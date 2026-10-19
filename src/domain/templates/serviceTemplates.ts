@@ -25,6 +25,8 @@ export interface ServiceTemplates {
   sermon: Slide;
   /** The church's current closing deck; missing when it could not be downloaded. */
   back?: Slide[];
+  /** Content hashes of the decks, to tell when the church changed them. */
+  keys: { front: string; back?: string };
 }
 
 /** Where the ppt program publishes back-slides.pptx (it is kept out of the repo). */
@@ -116,5 +118,6 @@ async function build(): Promise<ServiceTemplates> {
     bibleVerse: bibleSlides[1],
     sermon: named(bibleSlides[2], '설교'),
     back: backSlides?.length ? backSlides : undefined,
+    keys: { front: front.key, back: backSlides?.length ? (await backDeck)?.key : undefined },
   };
 }

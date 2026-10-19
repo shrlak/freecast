@@ -1,7 +1,9 @@
 // Self-updating for the FreeCast desktop app.
-// - Windows: electron-updater (NSIS) downloads in the background and installs on restart.
+// - Windows: electron-updater (NSIS) downloads in the background and installs when the app quits.
 // - macOS: Apple's updater only works for apps signed with a paid Developer ID, so unsigned builds
-//   download the new release .zip, swap the app bundle with a small script and relaunch.
+//   download the new release .zip and swap the app bundle with a small script — when the app quits,
+//   or right away (with a relaunch) if the operator clicks the notice.
+// Nothing restarts on its own: an update never interrupts a running service.
 // Updates are checked at launch, every 4 hours, when the computer wakes, and right away when
 // macOS / Windows itself was updated since the last launch.
 import { app, Notification, powerMonitor, shell } from 'electron';
@@ -89,12 +91,15 @@ async function checkMac() {
   if (!appDir) throw new Error('The update archive has no FreeCast.app');
   macUpdate = { version, appPath: path.join(dir, appDir) };
   set({ status: 'ready', version, progress: 100 });
-  notify('FreeCast 업데이트 준비됨', `버전 ${version} — 클릭하면 재시작하여 설치합니다.`, () => installUpdate());
+  notify('FreeCast 업데이트 준비됨', `버전 ${version} — 앱을 종료하면 자동으로 설치됩니다. 지금 설치하려면 클릭하세요.`, () => installUpdate());
   if (process.env.FREECAST_UPDATE_AUTOINSTALL === '1') installUpdate();
 }
 
-function installMac() {
-  if (!macUpdate) return;
+let macInstalling = false;
+
+/** Swap in the downloaded app once this process has exited; `relaunch` opens it again afterwards. */
+function installMac(relaunch = true) {
+  if (!macUpdate || macInstalling) return;
   const target = currentBundle();
   let writable = true;
   try {
@@ -104,20 +109,21 @@ function installMac() {
   }
   if (!writable || !target.endsWith('.app')) {
     // Can't replace in place (e.g. not in a user-writable folder): show the new app to drag in.
-    shell.showItemInFolder(macUpdate.appPath);
+    if (relaunch) shell.showItemInFolder(macUpdate.appPath);
     return;
   }
+  macInstalling = true;
   const script = path.join(os.tmpdir(), `freecast-update-${Date.now()}.sh`);
   fs.writeFileSync(script, `#!/bin/sh
 while kill -0 ${process.pid} 2>/dev/null; do sleep 0.3; done
 rm -rf "${target}.old"
 mv "${target}" "${target}.old" && /usr/bin/ditto "${macUpdate.appPath}" "${target}" && rm -rf "${target}.old" || mv "${target}.old" "${target}"
 /usr/bin/xattr -dr com.apple.quarantine "${target}" 2>/dev/null
-open "${target}"
+${relaunch ? `open "${target}"` : ''}
 rm -f "$0"
 `, { mode: 0o755 });
   spawn('/bin/sh', [script], { detached: true, stdio: 'ignore' }).unref();
-  app.quit();
+  if (relaunch) app.quit();
 }
 
 function setupWindows() {
@@ -132,7 +138,7 @@ function setupWindows() {
   autoUpdater.on('download-progress', (p) => set({ progress: Math.round(p.percent) }));
   autoUpdater.on('update-downloaded', (info) => {
     set({ status: 'ready', version: info.version, progress: 100 });
-    notify('FreeCast 업데이트 준비됨', `버전 ${info.version} — 클릭하면 재시작하여 설치합니다.`, () => installUpdate());
+    notify('FreeCast 업데이트 준비됨', `버전 ${info.version} — 앱을 종료하면 자동으로 설치됩니다. 지금 설치하려면 클릭하세요.`, () => installUpdate());
   });
   autoUpdater.on('error', (e) => set({ status: 'error', error: e?.message ?? String(e) }));
 }
@@ -169,6 +175,8 @@ export function startUpdater({ publishConfig, sendToRenderer, settings, saveSett
   send = sendToRenderer;
   if (!app.isPackaged || !publish) return;
   if (process.platform !== 'darwin') setupWindows();
+  // macOS: a downloaded update installs itself when FreeCast quits (Windows does this in electron-updater).
+  else app.on('will-quit', () => state.status === 'ready' && installMac(false));
 
   const osVersion = `${process.platform} ${os.release()}`;
   const osUpdated = settings.lastOsVersion && settings.lastOsVersion !== osVersion;

@@ -160,6 +160,8 @@ export interface Transition {
 
 export interface Presentation {
   id: string;
+  /** Which church template (and 고백송) this deck was last built from; set on decks FreeCast keeps in sync. */
+  templateKey?: string;
   title: string;
   slides: Slide[];
   themeId: string;

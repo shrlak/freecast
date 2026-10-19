@@ -109,6 +109,9 @@ Connect with us after the service`;
 
 const s = (id: string, group: string, text: string, extra: Partial<Slide> = {}): Slide => ({ id, group, text, ...extra });
 
+/** This season's 공동체 고백송 (printed in the Back deck). */
+export const DEFAULT_CONFESSION_SONG = '우리는 주의 움직이는 교회';
+
 export const PRAYER_PREP_TITLE = '지금은 기도로 예배를 준비하는 시간입니다.';
 
 function sundayTemplates(): Presentation[] {
@@ -196,7 +199,7 @@ export function createSeedLibrary(): Library {
     screens: DEFAULT_SCREENS.map((sc) => ({ ...sc, layers: { ...sc.layers } })),
     usage: [],
     sunday: {
-      frontId: 'p_front', prayerId: 'p_prayer', backId: 'p_back', confessionSong: '',
+      frontId: 'p_front', prayerId: 'p_prayer', backId: 'p_back', confessionSong: DEFAULT_CONFESSION_SONG,
       linesPerSlide: 2, translations: ['nkrv'], versesPerSlide: 2,
     },
     schedules: [],

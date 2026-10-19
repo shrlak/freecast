@@ -17,6 +17,9 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
 body { background: var(--bg); color: var(--text); overflow: hidden; }
+/* Korean wraps at spaces (word by word), as PowerPoint does — never in the middle of a word
+   like "마법 / 사". A word longer than its box still breaks rather than overflowing. */
+body { word-break: keep-all; overflow-wrap: break-word; }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 button {

@@ -31,6 +31,7 @@ const TPL: ServiceTemplates = {
     text('v2', '{{ETITLE}} {{CHAP}}:{{PARA}}\n{{BODY2}}', 736),
   ]),
   sermon: slide('설교', [text('sh', '설교\nSermon', 186), text('sp', '방태준 목사님', 822), text('stt', '{{SERMON_TITLE}}\n{{RANGE_KO}}', 482)]),
+  keys: { front: 'f1' },
 };
 const els = (s: Slide) => (s.elements ?? []).map((e) => e.text);
 
@@ -184,5 +185,57 @@ describe('church Back deck', () => {
     const live = createLiveService(custom, tpl, date);
     expect(live.presentations.some((p) => p.title === '1018 Back')).toBe(false);
     expect(live.playlist.items.at(-1)).toMatchObject({ presentationId: lib.sunday.backId });
+  });
+});
+
+describe('공동체 고백송 and template deck sync', async () => {
+  const { applyConfessionSong, findConfessionBlock } = await import('../src/domain/templates/confession');
+  const { templateDeckUpdates } = await import('../src/domain/templates/register');
+  const bg = (id: string) => ({ kind: 'media', mediaId: `tpl-abc-${id}`, mediaType: 'image', fit: 'cover' }) as const;
+  const back: Slide[] = [
+    { ...slide('Back', [text('m', '공동체 고백송\n“Celebrate the Light”')]), background: bg('0') },
+    { ...slide('Back', [text('hid', '우리 모일 때', 7, { w: 380, h: 58 }), text('ly', '줄 1\n줄 2\n줄 3\n줄 4', 324, { w: 1411, h: 485 }), text('ct', 'Celebrate the Light', 31, { w: 562, h: 58 })]), background: bg('1') },
+    { ...slide('Back', [text('ly2', '줄 5\n줄 6', 324, { w: 1411, h: 485 }), text('ct2', 'Celebrate the Light', 31, { w: 562, h: 58 })]), background: bg('2') },
+    { ...slide('Back', [text('hl', 'Happy Lord’s Day')]), background: bg('3') },
+  ];
+  const song: Presentation = {
+    id: 'online:x', title: '우리는 주의 움직이는 교회', themeId: 't', online: true,
+    slides: [{ id: 'a', group: 'Verse 1', text: 'A1\nA2' }, { id: 'b', group: 'Verse 1', text: 'A3\nA4\nA5' }, { id: 'c', group: 'Chorus', text: 'C1\nC2' }],
+  };
+
+  it('finds the block by its marker and the song name', () => {
+    expect(findConfessionBlock(back)).toEqual({ marker: 0, lyrics: [1, 2], title: 'Celebrate the Light' });
+  });
+
+  it('replaces the song name and lyrics, keeping the design and the rest of the deck', () => {
+    const out = applyConfessionSong(back, song)!;
+    const texts = (s: Slide) => s.elements!.map((e) => e.text);
+    expect(texts(out[0])).toEqual(['공동체 고백송\n“우리는 주의 움직이는 교회”']);
+    // Verse 1 (5 lines, max 4 per slide) → 3 + 2, then Chorus
+    expect(out.slice(1, -1).map((s) => texts(s))).toEqual([
+      ['우리 모일 때', 'A1\nA2\nA3', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'A4\nA5', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'C1\nC2', '우리는 주의 움직이는 교회'],
+    ]);
+    expect(out[1].background).toEqual(back[1].background);
+    expect(texts(out.at(-1)!)).toEqual(['Happy Lord’s Day']);
+    expect(applyConfessionSong(out, song)).toBe(out);
+  });
+
+  it('brings the library Front/Back decks in line with the templates and the 고백송', () => {
+    const lib = createSeedLibrary();
+    lib.presentations.push(song);
+    const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1' } };
+    const updates = templateDeckUpdates(lib, tpl);
+    expect(updates.map((u) => u.id)).toEqual([lib.sunday.frontId, lib.sunday.backId]);
+    const backPatch = updates[1].patch;
+    expect(backPatch.slides![0].elements![0].text).toContain('우리는 주의 움직이는 교회');
+    // Applied once, nothing more to do — until the template changes.
+    const synced = { ...lib, presentations: lib.presentations.map((p) => updates.find((u) => u.id === p.id) ? { ...p, ...updates.find((u) => u.id === p.id)!.patch } : p) };
+    expect(templateDeckUpdates(synced, tpl)).toEqual([]);
+    expect(templateDeckUpdates(synced, { ...tpl, keys: { front: 'f2', back: 'b1' } }).map((u) => u.id)).toEqual([lib.sunday.frontId]);
+    // A deck the church edited by hand (not on template backgrounds) is left alone.
+    const custom = { ...synced, presentations: synced.presentations.map((p) => (p.id === lib.sunday.backId ? { ...p, templateKey: undefined, slides: [{ id: 'mine', group: 'Back', text: '축도' }] } : p)) };
+    expect(templateDeckUpdates(custom, { ...tpl, keys: { front: 'f1', back: 'b2' } })).toEqual([]);
   });
 });

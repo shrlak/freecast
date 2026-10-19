@@ -6,38 +6,27 @@
 <title>KCCP FreeCast</title>
 <link rel="stylesheet" href="../dist/splash.css" />
 <style>
-  html, body { margin: 0; height: 100%; background: #040d1a; overflow: hidden; }
-  .fc-splash { border-radius: 14px; }
+  html, body { margin: 0; height: 100%; background: #fff; overflow: hidden; }
+  .fc-splash { border: 1px solid #d9dee6; border-radius: 14px; }
 </style>
 </head>
 <body>
     <div class="fc-splash" title="클릭하면 건너뜁니다">
-      <div class="fc-aurora"><i></i><i></i><i></i></div>
-      <div class="fc-rays"></div>
-      <canvas class="fc-sparks"></canvas>
       <div class="fc-main">
         <div class="fc-stage">
-          <div class="fc-emblem-wrap">
-            <svg class="fc-emblem" viewBox="0 0 407 356" aria-hidden="true">
-              <defs><clipPath id="fc-clip"><rect x="0" y="73" width="295" height="283" /><polygon points="313,70 407,0 407,233 313,350" /></clipPath></defs>
-              <rect class="g" x="0" y="73" width="295" height="283" fill="#4bc789" />
-              <polygon class="y" points="313,70 407,0 407,233 313,350" fill="#fde718" />
-              <rect class="cv" x="297" y="73" width="14" height="283" fill="#ffffff" />
-              <rect class="ch" x="249" y="129" width="112" height="15" fill="#ffffff" />
-              <g clip-path="url(#fc-clip)"><g transform="skewX(-20)"><rect class="shine" x="-60" y="-40" width="60" height="460" fill="rgba(255,255,255,.6)" /></g></g>
-            </svg>
-            <div class="fc-ring"></div><div class="fc-ring r2"></div><div class="fc-ring r3"></div>
-            <div class="fc-flare"></div>
-          </div>
-          <div class="fc-word"><img src="../dist/church-logo-text-white.png" alt="Korean Central Church of Pittsburgh · 빛주사랑 대학청년부" /><div class="sheen"></div></div>
+          <svg class="fc-emblem" viewBox="0 0 407 356" aria-hidden="true">
+            <defs><clipPath id="fc-clip"><rect x="0" y="73" width="295" height="283" /><polygon points="313,70 407,0 407,233 313,350" /></clipPath></defs>
+            <rect class="g" x="0" y="73" width="295" height="283" fill="#4bc789" />
+            <polygon class="y" points="313,70 407,0 407,233 313,350" fill="#fde718" />
+            <rect class="c" x="249" y="129" width="112" height="15" fill="#ffffff" />
+            <g clip-path="url(#fc-clip)"><g transform="skewX(-20)"><rect class="shine" x="-60" y="-40" width="60" height="460" fill="rgba(255,255,255,.55)" /></g></g>
+          </svg>
+          <div class="fc-word"><img src="../dist/church-logo-text.png" alt="Korean Central Church of Pittsburgh · 빛주사랑 대학청년부" /></div>
         </div>
-        <div class="fc-title" aria-label="FreeCast"><span style="--i:0">F</span><span style="--i:1">r</span><span style="--i:2">e</span><span style="--i:3">e</span><span style="--i:4" class="accent">C</span><span style="--i:5" class="accent">a</span><span style="--i:6" class="accent">s</span><span style="--i:7" class="accent">t</span></div>
-        <div class="fc-sub">KCCP 예배 프레젠테이션</div>
-        <div class="fc-load"><div class="fc-bar"><i></i></div><div class="fc-status"></div></div>
+        <div class="fc-bar"></div>
+        <div class="fc-name">KCCP 예배 프레젠테이션 · FreeCast</div>
       </div>
-      <footer class="fc-team"><img src="../dist/media-team-logo.png" alt="KCCP Media Team" /><span><b>MEDIA TEAM</b>KCCP 빛주사랑 대학청년부 미디어팀</span></footer>
-      <div class="fc-skip">클릭하여 건너뛰기</div>
-      <div class="fc-flash"></div>
+      <footer class="fc-team"><img src="../dist/media-team-logo.png" alt="KCCP Media Team" /><span>KCCP 빛주사랑 대학청년부 미디어팀</span></footer>
     </div>
     <script src="../dist/splash.js"></script>
 </body>

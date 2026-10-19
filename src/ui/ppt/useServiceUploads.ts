@@ -12,7 +12,8 @@ import { parseRefs } from '../../domain/bible/refs';
 import { loadScriptureChunks } from '../../domain/bible/slides';
 import { uid } from '../../domain/lyrics';
 import { loadServiceTemplates, pptxSlides, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
-import { backSlides, isPlaceholderBack, scriptureSlides, sermonTitleSlide, songInTemplate, templateLyricsTheme } from '../../domain/templates/fill';
+import { templateDeckUpdates } from '../../domain/templates/register';
+import { scriptureSlides, sermonTitleSlide, songInTemplate, templateLyricsTheme } from '../../domain/templates/fill';
 import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { loadTranslations } from '../BibleModal';
 import { filesToSlides } from '../importFiles';
@@ -52,15 +53,17 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
         const theme = templateLyricsTheme(t);
         const have = lib.current.themes.find((x) => x.id === theme.id);
         if (JSON.stringify(have) !== JSON.stringify(theme)) dispatch({ type: 'theme/upsert', theme });
-        // Register the church's current Back deck in place of FreeCast's placeholder one.
-        const back = lib.current.presentations.find((p) => p.id === lib.current.sunday.backId);
-        if (t.back?.length && isPlaceholderBack(back)) {
-          dispatch({ type: 'presentation/update', id: back!.id, patch: { slides: backSlides(t), themeId: 'theme_classic', background: { kind: 'color', value: '#000000' } } });
-        }
         setTemplates('ok');
       })
       .catch(() => setTemplates('error'));
   }, [dispatch]);
+
+  // The library's 주일예배 Front / Back decks follow the church templates and this season's 고백송
+  // (re-checked as songs load from the server and when the 고백송 setting changes).
+  useEffect(() => {
+    if (templates !== 'ok' || !tpl.current) return;
+    for (const u of templateDeckUpdates(library, tpl.current)) dispatch({ type: 'presentation/update', id: u.id, patch: u.patch });
+  }, [templates, library, dispatch]);
 
   const templatesNow = async () => tpl.current ?? (await loadServiceTemplates().catch(() => null));
   const playlist = (id: string) => lib.current.playlists.find((p) => p.id === id);
