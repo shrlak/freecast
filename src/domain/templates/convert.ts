@@ -3,14 +3,15 @@
 // filled boxes — is baked into one background image (bake.ts), and every text box becomes an
 // editable text element at the same place, size, font and colour.
 //
-// The church decks are 4:3; FreeCast draws 16:9, so the slide is centred with black bars at the
-// sides, the way PowerPoint shows a 4:3 deck on a widescreen projector.
+// FreeCast slides are 4:3 like the church decks, so those fill the canvas exactly; a deck of
+// another shape (16:9 sermon slides) is centred with black bars.
 import type { ElementParagraph, HAlign, Slide, SlideElement, VAlign } from '../types';
 import type { RenderedSlide, RenderedTextShape } from '../io/pptxRender';
 import { uid } from '../lyrics';
+import { CANVAS_H, CANVAS_W } from '../canvas';
 
-const W = 1920;
-const H = 1080;
+const W = CANVAS_W;
+const H = CANVAS_H;
 const EMU_PER_POINT = 12700;
 /** PowerPoint's default text-box insets: 0.1" left/right, 0.05" top/bottom. */
 const INSET_X = 91440;
@@ -24,7 +25,7 @@ export interface Frame {
   y: number;
 }
 
-/** Where a slide of this size sits on the 1920×1080 canvas. */
+/** Where a slide of this size sits on the 1440×1080 canvas (a 4:3 deck fills it; wider decks get bars above and below). */
 export function frameFor(widthEmu: number, heightEmu: number): Frame {
   const k = Math.min(W / widthEmu, H / heightEmu);
   return { k, x: (W - widthEmu * k) / 2, y: (H - heightEmu * k) / 2 };

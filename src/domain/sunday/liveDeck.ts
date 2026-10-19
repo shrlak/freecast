@@ -5,7 +5,8 @@
 //   Front → 찬양 → 기도 → 성경 말씀 → 설교 → 기도 → 설교 후 찬양 (+ 기도) → 광고 → Back / End
 import type { Library, Playlist, PlaylistItem, Presentation } from '../types';
 import { uid } from '../lyrics';
-import { mmdd } from './notice';
+import { mdy, mmdd } from './notice';
+import { parsePrayerTopics } from './prayer';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
 import { backSlides, fillFront, isPlaceholderBack, prayerSlide, sermonTitleSlide } from '../templates/fill';
 
@@ -42,7 +43,11 @@ export function createLiveService(lib: Library, tpl: ServiceTemplates | null, da
   const created: Presentation[] = [];
   const add = (p: Presentation) => (created.push(p), p);
 
-  const front = tpl ? add(make(`${tag} Front`, fillFront(tpl, date, []))) : byId(lib.sunday.frontId);
+  // The library's Front deck already shows this Sunday's date and 기도제목 (templates/register.ts);
+  // the service uses it directly, so later 기도제목 changes show up here too.
+  const libFront = byId(lib.sunday.frontId);
+  const synced = libFront?.templateKey?.startsWith('front:') && libFront.templateKey.includes(`|${mdy(date)}|`);
+  const front = synced || !tpl ? libFront : add(make(`${tag} Front`, fillFront(tpl, date, parsePrayerTopics(lib.sunday.prayerText ?? ''))));
   const prayer = tpl ? add(make(`${tag} 기도`, [prayerSlide(tpl)])) : byId(lib.sunday.prayerId);
   const sermon = add(make(`${tag} 설교`, tpl ? [sermonTitleSlide(tpl, { refs: [] })] : []));
   const libBack = byId(lib.sunday.backId);

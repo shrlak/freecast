@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { SlideCanvas } from '../ui/SlideCanvas';
+import { CANVAS_W } from '../domain/canvas';
 import { useLiveFeed } from '../ui/hooks';
 import { liveCanvasProps } from '../ui/liveProps';
 
@@ -36,13 +37,14 @@ export function OutputView() {
   const edge = screen?.edge && screen.edge.part !== 'none' ? screen.edge : null;
   if (edge) {
     // Each projector shows half the picture plus the overlap; the overlap fades out so the two blend.
-    const regionW = 960 + edge.overlap / 2;
-    const x = edge.part === 'left' ? 0 : 960 - edge.overlap / 2;
-    const scale = 1920 / regionW;
+    const half = CANVAS_W / 2;
+    const regionW = half + edge.overlap / 2;
+    const x = edge.part === 'left' ? 0 : half - edge.overlap / 2;
+    const scale = CANVAS_W / regionW;
     return (
       <div className="output-root edge-root" style={{ background: bg }}>
         <div className="edge-view">
-          <div style={{ width: `${scale * 100}%`, transform: `translateX(${(-x / 1920) * 100}%)` }}>
+          <div style={{ width: `${scale * 100}%`, transform: `translateX(${(-x / CANVAS_W) * 100}%)` }}>
             <SlideCanvas {...liveCanvasProps(live, screen)} />
           </div>
           <div className={`edge-fade ${edge.part}`} style={{ width: `${(edge.overlap / regionW) * 100}%` }} />

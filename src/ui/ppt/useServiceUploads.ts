@@ -60,10 +60,16 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
 
   // The library's 주일예배 Front / Back decks follow the church templates and this season's 고백송
   // (re-checked as songs load from the server and when the 고백송 setting changes).
+  // Re-checked every 30 minutes too, so the Front deck moves on to the next Sunday's date by itself.
+  const [clock, setClock] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setClock(Date.now()), 30 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => {
     if (templates !== 'ok' || !tpl.current) return;
-    for (const u of templateDeckUpdates(library, tpl.current)) dispatch({ type: 'presentation/update', id: u.id, patch: u.patch });
-  }, [templates, library, dispatch]);
+    for (const u of templateDeckUpdates(library, tpl.current, new Date(clock))) dispatch({ type: 'presentation/update', id: u.id, patch: u.patch });
+  }, [templates, library, dispatch, clock]);
 
   const templatesNow = async () => tpl.current ?? (await loadServiceTemplates().catch(() => null));
   const playlist = (id: string) => lib.current.playlists.find((p) => p.id === id);

@@ -31,7 +31,7 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
   const update = (id: string, patch: Partial<SlideElement>) => setEls((list) => list.map((e) => (e.id === id ? patchElement(e, patch) : e)));
 
   const add = (el: Omit<SlideElement, 'id' | 'x' | 'y' | 'w' | 'h'> & Partial<SlideElement>) => {
-    const next = { id: uid('el'), x: 660, y: 390, w: 600, h: 300, ...el } as SlideElement;
+    const next = { id: uid('el'), x: (CANVAS_W - 600) / 2, y: 390, w: 600, h: 300, ...el } as SlideElement;
     setEls((l) => [...l, next]);
     setSel(next.id);
   };
@@ -110,7 +110,7 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
               {media.filter((m) => m.type === 'video').map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
             <button onClick={() => add({ kind: 'camera', deviceId: '', w: 800, h: 450 })} title="Live camera / capture input as an object">＋ Camera</button>
-            <button onClick={() => add({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, w: 1600, h: 220, x: 160, y: 820 })}>＋ Box</button>
+            <button onClick={() => add({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, w: 1240, h: 220, x: 100, y: 820 })}>＋ Box</button>
             <button onClick={() => add({ kind: 'shape', fill: '#4bc789', ellipse: true, w: 300, h: 300 })}>＋ Circle</button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => uploadImage(e.target.files?.[0])} />
           </div>

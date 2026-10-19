@@ -61,6 +61,8 @@ export interface RenderedTextShape extends ShapeBase {
 export interface RenderedPictureShape extends ShapeBase {
   kind: 'picture';
   imageUrl: string;
+  /** PowerPoint's crop (`a:srcRect`): fractions of the image cut off each side; absent when uncropped. */
+  crop?: { l: number; t: number; r: number; b: number };
 }
 
 export type RenderedShape = RenderedTextShape | RenderedPictureShape;
@@ -398,7 +400,12 @@ async function readPictureShape(
     url = URL.createObjectURL(bytes);
     urlCache.set(mediaPath, url);
   }
-  return { kind: 'picture', ...box, imageUrl: url };
+  // a:srcRect l/t/r/b are 1/1000 of a percent of the image cut off that side (PowerPoint's crop).
+  const src = firstEl(pic, 'a:srcRect');
+  const part = (k: string) => Math.min(0.99, Math.max(0, Number(src?.getAttribute(k) ?? 0) / 100000 || 0));
+  const crop = src ? { l: part('l'), t: part('t'), r: part('r'), b: part('b') } : undefined;
+  const cropped = crop && (crop.l || crop.t || crop.r || crop.b) ? crop : undefined;
+  return { kind: 'picture', ...box, imageUrl: url, ...(cropped ? { crop: cropped } : {}) };
 }
 
 /** Geometry/font inheritance sources for a spTree's placeholder shapes — undefined when reading a layout/master's own (non-placeholder) art, which never needs it. */

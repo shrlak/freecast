@@ -64,7 +64,7 @@ export function ObsPanel({ state, dispatch }: Props) {
           }}>＋ Macro for current scene</button>
         </>
       )}
-      <span className="muted small">Lyrics in OBS — add a <b>Browser</b> source (1920×1080) with this URL, on top of your camera:</span>
+      <span className="muted small">Lyrics in OBS — add a <b>Browser</b> source (1440×1080) with this URL, on top of your camera:</span>
       {state.library.screens.map((s) => {
         const url = `${base}?view=output&screen=${s.id}`;
         return (

@@ -72,6 +72,7 @@ export function mergeLibrary(base: Library | null, local: Library, remote: Libra
     conflicts,
     library: {
       version: 1,
+      aspect: '4:3',
       presentations,
       themes: m('themes'),
       playlists: m('playlists'),

@@ -113,7 +113,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
     const kind = insertKind.current;
     await putMedia(id, file);
     dispatch({ type: 'media/add', media: { id, name: file.name, type: kind } });
-    addElement({ kind, mediaId: id, fit: kind === 'video' ? 'cover' : 'contain', x: 460, y: 240, w: 1000, h: 600 });
+    addElement({ kind, mediaId: id, fit: kind === 'video' ? 'cover' : 'contain', x: 220, y: 240, w: 1000, h: 600 });
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -208,12 +208,12 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="📖" label="성경 구절" onClick={() => cmd.open('bible')} />
             </Group>
             <Group label="개체">
-              <Big icon="T" label="텍스트 상자" disabled={!slide} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 560, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />
+              <Big icon="T" label="텍스트 상자" disabled={!slide} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 320, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />
               <Big icon="🖼" label="그림" disabled={!slide} onClick={() => { insertKind.current = 'image'; if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.click(); } }} />
               <Big icon="🎬" label="비디오" disabled={!slide} onClick={() => { insertKind.current = 'video'; if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.click(); } }} />
-              <Big icon="⬛" label="도형" disabled={!slide} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 160, y: 820, w: 1600, h: 200 })} />
-              <Big icon="⚪" label="원" disabled={!slide} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 810, y: 390, w: 300, h: 300 })} />
-              <Big icon="📷" label="카메라" disabled={!slide} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 560, y: 315, w: 800, h: 450 })} />
+              <Big icon="⬛" label="도형" disabled={!slide} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 100, y: 820, w: 1240, h: 200 })} />
+              <Big icon="⚪" label="원" disabled={!slide} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 570, y: 390, w: 300, h: 300 })} />
+              <Big icon="📷" label="카메라" disabled={!slide} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 320, y: 315, w: 800, h: 450 })} />
             </Group>
             <Group label="텍스트">
               <Small icon="🕒" label="현재 시각 {time}" disabled={!slide} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{time}` })} />
@@ -311,6 +311,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             </Group>
             <Group label="예배 만들기">
               <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
+              <Big icon="🙏" label="기도제목" title="이번 주 기도제목 — 주일예배 Front 슬라이드에 들어갑니다" onClick={() => cmd.open('prayer')} />
               <Big icon="🙌" label="공동체 고백송" title={`지금: ${lib.sunday.confessionSong || DEFAULT_CONFESSION_SONG} — 학기·해마다 바꾸기`} onClick={() => cmd.open('confession')} />
               <Big icon="⛺" label="수련회" onClick={() => cmd.open('retreat')} />
             </Group>

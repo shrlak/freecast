@@ -1,11 +1,12 @@
 // The 주일예배 designs, read from the same .pptx templates the shrlak/ppt program builds its
 // deck from, fetched from the online content server each session:
-//   front-slides.pptx     → Front (기도 준비, welcome + date, 신앙고백)
+//   front-slides.pptx     → Front (기도 준비, welcome + date, 신앙고백) — the church's own copy
+//                           bundled with FreeCast (public/templates/) wins over the server's
 //   service-template.pptx → 기도 (slide 17), 광고 title (32) and 광고 item (33)
 //   template.pptx         → song title slide (1) and lyric slide (2)
 //   bible-template.pptx   → 성경 말씀 title (1), verse slide (2), 설교 title (3)
-//   back-slides.pptx      → Back / End, all of it (공동체 고백송, 송별, 헌금, 축복송 …) — not in the
-//                           repo's git, so it comes from the published ppt site when the server lacks it
+//   back-slides.pptx      → Back / End, all of it (공동체 고백송, 송별, 헌금, 축복송 …) — the church's
+//                           own copy bundled with FreeCast, else the published ppt site
 import type { Slide } from '../types';
 import { renderPptxSlides, revokeRenderedSlides, type RenderedSlide } from '../io/pptxRender';
 import { getMedia, putMedia } from '../media';
@@ -69,15 +70,20 @@ export async function pptxSlides(
   }
 }
 
+/** Decks the church gave FreeCast directly, served with the app (they win over the content server). */
+const BUNDLED: Record<string, string> = { 'front-slides.pptx': 'templates/front-slides.pptx', 'back-slides.pptx': 'templates/back-slides.pptx' };
+
 async function fetchDeck(name: string, ...fallbacks: string[]): Promise<{ data: ArrayBuffer; key: string }> {
   let res: Response | null = null;
-  for (const url of [`${contentServer()}${name}`, ...fallbacks]) {
+  const bundled = BUNDLED[name] ? [new URL(BUNDLED[name], document.baseURI).href] : [];
+  for (const url of [...bundled, `${contentServer()}${name}`, ...fallbacks]) {
     res = await fetch(url).catch(() => null);
     if (res?.ok) break;
   }
   if (!res?.ok) throw new Error(`${name}: ${res?.status ?? 'offline'}`);
   const data = await res.arrayBuffer();
-  return { data, key: `tpl-${await hash(data)}` };
+  // '-43c': backgrounds baked for the 4:3 canvas with picture crops (the key also names the cached images).
+  return { data, key: `tpl-${await hash(data)}-43c` };
 }
 
 let cached: Promise<ServiceTemplates> | null = null;

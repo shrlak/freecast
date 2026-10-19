@@ -112,7 +112,7 @@ kbd { margin-left: 6px; font-size: 10px; color: var(--muted); font-family: inher
 .thumb-num { opacity: .8; }
 
 /* ---------- Canvas ---------- */
-.canvas-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
+.canvas-frame { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; background: #000; }
 .canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; overflow: hidden; }
 .layer { position: absolute; inset: 0; }
 .layer.media { width: 100%; height: 100%; object-fit: cover; }
@@ -134,7 +134,7 @@ kbd { margin-left: 6px; font-size: 10px; color: var(--muted); font-family: inher
 .swatch { position: relative; flex: 0 0 120px; }
 .swatch-main { padding: 0; width: 100%; border: 2px solid transparent; border-radius: 6px; overflow: hidden; display: block; background: #000; }
 .swatch.live .swatch-main { border-color: var(--live); }
-.swatch-fill { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #111; }
+.swatch-fill { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #111; }
 .swatch-name { display: block; font-size: 11px; padding: 3px 6px; background: var(--panel-2); text-align: left; }
 .swatch-actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; opacity: 0; }
 .swatch:hover .swatch-actions { opacity: 1; }
@@ -178,7 +178,7 @@ kbd { margin-left: 6px; font-size: 10px; color: var(--muted); font-family: inher
 /* ---------- Output ---------- */
 .output-root { position: fixed; inset: 0; background: #000; display: grid; place-items: center; cursor: none; }
 .output-root.waiting { color: #555; cursor: default; font-size: 18px; }
-.output-canvas { width: min(100vw, calc(100vh * 16 / 9)); }
+.output-canvas { width: min(100vw, calc(100vh * 4 / 3)); }
 
 /* ---------- Stage display ---------- */
 .stage-root { position: fixed; inset: 0; background: #000; color: #fff; display: flex; flex-direction: column; padding: 2vh 3vw; gap: 2vh; }
@@ -448,7 +448,7 @@ body[data-view='multiview'] { overflow: auto; }
 .multiview { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; padding: 12px; }
 .multiview figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .multiview figcaption { padding: 4px 8px; font-size: 12px; color: var(--muted); }
-.multiview-info > div { padding: 12px; aspect-ratio: 16 / 9; overflow: auto; white-space: pre-line; }
+.multiview-info > div { padding: 12px; aspect-ratio: 4 / 3; overflow: auto; white-space: pre-line; }
 .checker { background-image: conic-gradient(#333 25%, #222 0 50%, #333 0 75%, #222 0); background-size: 24px 24px; }
 .checker .canvas-frame { background: transparent !important; }
 
@@ -508,7 +508,7 @@ body[data-view='multiview'] { overflow: auto; }
 .rb-theme span { padding: 1px 4px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rb-swatch { padding: 0 !important; width: 78px; flex: 0 0 auto; border: 2px solid transparent !important; }
 .rb-swatch:hover:not(:disabled) { border-color: var(--accent) !important; }
-.rb-swatch-fill { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.rb-swatch-fill { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 
 /* body */
 .ppt-body { flex: 1; display: flex; min-height: 0; }
@@ -530,7 +530,7 @@ body[data-view='multiview'] { overflow: auto; }
 .ppt-add { margin: 4px 0 0 28px; }
 .ppt-center { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #e9e7e5; }
 .ppt-stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; min-height: 0; }
-.ppt-canvas { width: min(100%, calc((100vh - 330px) * 16 / 9)); box-shadow: 0 2px 10px rgba(0,0,0,.25); cursor: text; }
+.ppt-canvas { width: min(100%, calc((100vh - 330px) * 4 / 3)); box-shadow: 0 2px 10px rgba(0,0,0,.25); cursor: text; }
 .ppt-empty { text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 12px; align-items: center; }
 .ppt-notes { height: 92px; resize: vertical; border: none !important; border-top: 1px solid #d2d0ce !important; border-radius: 0; padding: 8px 14px; font-family: inherit; font-size: 13px; }
 .ppt-format { width: 300px; background: #fff; border-left: 1px solid #d2d0ce; display: flex; flex-direction: column; min-height: 0; }
@@ -573,7 +573,7 @@ body[data-view='multiview'] { overflow: auto; }
 .presenter-nav button { padding: 8px 22px; font-size: 18px; }
 .presenter-side { display: flex; flex-direction: column; gap: 8px; }
 .presenter-label { font-size: 12px; color: #a19f9d; text-transform: uppercase; letter-spacing: .06em; }
-.presenter-end { aspect-ratio: 16 / 9; display: grid; place-items: center; background: #111; color: #777; }
+.presenter-end { aspect-ratio: 4 / 3; display: grid; place-items: center; background: #111; color: #777; }
 .presenter-notes { background: #111; border-radius: 6px; padding: 12px; min-height: 140px; font-size: 18px; line-height: 1.5; white-space: pre-line; }
 .presenter .live-panel { border-left: 1px solid #3a3a3a; }
 .ppt-format .inspector input, .ppt-format .inspector select, .ppt-format .inspector textarea { width: 100%; min-width: 0; }
@@ -613,7 +613,7 @@ body[data-view='multiview'] { overflow: auto; }
 .fmt-swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; max-height: 190px; overflow-y: auto; }
 .fmt-swatch { padding: 0 !important; border: 2px solid transparent !important; border-radius: 3px; overflow: hidden; }
 .fmt-swatch:hover:not(:disabled), .fmt-swatch.on { border-color: var(--accent) !important; }
-.fmt-swatch-fill { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.fmt-swatch-fill { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
 .fmt-none { display: grid; place-items: center; font-size: 11px; color: var(--muted); background: repeating-linear-gradient(45deg, #f3f2f1, #f3f2f1 6px, #fff 6px, #fff 12px); }
 .slide-format .inspector { position: static; width: auto; box-shadow: none; border: none; padding: 0; background: transparent; }
 .slide-format .inspector label:not(.check) { color: var(--muted); }

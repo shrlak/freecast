@@ -11,11 +11,13 @@ import type { PrayerTopic } from '../sunday/prayer';
 import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
 import { fillSlide, fillTokens } from './convert';
+import { CANVAS_W } from '../canvas';
 import type { ServiceTemplates } from './serviceTemplates';
 
 export const TEMPLATE_LYRICS_THEME = 'theme_tpl_lyrics';
 
-const DATE_LINE = /^\s*\d{1,2}\s*\/\s*\d{1,2}\s*\/\s*(?:\d{4}|\d{2})\s*$/;
+/** A line that is only a date — "07/12/2026", "7/9/23" — or a date placeholder like "mm/dd/202y". */
+const DATE_LINE = /^\s*(?:\d{1,2}|m{1,2})\s*\/\s*(?:\d{1,2}|d{1,2})\s*\/\s*[\dy]{2,4}\s*$/i;
 const area = (e: SlideElement) => e.w * e.h;
 const texts = (s: Slide) => (s.elements ?? []).filter((e) => e.kind === 'text');
 
@@ -80,7 +82,7 @@ export function templateLyricsTheme(tpl: ServiceTemplates): Theme {
     fontFamily: lyrics?.fontFamily ?? '"Nanum Gothic", "Apple SD Gothic Neo", sans-serif',
     fontSize: p?.fontSize ?? lyrics?.fontSize ?? 82, fontWeight: p?.bold ? 700 : 500,
     color: p?.color ?? lyrics?.color ?? '#000000', align: 'center', vAlign: lyrics?.vAlign ?? 'middle',
-    lineHeight: 1.25, padding: Math.round(lyrics ? Math.max(lyrics.x, 1920 - lyrics.x - lyrics.w, 120) : 260),
+    lineHeight: 1.25, padding: Math.round(lyrics ? Math.max(lyrics.x, CANVAS_W - lyrics.x - lyrics.w, 120) : 260),
     shadow: false, uppercase: false, subColor: '#555555', subScale: 0.62,
   };
 }

@@ -1,5 +1,6 @@
 import type { Library, LiveState, Playlist } from './types';
 import { createSeedLibrary, DEFAULT_THEMES } from './defaults';
+import { CANVAS_W, LEGACY_CANVAS_W } from './canvas';
 
 const LIBRARY_KEY = 'freecast.library.v1';
 const LIVE_KEY = 'freecast.live.v2';
@@ -29,9 +30,11 @@ export function normalizeLibrary(value: unknown): Library | null {
   const saved = isObj(value.sunday) ? value.sunday : null;
   const wanted = (id: string) => !saved || [saved.frontId, saved.prayerId, saved.backId].includes(id);
   const templates = seed.presentations.filter((p) => p.folder === 'Templates' && !ids.has(p.id) && wanted(p.id));
+  const own = value.aspect === '4:3' ? (presentations as Library['presentations']) : toFourThree(presentations as Library['presentations']);
   return {
     version: 1,
-    presentations: [...(presentations as Library['presentations']), ...templates],
+    aspect: '4:3',
+    presentations: [...own, ...templates],
     // Themes added in later versions (광고, scripture) are appended if missing.
     themes: [...(themes as Library['themes']), ...DEFAULT_THEMES.filter((t) => !themes.some((x) => isObj(x) && x.id === t.id))],
     playlists,
@@ -48,6 +51,23 @@ export function normalizeLibrary(value: unknown): Library | null {
     logoMediaId: typeof value.logoMediaId === 'string' ? value.logoMediaId : null,
     sunday: { ...seed.sunday, ...(isObj(value.sunday) ? value.sunday : {}) },
   };
+}
+
+/**
+ * Slides made when FreeCast was 16:9 (1920 wide) → the 4:3 canvas: objects keep their place
+ * relative to the centre, the way the wider background is trimmed at both sides. An object that
+ * would end up off the slide is pulled back so at least part of it stays visible.
+ */
+export function toFourThree(presentations: Library['presentations']): Library['presentations'] {
+  const dx = (LEGACY_CANVAS_W - CANVAS_W) / 2;
+  return presentations.map((p) => ({
+    ...p,
+    slides: p.slides.map((s) =>
+      s.elements?.length
+        ? { ...s, elements: s.elements.map((e) => ({ ...e, x: Math.min(CANVAS_W - 40, Math.max(40 - e.w, Math.round(e.x - dx))) })) }
+        : s,
+    ),
+  }));
 }
 
 export const isLibrary = (value: unknown): boolean => normalizeLibrary(value) !== null;

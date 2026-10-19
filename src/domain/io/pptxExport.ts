@@ -5,10 +5,11 @@ import { getMedia } from '../media';
 import { qrDataUrl } from './qr';
 import { stripChords } from '../lyrics';
 import { pptxFont } from '../fonts';
+import { CANVAS_W } from '../canvas';
 
-const W = 13.333;
+const W = 10;
 const H = 7.5;
-const PX = W / 1920; // inches per canvas pixel
+const PX = W / CANVAS_W; // inches per canvas pixel (4:3 slides, 10 × 7.5 in)
 
 function firstColor(b: Background | undefined | null): string {
   if (!b) return '000000';
@@ -105,7 +106,7 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
 /** Export presentations (in playlist order when given) to a .pptx file download. */
 export async function exportPptx(lib: Library, source: { playlist: Playlist } | { presentation: Presentation }, fileName: string) {
   const pptx = new PptxGenJS();
-  pptx.layout = 'LAYOUT_WIDE';
+  pptx.layout = 'LAYOUT_4x3';
   const list = 'playlist' in source
     ? source.playlist.items.flatMap((i) => (i.kind === 'header' ? [] : lib.presentations.filter((p) => p.id === i.presentationId)))
     : [source.presentation];

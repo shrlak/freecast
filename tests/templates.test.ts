@@ -36,10 +36,13 @@ const TPL: ServiceTemplates = {
 const els = (s: Slide) => (s.elements ?? []).map((e) => e.text);
 
 describe('PPTX slide conversion', () => {
-  it('centres a 4:3 slide with bars and maps text boxes to canvas pixels', () => {
+  it('fills the 4:3 canvas with a 4:3 slide and maps text boxes to canvas pixels', () => {
     const f = frameFor(9144000, 6858000);
-    expect(f.x).toBe(240);
+    expect(f.x).toBe(0);
     expect(f.y).toBe(0);
+    const wide = frameFor(12192000, 6858000); // 16:9 sermon deck: bars above and below
+    expect(wide.x).toBe(0);
+    expect(wide.y).toBeGreaterThan(0);
     const rs: RenderedSlide = {
       index: 0, widthEmu: 9144000, heightEmu: 6858000, shapes: [
         { kind: 'text', xEmu: 0, yEmu: 0, wEmu: 9144000, hEmu: 1000000, anchor: 'ctr', paragraphs: [{ align: 'ctr', runs: [{ text: '기도', sizePt: 40, bold: true, color: '#000000', fontFamily: 'Arial' }] }, { runs: [{ text: 'Prayer', sizePt: 30 }] }] },
@@ -53,7 +56,7 @@ describe('PPTX slide conversion', () => {
     expect(s.elements).toHaveLength(1);
     const [el] = s.elements!;
     expect(el.text).toBe('기도\nPrayer');
-    expect(el.x).toBe(254); // 240 bar + 0.1" inset
+    expect(el.x).toBe(14); // 0.1" inset
     expect(el.paragraphs![0]).toMatchObject({ fontSize: 80, bold: true, align: 'center' });
     expect(el.paragraphs![1].fontSize).toBe(60);
     expect(el.vAlign).toBe('middle');
@@ -237,5 +240,42 @@ describe('공동체 고백송 and template deck sync', async () => {
     // A deck the church edited by hand (not on template backgrounds) is left alone.
     const custom = { ...synced, presentations: synced.presentations.map((p) => (p.id === lib.sunday.backId ? { ...p, templateKey: undefined, slides: [{ id: 'mine', group: 'Back', text: '축도' }] } : p)) };
     expect(templateDeckUpdates(custom, { ...tpl, keys: { front: 'f1', back: 'b2' } })).toEqual([]);
+  });
+});
+
+describe('4:3 Front deck with this Sunday’s date and 기도제목', async () => {
+  const { templateDeckUpdates } = await import('../src/domain/templates/register');
+  const { toFourThree, normalizeLibrary } = await import('../src/domain/persistence');
+  const frontTpl = { ...TPL, front: [TPL.front[0], slide('Front', [text('d', '빛주사랑\n대학청년부\nmm/dd/202y', 800)]), TPL.front[2]], keys: { front: 'f1' } };
+
+  it('fills a date placeholder like mm/dd/202y', () => {
+    const out = fillFront(frontTpl, new Date(2026, 9, 25), []);
+    expect(out[1].elements![0].text).toBe('빛주사랑\n대학청년부\n10/25/2026');
+  });
+
+  it('keeps the library Front deck on the coming Sunday with the saved 기도제목', () => {
+    const lib = createSeedLibrary();
+    lib.sunday.prayerText = '1. 예배\n- 은혜\n2. 선교';
+    const [front] = templateDeckUpdates(lib, frontTpl, new Date(2026, 9, 21)); // a Wednesday
+    expect(front.id).toBe(lib.sunday.frontId);
+    const slides = front.patch.slides!;
+    expect(slides[0].elements![1].text).toBe('1. 예배\n● 은혜\n● 선교');
+    expect(slides[1].elements![0].text).toContain('10/25/2026');
+    const synced = { ...lib, presentations: lib.presentations.map((p) => (p.id === front.id ? { ...p, ...front.patch } : p)) };
+    expect(templateDeckUpdates(synced, frontTpl, new Date(2026, 9, 22))).toEqual([]); // same week
+    const nextWeek = templateDeckUpdates(synced, frontTpl, new Date(2026, 9, 26));
+    expect(nextWeek[0].patch.slides![1].elements![0].text).toContain('11/01/2026');
+    const newTopics = templateDeckUpdates({ ...synced, sunday: { ...synced.sunday, prayerText: '감사' } }, frontTpl, new Date(2026, 9, 22));
+    expect(newTopics[0].patch.slides![0].elements![1].text).toBe('● 감사');
+  });
+
+  it('moves 16:9 objects onto the 4:3 canvas once, keeping them centred', () => {
+    const p: Presentation = { id: 'p', title: 't', themeId: 't', slides: [{ id: 's', group: 'g', text: '', elements: [text('a', 'A', 100, { x: 660, w: 600 }), text('b', 'B', 100, { x: 1800, w: 100 })] }] };
+    const [moved] = toFourThree([p]);
+    expect(moved.slides[0].elements!.map((e) => e.x)).toEqual([420, 1400]);
+    const lib = normalizeLibrary({ ...createSeedLibrary(), aspect: undefined, presentations: [p] })!;
+    expect(lib.aspect).toBe('4:3');
+    expect(lib.presentations[0].slides[0].elements![0].x).toBe(420);
+    expect(normalizeLibrary(lib)!.presentations[0].slides[0].elements![0].x).toBe(420); // not moved twice
   });
 });

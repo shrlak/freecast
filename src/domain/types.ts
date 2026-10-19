@@ -1,7 +1,7 @@
 export type HAlign = 'left' | 'center' | 'right';
 export type VAlign = 'top' | 'middle' | 'bottom';
 
-/** Text styling, sized against a 1920x1080 canvas. */
+/** Text styling, sized against the 1440x1080 (4:3) canvas. */
 export interface Theme {
   id: string;
   name: string;
@@ -75,7 +75,7 @@ export interface ElementParagraph {
   align?: HAlign;
 }
 
-/** A free-positioned object on a slide (slide editor), in 1920×1080 canvas pixels. */
+/** A free-positioned object on a slide (slide editor), in 1440×1080 canvas pixels. */
 export interface SlideElement {
   id: string;
   kind: ElementKind;
@@ -345,6 +345,8 @@ export interface SundaySettings {
   prayerId: string | null;
   backId: string | null;
   confessionSong: string;
+  /** This week's 기도제목 as typed (numbered topics, points under them); shown on the Front deck. */
+  prayerText?: string;
   linesPerSlide: number;
   translations: string[];
   versesPerSlide: number;
@@ -352,6 +354,8 @@ export interface SundaySettings {
 
 export interface Library {
   version: 1;
+  /** '4:3' once slides use the 1440×1080 canvas (libraries without it were laid out at 1920×1080). */
+  aspect?: '4:3';
   presentations: Presentation[];
   themes: Theme[];
   playlists: Playlist[];

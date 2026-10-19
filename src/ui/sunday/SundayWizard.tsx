@@ -115,6 +115,7 @@ export function SundayWizard({ state, dispatch, onClose, notify }: Props) {
         templates, scripture: { refs: refs.refs, chunks, sermonTitle: d.sermonTitle, preacher: d.preacher },
       });
       dispatch({ type: 'presentation/createMany', presentations: built.presentations, playlist: built.playlist });
+      if (d.prayer.trim()) dispatch({ type: 'sunday/settings', patch: { prayerText: d.prayer.trim() } });
       if (thenExport) {
         setBusy('Writing PPTX…');
         const lib = { ...state.library, presentations: [...state.library.presentations, ...built.presentations] };

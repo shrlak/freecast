@@ -162,6 +162,7 @@ export function createSeedLibrary(): Library {
   presentations[1].arrangements = [{ id: 'arr_short', name: 'Short (V1 V2 V4)', groups: ['Verse 1', 'Verse 2', 'Verse 4'] }];
   return {
     version: 1,
+    aspect: '4:3',
     presentations,
     themes: DEFAULT_THEMES.map((t) => ({ ...t })),
     playlists: [{

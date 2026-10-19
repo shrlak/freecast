@@ -6,8 +6,8 @@ import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
 import { useMediaUrl, useNow, useWidth } from './hooks';
 
-export const CANVAS_W = 1920;
-export const CANVAS_H = 1080;
+export { CANVAS_W, CANVAS_H } from '../domain/canvas';
+import { CANVAS_W, CANVAS_H } from '../domain/canvas';
 
 export interface CanvasProps {
   slide: Slide | null;
@@ -326,7 +326,7 @@ function LogoLayer({ mediaId }: { mediaId: string | null }) {
   );
 }
 
-/** Renders a slide at 1920x1080 and scales it to fit its container. */
+/** Renders a slide at 1440x1080 (4:3) and scales it to fit its container. */
 export function SlideCanvas(p: CanvasProps) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const layers = p.screen?.layers ?? { background: true, slide: true, props: true, messages: true, timer: true };
