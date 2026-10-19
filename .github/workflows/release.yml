@@ -1,11 +1,13 @@
-# Builds the macOS (.dmg/.zip) and Windows (.exe) installers and publishes them to GitHub Releases
-# whenever a version tag is pushed (e.g. `npm version patch && git push --follow-tags`).
-# Installed copies of FreeCast check these releases and update themselves.
+# Builds the macOS (.dmg/.zip) and Windows (.exe) installers in the cloud and publishes them to the
+# GitHub Release for the version in package.json. Installed copies of FreeCast check these releases
+# and update themselves.
+#
+# Run it by hand (Actions → Release → Run workflow). It does NOT run on tag pushes any more: a release
+# published from locally tested builds must not be overwritten by a second, untested cloud build.
 name: Release
 
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
