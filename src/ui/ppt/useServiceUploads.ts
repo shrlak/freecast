@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
-import type { Library, Presentation, Slide } from '../../domain/types';
+import type { Library, Presentation, Slide, Theme } from '../../domain/types';
 import { renderPdf, blobToBase64 } from '../../domain/io/pdf';
 import { ai } from '../../domain/ai';
 import { putMedia } from '../../domain/media';
@@ -17,6 +17,15 @@ import { scriptureSlides, sermonTitleSlide, songInTemplate, templateLyricsTheme 
 import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { loadTranslations } from '../BibleModal';
 import { filesToSlides } from '../importFiles';
+
+/** The theme with a fingerprint of its own settings, so a later edit to it can be recognised. */
+function themeWithFingerprint(theme: Theme): Theme {
+  const { generated: _, ...rest } = theme;
+  const text = JSON.stringify(rest);
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return { ...rest, generated: (h >>> 0).toString(36) };
+}
 
 export interface ServiceUploads {
   templates: 'loading' | 'ok' | 'error';
@@ -50,9 +59,12 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     loadServiceTemplates()
       .then((t) => {
         tpl.current = t;
-        const theme = templateLyricsTheme(t);
+        // The lyrics theme follows the church template — unless the operator has changed it since.
+        const theme = themeWithFingerprint(templateLyricsTheme(t));
         const have = lib.current.themes.find((x) => x.id === theme.id);
-        if (JSON.stringify(have) !== JSON.stringify(theme)) dispatch({ type: 'theme/upsert', theme });
+        // (A theme from before fingerprints was written by FreeCast alone, so it counts as untouched.)
+        const untouched = !have || !have.generated || have.generated === themeWithFingerprint(have).generated;
+        if (untouched && have?.generated !== theme.generated) dispatch({ type: 'theme/upsert', theme });
         setTemplates('ok');
       })
       .catch(() => setTemplates('error'));

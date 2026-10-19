@@ -1,12 +1,13 @@
 // Turns a slide read by the PPTX renderer (pptxRender.ts, from the shrlak/ppt program) into a
-// FreeCast slide: everything that is not text — background colour/picture, logos, photos,
-// filled boxes — is baked into one background image (bake.ts), and every text box becomes an
-// editable text element at the same place, size, font and colour.
+// FreeCast slide where every part can be edited: the slide background (colour / background
+// picture) becomes the slide's background image (bake.ts), and each picture (logos, photos), each
+// filled box and each text box becomes its own object at the same place and size, in the same
+// order — so all of it can be moved, resized, restyled or deleted in the slide editor.
 //
 // FreeCast slides are 4:3 like the church decks, so those fill the canvas exactly; a deck of
 // another shape (16:9 sermon slides) is centred with black bars.
 import type { ElementParagraph, HAlign, Slide, SlideElement, VAlign } from '../types';
-import type { RenderedSlide, RenderedTextShape } from '../io/pptxRender';
+import type { RenderedPictureShape, RenderedSlide, RenderedTextShape } from '../io/pptxRender';
 import { uid } from '../lyrics';
 import { CANVAS_H, CANVAS_W } from '../canvas';
 
@@ -64,7 +65,8 @@ export function textElement(shape: RenderedTextShape, f: Frame): SlideElement {
     text: paragraphs.map((p) => p.text).join('\n'),
     paragraphs,
     fontSize: paragraphs.find((p) => p.text.trim())?.fontSize ?? px(undefined),
-    fontFamily: fontStack(firstRun?.fontFamily),
+    // A run with no typeface of its own uses the deck's theme font — Arial in the church decks.
+    fontFamily: fontStack(firstRun?.fontFamily ?? 'Arial'),
     color: firstRun?.color ?? '#000000',
     align: paragraphs.find((p) => p.align)?.align ?? 'left',
     vAlign: shape.anchor ? ANCHOR[shape.anchor] : 'top',
@@ -72,12 +74,28 @@ export function textElement(shape: RenderedTextShape, f: Frame): SlideElement {
   };
 }
 
-/** A rendered slide → FreeCast slide, given the media id of its baked background. */
-export function slideFromRendered(rs: RenderedSlide, backgroundMediaId: string, group: string): Slide {
+/** Key of a picture as stored: the same image with the same crop is stored once. */
+export const pictureKey = (p: RenderedPictureShape) => `${p.imageUrl}|${p.crop ? [p.crop.l, p.crop.t, p.crop.r, p.crop.b].join(',') : ''}`;
+
+/**
+ * A rendered slide → FreeCast slide, given the media id of its baked background and of each
+ * picture (by pictureKey). A picture without a media id is left out.
+ */
+export function slideFromRendered(rs: RenderedSlide, backgroundMediaId: string, group: string, pictures: Map<string, string> = new Map()): Slide {
   const f = frameFor(rs.widthEmu, rs.heightEmu);
-  const elements = rs.shapes
-    .filter((s): s is RenderedTextShape => s.kind === 'text' && !isBlankText(s))
-    .map((s) => textElement(s, f));
+  const box = (s: { xEmu: number; yEmu: number; wEmu: number; hEmu: number }) => ({
+    x: Math.round(f.x + s.xEmu * f.k), y: Math.round(f.y + s.yEmu * f.k), w: Math.round(s.wEmu * f.k), h: Math.round(s.hEmu * f.k),
+  });
+  const elements: SlideElement[] = [];
+  for (const s of rs.shapes) {
+    if (s.kind === 'picture') {
+      const mediaId = pictures.get(pictureKey(s));
+      if (mediaId) elements.push({ id: uid('e'), kind: 'image', ...box(s), mediaId, fit: 'fill' });
+      continue;
+    }
+    if (s.fill || s.outline) elements.push({ id: uid('e'), kind: 'shape', ...box(s), fill: s.fill ?? 'transparent', stroke: s.outline?.color });
+    if (!isBlankText(s)) elements.push(textElement(s, f));
+  }
   return {
     id: uid('s'),
     group,

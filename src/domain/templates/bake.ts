@@ -1,6 +1,6 @@
-// Draws everything on a rendered PPTX slide except its text — background colour or picture,
-// pictures (logos, photos), filled/outlined boxes — into one 1440×1080 (4:3) PNG, with black
-// bars around a deck of another shape. The text goes on top as editable elements (convert.ts).
+// Draws a rendered PPTX slide's background — its colour and background picture — into one
+// 1440×1080 (4:3) PNG, with black bars around a deck of another shape. Everything on top (pictures,
+// boxes, text) becomes separate editable objects (convert.ts).
 import type { RenderedSlide } from '../io/pptxRender';
 import { frameFor } from './convert';
 import { CANVAS_H, CANVAS_W } from '../canvas';
@@ -34,30 +34,20 @@ export async function bakeBackground(rs: RenderedSlide): Promise<Blob> {
     const img = await loadImage(rs.backgroundImage);
     if (img) ctx.drawImage(img, f.x, f.y, sw, sh);
   }
-  const box = (s: { xEmu: number; yEmu: number; wEmu: number; hEmu: number }) =>
-    [f.x + s.xEmu * f.k, f.y + s.yEmu * f.k, s.wEmu * f.k, s.hEmu * f.k] as const;
-  for (const shape of rs.shapes) {
-    if (shape.kind === 'picture') {
-      const img = await loadImage(shape.imageUrl);
-      if (!img) continue;
-      const c = shape.crop;
-      if (c) {
-        // Only the part PowerPoint shows (its crop), stretched over the picture's frame.
-        const w = img.naturalWidth, h = img.naturalHeight;
-        ctx.drawImage(img, c.l * w, c.t * h, w * (1 - c.l - c.r), h * (1 - c.t - c.b), ...box(shape));
-      } else ctx.drawImage(img, ...box(shape));
-    } else {
-      if (shape.fill) {
-        ctx.fillStyle = shape.fill;
-        ctx.fillRect(...box(shape));
-      }
-      if (shape.outline) {
-        ctx.strokeStyle = shape.outline.color;
-        ctx.lineWidth = Math.max(1, shape.outline.widthEmu * f.k);
-        ctx.strokeRect(...box(shape));
-      }
-    }
-  }
   ctx.restore();
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not draw the slide'))), 'image/png'));
+}
+
+/** A picture with PowerPoint's crop applied (only the part the slide shows), as a PNG. */
+export async function croppedPicture(url: string, crop: { l: number; t: number; r: number; b: number }): Promise<Blob | null> {
+  const img = await loadImage(url);
+  if (!img) return null;
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const sw = Math.max(1, Math.round(w * (1 - crop.l - crop.r)));
+  const sh = Math.max(1, Math.round(h * (1 - crop.t - crop.b)));
+  const canvas = document.createElement('canvas');
+  canvas.width = sw;
+  canvas.height = sh;
+  canvas.getContext('2d')!.drawImage(img, crop.l * w, crop.t * h, sw, sh, 0, 0, sw, sh);
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), 'image/png'));
 }

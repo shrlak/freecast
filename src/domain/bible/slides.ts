@@ -48,6 +48,9 @@ export interface ScriptureChunk {
   lines: string[];
   /** Matching verses of the second translation. */
   lines2: string[];
+  /** The verse texts alone (no verse numbers), as the church Bible template prints them. */
+  texts: string[];
+  texts2: string[];
 }
 
 export function scriptureChunks(refs: BibleRef[], texts: BibleText[], opts: ScriptureOptions): ScriptureChunk[] {
@@ -63,9 +66,10 @@ export function scriptureChunks(refs: BibleRef[], texts: BibleText[], opts: Scri
       const z = chunk[chunk.length - 1];
       const end = z.endVerse ?? z.verse;
       const verses = a.chapter !== z.chapter ? `${a.verse}-${z.chapter}:${end}` : a.verse === end ? `${a.verse}` : `${a.verse}-${end}`;
+      const other = second.length ? matching(second, chunk) : [];
       out.push({
         ref: r, label: chunkRef(r, chunk, primary.language), nameKo: r.book.nameKo, nameEn: r.book.nameEn, chapter: a.chapter, verses,
-        lines: chunk.map(lineOf), lines2: second.length ? matching(second, chunk).map(lineOf) : [],
+        lines: chunk.map(lineOf), lines2: other.map(lineOf), texts: chunk.map((v) => v.text), texts2: other.map((v) => v.text),
       });
     }
   }

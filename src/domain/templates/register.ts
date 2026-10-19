@@ -1,13 +1,14 @@
 // Keeps the library's 주일예배 Front and Back decks the same as the church's current
 // templates (front-slides.pptx / back-slides.pptx): the Front shows this coming Sunday's date
 // and this week's 기도제목, the Back this season's 공동체 고백송.
-// A deck is replaced when it is still FreeCast's built-in placeholder, or when it was built from
-// the templates and the templates or the 고백송 have changed since.
+// A deck built from the same church file is only refreshed in place (date, 기도제목, 고백송 block),
+// so edits made to it in FreeCast stay; it is rebuilt from the template when the church file
+// itself changes, or when it is still FreeCast's built-in placeholder.
 import type { Library, Presentation } from '../types';
 import { DEFAULT_CONFESSION_SONG } from '../defaults';
 import { findSong } from '../sunday/songs';
 import { fillSlide } from './convert';
-import { fillFront } from './fill';
+import { fillFront, refreshFront } from './fill';
 import { parsePrayerTopics } from '../sunday/prayer';
 import { mdy, upcomingSunday } from '../sunday/notice';
 import { applyConfessionSong, songSections } from './confession';
@@ -41,8 +42,11 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
   const sunday = upcomingSunday(now);
   const prayer = (lib.sunday.prayerText ?? '').trim();
   const frontKey = `front:${tpl.keys.front}|${mdy(sunday)}|${hash(prayer)}`;
-  if (front && front.templateKey !== frontKey && (isPlaceholder(front, 'front') || fromTemplates(front, 'front'))) {
-    out.push({ id: front.id, patch: { ...base, templateKey: frontKey, slides: fillFront(tpl, sunday, parsePrayerTopics(prayer)) } });
+  if (front && front.templateKey !== frontKey) {
+    const topics = parsePrayerTopics(prayer);
+    // Same church file as before: only the date and the 기도 준비 slides change, edits stay.
+    if (front.templateKey?.startsWith(`front:${tpl.keys.front}|`)) out.push({ id: front.id, patch: { templateKey: frontKey, slides: refreshFront(front.slides, tpl, sunday, topics) } });
+    else if (isPlaceholder(front, 'front') || fromTemplates(front, 'front')) out.push({ id: front.id, patch: { ...base, templateKey: frontKey, slides: fillFront(tpl, sunday, topics) } });
   }
 
   const back = byId(lib.sunday.backId);
@@ -51,9 +55,14 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
     const song = findSong(lib.presentations, title);
     const lyrics = song ? songSections(song) : [];
     const backKey = `back:${tpl.keys.back}|${song ? `${song.title}:${hash(JSON.stringify(lyrics))}` : '-'}`;
-    if (back.templateKey !== backKey && (isPlaceholder(back, 'back') || fromTemplates(back, 'back'))) {
-      const slides = tpl.back.map((s) => fillSlide(s, (t) => t));
-      out.push({ id: back.id, patch: { ...base, templateKey: backKey, slides: (song && applyConfessionSong(slides, song)) || slides } });
+    if (back.templateKey !== backKey) {
+      if (back.templateKey?.startsWith(`back:${tpl.keys.back}|`)) {
+        // Same church file: only the 공동체 고백송 block is rewritten, edits elsewhere stay.
+        out.push({ id: back.id, patch: { templateKey: backKey, slides: (song && applyConfessionSong(back.slides, song)) || back.slides } });
+      } else if (isPlaceholder(back, 'back') || fromTemplates(back, 'back')) {
+        const slides = tpl.back.map((s) => fillSlide(s, (t) => t));
+        out.push({ id: back.id, patch: { ...base, templateKey: backKey, slides: (song && applyConfessionSong(slides, song)) || slides } });
+      }
     }
   }
   return out;

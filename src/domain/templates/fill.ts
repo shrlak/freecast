@@ -10,8 +10,8 @@ import type { Announcement } from '../sunday/announcements';
 import type { PrayerTopic } from '../sunday/prayer';
 import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
-import { fillSlide, fillTokens } from './convert';
-import { CANVAS_W } from '../canvas';
+import { fillSlide, fillTokens, withElementText } from './convert';
+import { CANVAS_H, CANVAS_W } from '../canvas';
 import type { ServiceTemplates } from './serviceTemplates';
 
 export const TEMPLATE_LYRICS_THEME = 'theme_tpl_lyrics';
@@ -31,26 +31,71 @@ function setLines(el: SlideElement, lines: { text: string; bold?: boolean }[]): 
   };
 }
 
-/** Front: 기도제목 on the 기도 준비 slide (as many copies as they need), the service date on the welcome slide. */
+const PRAYER_MARK = /기도제목\s*\d/;
+const copy = (s: Slide): Slide => fillSlide(s, (t) => t);
+const isPrayerSlide = (s: Slide) => texts(s).some((e) => e.role === 'prayer');
+
+/** A copy of `design` (a 기도 준비 slide) printing `lines` in its 기도제목 box. */
+function prayerCopy(design: Slide, lines: { text: string; bold?: boolean }[], group: string): Slide {
+  const c = copy(design);
+  return { ...c, group, elements: c.elements!.map((e) => (e.role === 'prayer' ? setLines(e, lines) : e)) };
+}
+
+/**
+ * The 기도 준비 slides for these topics, each a copy of `design` (≤3 topics per slide, as in the
+ * ppt program). With no topics, one slide with the template's own text (`emptyText`).
+ */
+function prayerSlides(design: Slide, topics: PrayerTopic[], emptyText: string): Slide[] {
+  if (!topics.length) return [prayerCopy(design, emptyText.split('\n').map((text) => ({ text })), design.group === '기도제목' ? 'Front' : design.group)];
+  // As the ppt program prints them: numbered topics (any with points) are all "n. 제목" in bold with
+  // their points as ● lines; a plain list is one ● line per topic.
+  const structured = topics.some((t) => t.points.length);
+  let n = 1;
+  return planPrayerSlides(topics).map((group) => {
+    const lines = group.flatMap((t, i) =>
+      structured ? [{ text: `${n + i}. ${t.title}`, bold: true }, ...t.points.map((p) => ({ text: `● ${p}` }))] : [{ text: `● ${t.title}` }],
+    );
+    n += group.length;
+    return prayerCopy(design, lines, '기도제목');
+  });
+}
+
+const withDate = (s: Slide, date: Date): Slide => ({
+  ...s,
+  elements: s.elements?.map((e) => (e.kind === 'text' && e.text && e.text.split('\n').some((l) => DATE_LINE.test(l))
+    ? withElementText(e, e.text.split('\n').map((l) => (DATE_LINE.test(l) ? mdy(date) : l)).join('\n'))
+    : e)),
+});
+
+/** The template's 기도제목 box text ("기도제목 1\n기도제목 2"), printed when there are no topics. */
+const templatePrayerText = (tpl: ServiceTemplates) =>
+  tpl.front.flatMap((s) => texts(s)).find((e) => PRAYER_MARK.test(e.text ?? ''))?.text ?? '기도제목';
+
+/**
+ * Bring an existing Front deck up to date — the date on the welcome slide and the 기도 준비
+ * slides — while keeping everything else on it exactly as edited.
+ */
+export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date, topics: PrayerTopic[]): Slide[] {
+  const at = slides.findIndex(isPrayerSlide);
+  const rest = slides.filter((s) => !isPrayerSlide(s)).map((s) => withDate(s, date));
+  if (at < 0) return rest;
+  const before = slides.slice(0, at).filter((s) => !isPrayerSlide(s)).length;
+  return [...rest.slice(0, before), ...prayerSlides(slides[at], topics, templatePrayerText(tpl)), ...rest.slice(before)];
+}
+
+/**
+ * Front from the template: 기도제목 on the 기도 준비 slide (as many copies as they need, its corner
+ * logo left off), the service date on the welcome slide.
+ */
 export function fillFront(tpl: ServiceTemplates, date: Date, topics: PrayerTopic[]): Slide[] {
-  const out: Slide[] = [];
-  for (const slide of tpl.front) {
-    const prayerBox = texts(slide).find((e) => /기도제목\s*\d/.test(e.text ?? ''));
-    if (prayerBox && topics.length) {
-      let n = 1;
-      for (const group of planPrayerSlides(topics)) {
-        const lines = group.flatMap((t, i) =>
-          t.points.length ? [{ text: `${n + i}. ${t.title}`, bold: true }, ...t.points.map((p) => ({ text: `● ${p}` }))] : [{ text: `● ${t.title}` }],
-        );
-        n += group.length;
-        const filled = fillSlide(slide, (t) => t);
-        out.push({ ...filled, group: '기도제목', elements: filled.elements!.map((e) => (e.text === prayerBox.text ? setLines(e, lines) : e)) });
-      }
-      continue;
-    }
-    out.push(fillSlide(slide, (t) => t.split('\n').map((line) => (DATE_LINE.test(line) ? mdy(date) : line)).join('\n')));
-  }
-  return out;
+  const slides = tpl.front.map((slide) => {
+    const c = copy(slide);
+    const box = texts(c).find((e) => PRAYER_MARK.test(e.text ?? ''));
+    if (!box) return c;
+    const topRight = (e: SlideElement) => e.kind === 'image' && e.x + e.w / 2 > CANVAS_W * 0.6 && e.y + e.h / 2 < CANVAS_H * 0.25;
+    return { ...c, elements: c.elements!.filter((e) => !topRight(e)).map((e) => (e === box ? { ...e, role: 'prayer' as const } : e)) };
+  });
+  return refreshFront(slides, tpl, date, topics);
 }
 
 export const prayerSlide = (tpl: ServiceTemplates): Slide => fillSlide(tpl.prayer, (t) => t);
@@ -79,10 +124,11 @@ export function templateLyricsTheme(tpl: ServiceTemplates): Theme {
   const p = lyrics?.paragraphs?.find((x) => x.text.trim());
   return {
     id: TEMPLATE_LYRICS_THEME, name: '주일 템플릿 (가사)',
-    fontFamily: lyrics?.fontFamily ?? '"Nanum Gothic", "Apple SD Gothic Neo", sans-serif',
-    fontSize: p?.fontSize ?? lyrics?.fontSize ?? 82, fontWeight: p?.bold ? 700 : 500,
+    fontFamily: lyrics?.fontFamily ?? '"Arial", Arimo, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+    fontSize: p?.fontSize ?? lyrics?.fontSize ?? 82, fontWeight: p?.bold ? 700 : 400,
     color: p?.color ?? lyrics?.color ?? '#000000', align: 'center', vAlign: lyrics?.vAlign ?? 'middle',
-    lineHeight: 1.25, padding: Math.round(lyrics ? Math.max(lyrics.x, CANVAS_W - lyrics.x - lyrics.w, 120) : 260),
+    // The ppt program sets lyric lines to 125% spacing; PowerPoint's single spacing for Arial is ~1.15 em.
+    lineHeight: 1.44, padding: Math.round(lyrics ? Math.max(lyrics.x, CANVAS_W - lyrics.x - lyrics.w, 120) : 260),
     shadow: false, uppercase: false, subColor: '#555555', subScale: 0.62,
   };
 }
@@ -93,9 +139,14 @@ export function templateLyricsTheme(tpl: ServiceTemplates): Theme {
  * arrangements, the stage display and the OBS overlay keep working.
  */
 export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder: string): Presentation {
-  const [, titleBox] = [...texts(tpl.songLyrics)].sort((a, b) => area(b) - area(a));
+  const [lyricBox, titleBox] = [...texts(tpl.songLyrics)].sort((a, b) => area(b) - area(a));
   const title = song.title;
-  const corner = titleBox ? fillSlide({ ...tpl.songLyrics, elements: [titleBox] }, () => title).elements! : [];
+  // Everything on the template's lyric slide except its lyrics box: the logo, any boxes, and the
+  // song title in the corner (lyrics stay slide text, drawn by the theme).
+  const corner = fillSlide(
+    { ...tpl.songLyrics, elements: (tpl.songLyrics.elements ?? []).filter((e) => e !== lyricBox) },
+    (t, el) => (el === titleBox ? title : t),
+  ).elements!;
   const lyrics = song.slides
     .filter((s) => s.group !== 'Title')
     .map((s) => ({ ...s, id: uid('s'), caption: undefined, background: undefined, elements: [...corner.map((e) => ({ ...e, id: uid('e') })), ...(s.elements ?? [])] }));
@@ -129,10 +180,11 @@ export function scriptureSlides(tpl: ServiceTemplates, f: ScriptureFill): Slide[
     fillSlide(tpl.bibleTitle, (t) => fillTokens(t, { RANGE_KO, RANGE_EN })),
     ...f.chunks.map((c) =>
       fillSlide(tpl.bibleVerse, (t) => {
-        if (t.includes('{{BODY2}}') && !c.lines2.length) return null;
+        if (t.includes('{{BODY2}}') && !c.texts2.length) return null;
+        // Verse texts run on without verse numbers, as the ppt program prints them.
         return fillTokens(t, {
           RANGE_KO, RANGE_EN, TITLE: c.nameKo, ETITLE: c.nameEn, CHAP: String(c.chapter), PARA: c.verses,
-          BODY: c.lines.join('\n'), BODY2: c.lines2.join('\n'),
+          BODY: c.texts.join(' '), BODY2: c.texts2.join(' '),
         });
       }, { group: c.label }),
     ),

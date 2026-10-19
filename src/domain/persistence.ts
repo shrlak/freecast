@@ -49,7 +49,7 @@ export function normalizeLibrary(value: unknown): Library | null {
     looks: arr(value.looks, []),
     stageLayouts: arr(value.stageLayouts, seed.stageLayouts),
     logoMediaId: typeof value.logoMediaId === 'string' ? value.logoMediaId : null,
-    sunday: { ...seed.sunday, ...(isObj(value.sunday) ? value.sunday : {}) },
+    sunday: churchStyle({ ...seed.sunday, ...(isObj(value.sunday) ? value.sunday : {}) }, isObj(value.sunday) ? value.sunday.styleVersion : undefined),
   };
 }
 
@@ -68,6 +68,12 @@ export function toFourThree(presentations: Library['presentations']): Library['p
         : s,
     ),
   }));
+}
+
+/** Once: defaults matched to the church's own PPT — one Bible verse per slide (changeable afterwards). */
+function churchStyle(sunday: Library['sunday'], saved: unknown): Library['sunday'] {
+  if (typeof saved === 'number' && saved >= 1) return sunday;
+  return { ...sunday, versesPerSlide: 1, styleVersion: 1 };
 }
 
 export const isLibrary = (value: unknown): boolean => normalizeLibrary(value) !== null;

@@ -88,8 +88,8 @@ describe('church template filling', () => {
     const topics = [{ title: '예배', points: ['은혜'] }, { title: '선교', points: [] }];
     const withTopics = fillFront(TPL, date, topics);
     expect(withTopics[0].group).toBe('기도제목');
-    expect(els(withTopics[0])[1]).toBe('1. 예배\n● 은혜\n● 선교');
-    expect(withTopics[0].elements![1].paragraphs!.map((p) => !!p.bold)).toEqual([true, false, false]);
+    expect(els(withTopics[0])[1]).toBe('1. 예배\n● 은혜\n2. 선교');
+    expect(withTopics[0].elements![1].paragraphs!.map((p) => !!p.bold)).toEqual([true, false, true]);
     expect(withTopics[0].id).not.toBe(TPL.front[0].id);
   });
 
@@ -130,11 +130,11 @@ describe('church template filling', () => {
 
   it('fills the Bible and sermon templates', () => {
     const { refs } = parseRefs('요한복음 3:16-17');
-    const chunk = { ref: refs[0], label: '요한복음 3:16-17', nameKo: '요한복음', nameEn: 'John', chapter: 3, verses: '16-17', lines: ['16 하나님이', '17 하나님이'], lines2: [] };
+    const chunk = { ref: refs[0], label: '요한복음 3:16-17', nameKo: '요한복음', nameEn: 'John', chapter: 3, verses: '16-17', lines: ['16 하나님이', '17 하나님이'], lines2: [], texts: ['하나님이 세상을', '하나님이 그 아들을'], texts2: [] };
     const slides = scriptureSlides(TPL, { refs, chunks: [chunk] });
     expect(slides).toHaveLength(2);
     expect(els(slides[0])[0]).toBe('요한복음 3:16-17\nJohn 3:16-17');
-    expect(els(slides[1])).toEqual(['요한복음 3:16-17\nJohn 3:16-17', '요한복음 3장 16-17절\n16 하나님이\n17 하나님이']);
+    expect(els(slides[1])).toEqual(['요한복음 3:16-17\nJohn 3:16-17', '요한복음 3장 16-17절\n하나님이 세상을 하나님이 그 아들을']);
     const sermon = sermonTitleSlide(TPL, { refs, sermonTitle: '사랑', preacher: '김목사' });
     expect(els(sermon)).toEqual(['설교\nSermon', '김목사', '사랑\n요한복음 3:16-17']);
   });
@@ -259,7 +259,7 @@ describe('4:3 Front deck with this Sunday’s date and 기도제목', async () =
     const [front] = templateDeckUpdates(lib, frontTpl, new Date(2026, 9, 21)); // a Wednesday
     expect(front.id).toBe(lib.sunday.frontId);
     const slides = front.patch.slides!;
-    expect(slides[0].elements![1].text).toBe('1. 예배\n● 은혜\n● 선교');
+    expect(slides[0].elements![1].text).toBe('1. 예배\n● 은혜\n2. 선교');
     expect(slides[1].elements![0].text).toContain('10/25/2026');
     const synced = { ...lib, presentations: lib.presentations.map((p) => (p.id === front.id ? { ...p, ...front.patch } : p)) };
     expect(templateDeckUpdates(synced, frontTpl, new Date(2026, 9, 22))).toEqual([]); // same week
@@ -277,5 +277,73 @@ describe('4:3 Front deck with this Sunday’s date and 기도제목', async () =
     expect(lib.aspect).toBe('4:3');
     expect(lib.presentations[0].slides[0].elements![0].x).toBe(420);
     expect(normalizeLibrary(lib)!.presentations[0].slides[0].elements![0].x).toBe(420); // not moved twice
+  });
+});
+
+describe('editable slides that keep their edits', async () => {
+  const { templateDeckUpdates } = await import('../src/domain/templates/register');
+  const { refreshFront } = await import('../src/domain/templates/fill');
+  const img = (id: string, x: number, y: number): SlideElement => ({ id, kind: 'image', x, y, w: 200, h: 100, mediaId: `m-${id}`, fit: 'fill' });
+
+  it('turns pictures and filled boxes into their own objects, in order', () => {
+    const rs: RenderedSlide = {
+      index: 0, widthEmu: 9144000, heightEmu: 6858000, shapes: [
+        { kind: 'picture', xEmu: 0, yEmu: 0, wEmu: 1000000, hEmu: 500000, imageUrl: 'blob:logo' },
+        { kind: 'text', xEmu: 0, yEmu: 1000000, wEmu: 2000000, hEmu: 500000, fill: '#eeeeee', paragraphs: [{ runs: [{ text: '광고' }] }] },
+      ],
+    };
+    const s = slideFromRendered(rs, 'bg', 'x', new Map([['blob:logo|', 'logo-media']]));
+    expect(s.elements!.map((e) => e.kind)).toEqual(['image', 'shape', 'text']);
+    expect(s.elements![0]).toMatchObject({ mediaId: 'logo-media', fit: 'fill', x: 0, w: 157 });
+    expect(s.elements![1]).toMatchObject({ fill: '#eeeeee' });
+  });
+
+  const prayerSlide = slide('Front', [img('logo', 1200, 20), text('t1', '지금은 기도로 예배를 준비하는 시간입니다.'), text('t2', '기도제목 1\n기도제목 2', 300)]);
+  const welcome = slide('Front', [img('w', 0, 300), text('d', '빛주사랑\n대학청년부\nmm/dd/202y', 800)]);
+  const tpl = { ...TPL, front: [prayerSlide, welcome], keys: { front: 'f1' } };
+
+  it('leaves the corner logo off the 기도 준비 slide only', () => {
+    const out = fillFront(tpl, new Date(2026, 9, 25), []);
+    expect(out[0].elements!.some((e) => e.kind === 'image')).toBe(false);
+    expect(out[0].elements!.find((e) => e.role === 'prayer')!.text).toBe('기도제목 1\n기도제목 2');
+    expect(out[1].elements!.some((e) => e.kind === 'image')).toBe(true);
+  });
+
+  it('refreshes the date and 기도제목 without losing edits', () => {
+    const first = fillFront(tpl, new Date(2026, 9, 25), [{ title: '예배', points: [] }]);
+    // The operator moves the title and adds a note on the welcome slide.
+    const edited = first.map((s, i) => (i === 0
+      ? { ...s, elements: s.elements!.map((e) => (e.text?.startsWith('지금은') ? { ...e, y: 40 } : e)) }
+      : { ...s, elements: [...s.elements!, text('note', '환영합니다!', 100)] }));
+    const next = refreshFront(edited, tpl, new Date(2026, 10, 1), [{ title: '선교', points: [] }, { title: '감사', points: [] }]);
+    expect(next).toHaveLength(2);
+    expect(next[0].elements!.find((e) => e.text?.startsWith('지금은'))!.y).toBe(40);
+    expect(next[0].elements!.find((e) => e.role === 'prayer')!.text).toBe('● 선교\n● 감사');
+    expect(next[1].elements!.map((e) => e.text).filter(Boolean)).toEqual(['빛주사랑\n대학청년부\n11/01/2026', '환영합니다!']);
+  });
+
+  it('keeps edits when the library decks refresh for a new week or 고백송', () => {
+    const lib = createSeedLibrary();
+    const [front] = templateDeckUpdates(lib, tpl, new Date(2026, 9, 21));
+    const editedSlides = front.patch.slides!.map((s, i) => (i === 1 ? { ...s, elements: [...s.elements!, text('mine', '내 메모', 50)] } : s));
+    const synced = { ...lib, presentations: lib.presentations.map((p) => (p.id === front.id ? { ...p, ...front.patch, slides: editedSlides } : p)) };
+    const [week2] = templateDeckUpdates(synced, tpl, new Date(2026, 9, 28));
+    expect(week2.patch.slides![1].elements!.some((e) => e.text === '내 메모')).toBe(true);
+    expect(week2.patch.slides![1].elements!.find((e) => e.text?.includes('대학청년부'))!.text).toContain('11/01/2026');
+    // A new church file rebuilds from the template.
+    const [newFile] = templateDeckUpdates(synced, { ...tpl, keys: { front: 'f2' } }, new Date(2026, 9, 21));
+    expect(newFile.patch.slides![1].elements!.some((e) => e.text === '내 메모')).toBe(false);
+  });
+});
+
+describe('church PPT style defaults', async () => {
+  const { normalizeLibrary } = await import('../src/domain/persistence');
+  it('switches an older library to one verse per slide once, then leaves the setting alone', () => {
+    const old = { ...createSeedLibrary(), sunday: { ...createSeedLibrary().sunday, versesPerSlide: 2, styleVersion: undefined } };
+    const lib = normalizeLibrary(old)!;
+    expect(lib.sunday.versesPerSlide).toBe(1);
+    expect(lib.sunday.styleVersion).toBe(1);
+    const chosen = normalizeLibrary({ ...lib, sunday: { ...lib.sunday, versesPerSlide: 3 } })!;
+    expect(chosen.sunday.versesPerSlide).toBe(3);
   });
 });

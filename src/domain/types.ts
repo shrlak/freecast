@@ -3,6 +3,8 @@ export type VAlign = 'top' | 'middle' | 'bottom';
 
 /** Text styling, sized against the 1440x1080 (4:3) canvas. */
 export interface Theme {
+  /** Set on a theme FreeCast generated from a church template: a fingerprint of what it generated. */
+  generated?: string;
   id: string;
   name: string;
   fontFamily: string;
@@ -36,7 +38,8 @@ export type SlideStyle = Partial<Pick<Theme,
   'subColor' | 'strokeColor' | 'strokeWidth' | 'italic' | 'underline' | 'padding'>>;
 
 export type MediaType = 'image' | 'video' | 'audio';
-export type MediaFit = 'cover' | 'contain';
+/** 'fill' stretches to the box (how PowerPoint draws a picture in its frame). */
+export type MediaFit = 'cover' | 'contain' | 'fill';
 
 export type Background =
   | { kind: 'color'; value: string }
@@ -106,6 +109,8 @@ export interface SlideElement {
   paragraphs?: ElementParagraph[];
   /** Shrink the text until it fits the box. */
   autoFit?: boolean;
+  /** What a template text box is for, so weekly updates can find it after edits ('prayer' = 기도제목 box). */
+  role?: 'prayer';
 }
 
 /** Things a slide does when it goes live (ProPresenter "slide actions"). */
@@ -350,6 +355,8 @@ export interface SundaySettings {
   linesPerSlide: number;
   translations: string[];
   versesPerSlide: number;
+  /** 1 = slide defaults matched to the church's own PPT (one verse per slide). */
+  styleVersion?: number;
 }
 
 export interface Library {
