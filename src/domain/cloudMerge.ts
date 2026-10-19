@@ -1,0 +1,92 @@
+import type { Library, Presentation } from './types';
+import { uid } from './lyrics';
+
+/** The part of the library that is shared through the cloud (online songs come from GitHub instead). */
+export function syncable(lib: Library): Library {
+  return { ...lib, presentations: lib.presentations.filter((p) => !p.online) };
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Three-way merge of id-keyed lists: base (last synced), local and remote.
+ * A side that did not change since base yields to the other; deletions on one side win
+ * when the other side left the item untouched. When both sides changed the same item,
+ * `onConflict` decides (default: keep local).
+ */
+export function mergeById<T extends { id: string }>(
+  base: T[] | undefined,
+  local: T[],
+  remote: T[],
+  onConflict: (l: T, r: T) => T[] = (l) => [l],
+): T[] {
+  const b = new Map((base ?? []).map((x) => [x.id, x]));
+  const l = new Map(local.map((x) => [x.id, x]));
+  const r = new Map(remote.map((x) => [x.id, x]));
+  const order = [...local.map((x) => x.id), ...remote.map((x) => x.id).filter((id) => !l.has(id))];
+  const out: T[] = [];
+  for (const id of order) {
+    const bv = b.get(id);
+    const lv = l.get(id);
+    const rv = r.get(id);
+    const lChanged = !same(bv, lv);
+    const rChanged = !same(bv, rv);
+    if (lv && rv) {
+      if (!lChanged) out.push(rv);
+      else if (!rChanged || same(lv, rv)) out.push(lv);
+      else out.push(...onConflict(lv, rv));
+    } else if (lv) {
+      if (!(bv && !lChanged)) out.push(lv); // new locally, or edited locally while deleted remotely
+    } else if (rv) {
+      if (!(bv && !rChanged)) out.push(rv); // new remotely, or edited remotely while deleted locally
+    }
+  }
+  return out;
+}
+
+const pick = <V>(base: V | undefined, local: V, remote: V, hasBase: boolean): V => (!hasBase || same(base, local) ? remote : local);
+
+export interface MergeResult {
+  library: Library;
+  /** Titles of presentations both devices edited; the other device's version was kept as a copy. */
+  conflicts: string[];
+}
+
+/** Merge the cloud library into this computer's library (both without online songs). */
+export function mergeLibrary(base: Library | null, local: Library, remote: Library): MergeResult {
+  const conflicts: string[] = [];
+  // First sync on this computer (no shared history): the cloud copy wins, local-only items are added.
+  const presentations = mergeById<Presentation>(base?.presentations, local.presentations, remote.presentations, (l, r) => {
+    if (!base) return [r];
+    conflicts.push(l.title);
+    return [l, { ...r, id: uid('p'), title: `${r.title} (다른 기기)` }];
+  });
+  const usageKey = (u: { at: number; presentationId: string }) => `${u.at}:${u.presentationId}`;
+  const usage = [...local.usage];
+  const seen = new Set(usage.map(usageKey));
+  for (const u of remote.usage ?? []) if (!seen.has(usageKey(u))) usage.push(u);
+  usage.sort((a, b) => a.at - b.at);
+  const m = <K extends 'themes' | 'playlists' | 'media' | 'timers' | 'props' | 'messageTemplates' | 'macros' | 'screens' | 'schedules' | 'looks' | 'stageLayouts'>(k: K) =>
+    mergeById<{ id: string }>(base?.[k] as { id: string }[] | undefined, (local[k] ?? []) as { id: string }[], (remote[k] ?? []) as { id: string }[], (l, r) => [base ? l : r]) as Library[K];
+  return {
+    conflicts,
+    library: {
+      version: 1,
+      presentations,
+      themes: m('themes'),
+      playlists: m('playlists'),
+      media: m('media'),
+      timers: m('timers'),
+      props: m('props'),
+      messageTemplates: m('messageTemplates'),
+      macros: m('macros'),
+      screens: m('screens'),
+      schedules: m('schedules'),
+      looks: m('looks'),
+      stageLayouts: m('stageLayouts'),
+      usage: usage.slice(-5000),
+      sunday: pick(base?.sunday, local.sunday, remote.sunday, !!base),
+      logoMediaId: pick(base?.logoMediaId, local.logoMediaId, remote.logoMediaId, !!base),
+    },
+  };
+}

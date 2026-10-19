@@ -1,0 +1,195 @@
+import { useEffect, useState, type Dispatch } from 'react';
+import type { Action, AppState } from '../../domain/reducer';
+import type { Presentation } from '../../domain/types';
+import { sequence } from '../../domain/arrangement';
+import { activePlaylist, slideAt, nextCursor } from '../../domain/live';
+import { groupColor } from '../../domain/lyrics';
+import { SlideCanvas } from '../SlideCanvas';
+import { liveCanvasProps } from '../liveProps';
+import { LivePanel } from '../LivePanel';
+import { SlideDesigner } from '../SlideDesigner';
+import { useNow } from '../hooks';
+import { SlideFormat } from './SlideFormat';
+import type { Commands } from './commands';
+
+interface Props {
+  state: AppState;
+  dispatch: Dispatch<Action>;
+  cmd: Commands;
+}
+
+/** Every slide of the service (playlist), or of the current presentation, as clickable thumbnails. */
+function AllSlides({ state, dispatch, onEdit }: { state: AppState; dispatch: Dispatch<Action>; onEdit: (presId: string, slideId: string) => void }) {
+  const lib = state.library;
+  const items = activePlaylist(state)?.items ?? [];
+  const inPlaylist = !!state.cursor && items.some((i) => i.kind !== 'header' && i.presentationId === state.cursor!.presentationId);
+  const sections: { index: number | null; header?: string; p?: Presentation }[] = inPlaylist
+    ? items.map((i, index) => (i.kind === 'header' ? { index, header: i.title } : { index, p: lib.presentations.find((x) => x.id === i.presentationId) }))
+    : state.cursor || state.selectedId
+      ? [{ index: null, p: lib.presentations.find((x) => x.id === (state.cursor?.presentationId ?? state.selectedId)) }]
+      : [];
+  return (
+    <div className="all-slides">
+      {sections.map((sec, k) => {
+        if (sec.header) return <div key={k} className="all-header">{sec.header}</div>;
+        const p = sec.p;
+        if (!p) return null;
+        const theme = lib.themes.find((t) => t.id === p.themeId) ?? lib.themes[0];
+        return (
+          <div key={k} className="all-pres">
+            <div className="all-title">{p.title}</div>
+            <div className="all-grid">
+              {sequence(p).map(({ slide }, seq) => {
+                const live = state.cursor?.presentationId === p.id && state.cursor.seq === seq && (sec.index == null || state.cursor.playlistIndex === sec.index || state.playlistIndex === sec.index);
+                return (
+                  <button key={`${slide.id}-${seq}`} className={`all-thumb ${live ? 'live' : ''} ${slide.disabled ? 'skip' : ''}`}
+                    title="클릭: 화면에 표시 · 오른쪽 클릭: 편집"
+                    onClick={() => {
+                      if (sec.index != null) dispatch({ type: 'playlist/select', index: sec.index });
+                      dispatch({ type: 'live/go', presentationId: p.id, seq });
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); onEdit(p.id, slide.id); }}>
+                    <SlideCanvas slide={slide} theme={theme} background={slide.background ?? p.background ?? null} bgEffect={p.bgEffect} />
+                    <span className="all-label" style={{ background: groupColor(slide.group) }}>{seq + 1} {slide.label || slide.group}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      {!sections.length && <p className="muted">재생목록이나 프레젠테이션을 선택하세요.</p>}
+    </div>
+  );
+}
+
+/**
+ * Split-screen Presenter View. Left: what the audience sees, the next slide, notes, timer and
+ * every slide of the service (click to show). Right: edit any slide while presenting — changes
+ * to the slide on screen appear on the output immediately.
+ */
+export function PresenterView({ state, dispatch, cmd }: Props) {
+  const now = useNow(1000);
+  const [started] = useState(() => Date.now());
+  const [mode, setMode] = useState<'next' | 'all'>('next');
+  const [controls, setControls] = useState(false);
+  const [edit, setEdit] = useState<{ presId: string; slideId: string } | null>(null);
+  const [follow, setFollow] = useState(true);
+  const [designing, setDesigning] = useState(false);
+  const { live, cursor } = state;
+  const lib = state.library;
+  const p = cursor ? lib.presentations.find((x) => x.id === cursor.presentationId) : null;
+  const seqLen = p ? sequence(p).length : 0;
+  const next = cursor ? nextCursor(state, cursor) : null;
+  const nextSlide = next ? slideAt(lib, next) : undefined;
+  const nextPres = next ? lib.presentations.find((x) => x.id === next.presentationId) : null;
+  const nextTheme = (nextPres && lib.themes.find((t) => t.id === nextPres.themeId)) || live.theme;
+  const elapsed = Math.floor((now - started) / 1000);
+
+  // The editor follows the live slide unless the operator picked another slide to edit.
+  const liveTarget = cursor && live.slide ? { presId: cursor.presentationId, slideId: live.slide.id } : null;
+  const target = follow ? liveTarget ?? edit : edit ?? liveTarget;
+  const editPres = target ? lib.presentations.find((x) => x.id === target.presId) : null;
+  const editSlide = editPres?.slides.find((s) => s.id === target!.slideId) ?? null;
+  const editTheme = (editPres && lib.themes.find((t) => t.id === editPres.themeId)) || lib.themes[0];
+  const editingLive = !!editSlide && editSlide.id === live.slide?.id;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('.modal-backdrop')) cmd.endShow();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cmd]);
+
+  const pickToEdit = (presId: string, slideId: string) => {
+    setEdit({ presId, slideId });
+    setFollow(false);
+  };
+
+  return (
+    <div className={`presenter split ${controls ? 'with-controls' : ''}`}>
+      <section className="presenter-main">
+        <div className="presenter-top">
+          <span className="presenter-clock">⏱ {String(Math.floor(elapsed / 60)).padStart(2, '0')}:{String(elapsed % 60).padStart(2, '0')}</span>
+          <span>{new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+          <span className="muted truncate">{live.title ?? '라이브 없음'}</span>
+          <div className="seg">
+            <button className={mode === 'next' ? 'on' : ''} onClick={() => setMode('next')}>다음 슬라이드</button>
+            <button className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>모든 슬라이드</button>
+          </div>
+          <button className={controls ? 'active' : ''} onClick={() => setControls(!controls)} title="매크로 · 메시지 · 타이머 · 화면 지우기">🎛 컨트롤</button>
+          <button className="danger" onClick={cmd.endShow}>쇼 마침 (Esc)</button>
+        </div>
+        {mode === 'next' ? (
+          <div className="presenter-slides">
+            <div className="presenter-current">
+              <div className="presenter-label">현재 화면</div>
+              <SlideCanvas {...liveCanvasProps(live)} />
+              <div className="presenter-nav">
+                <button onClick={() => dispatch({ type: 'live/prev' })}>◀</button>
+                <span>{cursor ? `슬라이드 ${cursor.seq + 1} / ${seqLen}` : '—'}</span>
+                <button className="primary" onClick={() => dispatch({ type: 'live/next' })}>▶</button>
+              </div>
+            </div>
+            <div className="presenter-side">
+              <div className="presenter-label">다음 슬라이드</div>
+              {nextSlide && nextPres ? (
+                <button className="presenter-next" onClick={() => dispatch({ type: 'live/next' })} title="클릭하여 다음 슬라이드 표시">
+                  <SlideCanvas slide={nextSlide} theme={nextTheme} background={nextSlide.background ?? nextPres.background ?? live.background} />
+                </button>
+              ) : <div className="presenter-end">쇼의 끝</div>}
+              <div className="presenter-label">노트</div>
+              <div className="presenter-notes">{live.slide?.notes || <span className="muted">노트 없음</span>}</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="presenter-strip">
+              <div className="presenter-mini"><SlideCanvas {...liveCanvasProps(live)} /></div>
+              <div className="presenter-nav">
+                <button onClick={() => dispatch({ type: 'live/prev' })}>◀</button>
+                <span>{cursor ? `${cursor.seq + 1} / ${seqLen}` : '—'}</span>
+                <button className="primary" onClick={() => dispatch({ type: 'live/next' })}>▶</button>
+              </div>
+            </div>
+            <AllSlides state={state} dispatch={dispatch} onEdit={pickToEdit} />
+          </>
+        )}
+      </section>
+
+      <section className="presenter-edit">
+        <div className="presenter-top">
+          <strong>실시간 편집</strong>
+          {editSlide && <span className={`edit-badge ${editingLive ? 'live' : ''}`}>{editingLive ? '● 화면에 표시 중 — 바로 반영됩니다' : '다음에 표시할 때 반영'}</span>}
+          <label className="check small"><input type="checkbox" checked={follow} onChange={(e) => setFollow(e.target.checked)} /> 현재 슬라이드 따라가기</label>
+        </div>
+        {editPres && editSlide ? (
+          <div className="presenter-edit-body">
+            <div className="presenter-edit-canvas" onDoubleClick={() => setDesigning(true)} title="두 번 클릭: 개체 편집">
+              <SlideCanvas slide={editSlide} theme={editTheme} background={editSlide.background ?? editPres.background ?? null} bgEffect={editPres.bgEffect} />
+              <div className="muted small">{editPres.title} · {editSlide.group}</div>
+            </div>
+            <div className="presenter-format">
+              <SlideFormat state={state} dispatch={dispatch} presentation={editPres} slide={editSlide} onDesign={() => setDesigning(true)} />
+            </div>
+          </div>
+        ) : (
+          <p className="muted presenter-hint">슬라이드를 화면에 표시하면 여기서 바로 편집할 수 있습니다. "모든 슬라이드"에서 오른쪽 클릭하면 다른 슬라이드를 편집합니다.</p>
+        )}
+      </section>
+
+      {controls && <LivePanel state={state} dispatch={dispatch} />}
+
+      {designing && editPres && editSlide && (
+        <SlideDesigner slide={editSlide} theme={editTheme} background={editSlide.background ?? editPres.background ?? null} media={lib.media}
+          addMedia={(m) => dispatch({ type: 'media/add', media: m })}
+          onClose={() => setDesigning(false)}
+          onSave={(elements, text) => {
+            dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch: { elements: elements.length ? elements : undefined, text } });
+            setDesigning(false);
+          }} />
+      )}
+    </div>
+  );
+}

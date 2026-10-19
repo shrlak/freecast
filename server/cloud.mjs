@@ -1,0 +1,35 @@
+// /api/cloud/* → the church Worker's /freecast/* routes (accounts + shared slide library).
+// Going through this local server means the Worker sees its allowed origin and the browser
+// never deals with CORS. FREECAST_CLOUD_URL overrides the Worker address (e.g. wrangler dev).
+import { aiConfig } from './aiProviders.mjs';
+
+const cloudBase = () => (process.env.FREECAST_CLOUD_URL || aiConfig().proxyUrl).replace(/\/+$/, '');
+
+export async function cloudMiddleware(req, res, next) {
+  if (!req.url?.startsWith('/api/cloud/')) return next();
+  if (req.headers['sec-fetch-site'] === 'cross-site') {
+    res.writeHead(403, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Cross-site requests are not allowed' }));
+  }
+  const target = `${cloudBase()}/freecast/${req.url.slice('/api/cloud/'.length)}`;
+  const headers = { Origin: aiConfig().proxyOrigin };
+  for (const h of ['authorization', 'content-type']) if (req.headers[h]) headers[h] = req.headers[h];
+  try {
+    const hasBody = !['GET', 'HEAD'].includes(req.method ?? 'GET');
+    const upstream = await fetch(target, {
+      method: req.method,
+      headers,
+      body: hasBody ? req : undefined,
+      duplex: hasBody ? 'half' : undefined,
+      signal: AbortSignal.timeout(120_000),
+    });
+    const out = { 'content-type': upstream.headers.get('content-type') ?? 'application/octet-stream' };
+    res.writeHead(upstream.status, out);
+    if (upstream.status === 204 || !upstream.body) return res.end();
+    for await (const chunk of upstream.body) res.write(chunk);
+    res.end();
+  } catch (e) {
+    res.writeHead(502, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: `클라우드 서버에 연결할 수 없습니다 (${e.message})` }));
+  }
+}

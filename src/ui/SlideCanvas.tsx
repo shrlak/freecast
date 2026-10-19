@@ -1,0 +1,369 @@
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { Background, Prop, Screen, Slide, SlideElement, Theme, Timer, Transition } from '../domain/types';
+import { stripChords } from '../domain/lyrics';
+import { CHURCH_LOGO_URL } from '../domain/defaults';
+import { qrDataUrl } from '../domain/io/qr';
+import { formatClock, timerValue } from '../domain/timers';
+import { useMediaUrl, useNow, useWidth } from './hooks';
+
+export const CANVAS_W = 1920;
+export const CANVAS_H = 1080;
+
+export interface CanvasProps {
+  slide: Slide | null;
+  theme: Theme;
+  background: Background | null;
+  black?: boolean;
+  message?: string | null;
+  props?: Prop[];
+  timers?: Timer[];
+  outputTimerId?: string | null;
+  copyright?: string | null;
+  transition?: Transition;
+  screen?: Screen;
+  video?: { playing: boolean; restart: number; seek?: { t: number; n: number }; loop?: boolean };
+  logo?: boolean;
+  logoMediaId?: string | null;
+  announcement?: { slide: Slide; theme: Theme } | null;
+  messageScroll?: boolean;
+  bgEffect?: { dim: number; blur: number } | null;
+  /** Reports background-video position (operator preview transport bar). */
+  onVideoTime?: (t: number, duration: number) => void;
+  /** Live rendering: play video/camera and run transitions. Off for thumbnails. */
+  animate?: boolean;
+  className?: string;
+}
+
+function VideoBg({ url, fit, loop, video, onTime }: { url: string; fit: string; loop: boolean; video?: CanvasProps['video']; onTime?: CanvasProps['onVideoTime'] }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (ref.current && video?.seek) ref.current.currentTime = video.seek.t;
+  }, [video?.seek?.n]);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (video?.playing === false) v.pause();
+    else v.play().catch(() => undefined);
+  }, [video?.playing, url]);
+  useEffect(() => {
+    if (ref.current && video && video.restart > 0) ref.current.currentTime = 0;
+  }, [video?.restart]);
+  return (
+    <video ref={ref} className="layer media" style={{ objectFit: fit as 'cover' }} src={url} autoPlay muted loop={video?.loop ?? loop} playsInline
+      onTimeUpdate={onTime ? (e) => onTime(e.currentTarget.currentTime, e.currentTarget.duration || 0) : undefined} />
+  );
+}
+
+function CameraBg({ deviceId, label, animate }: { deviceId: string; label: string; animate: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!animate || !navigator.mediaDevices) return;
+    let stream: MediaStream | null = null;
+    navigator.mediaDevices
+      .getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, width: 1920, height: 1080 } : true, audio: false })
+      .then((s) => {
+        stream = s;
+        if (ref.current) ref.current.srcObject = s;
+      })
+      .catch((e: Error) => setError(e.message));
+    return () => stream?.getTracks().forEach((t) => t.stop());
+  }, [deviceId, animate]);
+  if (!animate || error) return <div className="layer camera-placeholder">📷 {label}{error ? ` — ${error}` : ''}</div>;
+  return <video ref={ref} className="layer media" autoPlay muted playsInline />;
+}
+
+function BackgroundLayer({ background, animate, video, onTime }: { background: Background | null; animate: boolean; video?: CanvasProps['video']; onTime?: CanvasProps['onVideoTime'] }) {
+  const url = useMediaUrl(background?.kind === 'media' ? background.mediaId : null);
+  if (!background) return null;
+  if (background.kind === 'color') return <div className="layer" style={{ background: background.value }} />;
+  if (background.kind === 'gradient') return <div className="layer" style={{ backgroundImage: background.value }} />;
+  if (background.kind === 'camera') return <CameraBg deviceId={background.deviceId} label={background.label} animate={animate} />;
+  if (background.kind === 'image') return <img className="layer media" style={{ objectFit: background.fit ?? 'cover', background: '#fff' }} src={assetUrl(background.url)} alt="" />;
+  if (!url) return null;
+  const fit = background.fit ?? 'cover';
+  if (background.mediaType === 'image') return <img className="layer media" style={{ objectFit: fit }} src={url} alt="" />;
+  if (!animate) return <video className="layer media" style={{ objectFit: fit }} src={url} muted preload="metadata" />;
+  return <VideoBg url={url} fit={fit} loop={background.loop !== false} video={video} onTime={onTime} />;
+}
+
+/** Timers available to dynamic text ({timer:Name}) inside slides. */
+const TimersContext = createContext<Timer[]>([]);
+
+const TOKEN = /\{(time|date|timer:[^}]+)\}/;
+
+/** Replace {time}, {date} and {timer:Name} with live values. */
+function DynamicText({ text }: { text: string }) {
+  const timers = useContext(TimersContext);
+  const now = useNow(500);
+  const out = text.replace(new RegExp(TOKEN.source, 'g'), (_, tok: string) => {
+    if (tok === 'time') return new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (tok === 'date') return new Date(now).toLocaleDateString();
+    const name = tok.slice(6).trim().toLowerCase();
+    const t = timers.find((x) => x.name.toLowerCase() === name || x.id === name);
+    return t ? formatClock(timerValue(t, now)) : '--:--';
+  });
+  return <>{out}</>;
+}
+
+export function textStyle(theme: Theme): CSSProperties {
+  const glow = theme.glowColor ? `0 0 18px ${theme.glowColor}, 0 0 36px ${theme.glowColor}` : '';
+  const shadow = theme.shadow ? '0 4px 18px rgba(0,0,0,.85), 0 2px 4px rgba(0,0,0,.9)' : '';
+  const effects: CSSProperties = {};
+  if (theme.strokeWidth && theme.strokeColor) {
+    effects.WebkitTextStroke = `${theme.strokeWidth}px ${theme.strokeColor}`;
+    effects.paintOrder = 'stroke fill';
+  }
+  if (theme.gradient) {
+    effects.backgroundImage = theme.gradient;
+    effects.WebkitBackgroundClip = 'text';
+    effects.backgroundClip = 'text';
+  }
+  return {
+    ...effects,
+    fontFamily: theme.fontFamily,
+    fontSize: theme.fontSize,
+    fontWeight: theme.fontWeight,
+    color: theme.color,
+    textAlign: theme.align,
+    lineHeight: theme.lineHeight,
+    textTransform: theme.uppercase ? 'uppercase' : 'none',
+    fontStyle: theme.italic ? 'italic' : undefined,
+    textDecoration: theme.underline ? 'underline' : undefined,
+    textShadow: [glow, theme.gradient ? '' : shadow].filter(Boolean).join(', ') || 'none',
+    ...(theme.gradient ? { color: 'transparent' } : {}),
+  };
+}
+
+/** Lines wrapped in **…** render bold (prayer topic titles). */
+function Lines({ text }: { text: string }) {
+  return (
+    <>
+      {stripChords(text).split('\n').map((line, i) => {
+        const bold = /^\*\*(.+)\*\*$/.exec(line);
+        const content = bold ? bold[1] : line;
+        const body = TOKEN.test(content) ? <DynamicText text={content} /> : content || '\u00a0';
+        return <div key={i}>{bold ? <strong style={{ fontWeight: 800 }}>{body}</strong> : body}</div>;
+      })}
+    </>
+  );
+}
+
+const V_ALIGN = { top: 'flex-start', middle: 'center', bottom: 'flex-end' } as const;
+const H_ALIGN = { left: 'flex-start', center: 'center', right: 'flex-end' } as const;
+
+/** One free-positioned object from the slide editor. */
+export function ElementView({ el }: { el: SlideElement }) {
+  const url = useMediaUrl(el.kind === 'image' ? el.mediaId : null);
+  const videoUrl = useMediaUrl(el.kind === 'video' ? el.mediaId : null);
+  const box: CSSProperties = {
+    position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h, opacity: el.opacity ?? 1,
+    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+  };
+  if (el.kind === 'image') return url ? <img src={url} alt="" style={{ ...box, objectFit: el.fit ?? 'contain' }} /> : <div style={{ ...box, outline: '2px dashed #555' }} />;
+  if (el.kind === 'video') return videoUrl ? <video src={videoUrl} style={{ ...box, objectFit: el.fit ?? 'cover' }} autoPlay muted loop playsInline /> : <div style={{ ...box, outline: '2px dashed #555' }} />;
+  if (el.kind === 'camera') return <div style={box}><CameraBg deviceId={el.deviceId ?? ''} label="Camera" animate /></div>;
+  if (el.kind === 'shape') {
+    return <div style={{ ...box, background: el.fill ?? '#ffffff', borderRadius: el.ellipse ? '50%' : el.radius ?? 0, border: el.stroke ? `4px solid ${el.stroke}` : undefined }} />;
+  }
+  return <TextElement el={el} box={box} />;
+}
+
+function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const key = `${el.text}|${el.w}|${el.h}|${el.fontSize}|${JSON.stringify(el.paragraphs?.map((p) => p.fontSize))}`;
+  useLayoutEffect(() => setScale(1), [key]);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!el.autoFit || !node) return;
+    const k = Math.min(node.clientHeight / node.scrollHeight, node.clientWidth / node.scrollWidth);
+    if (k < 0.99 && scale > 0.3) setScale((v) => Math.max(0.3, v * k * 0.97));
+  }, [el.autoFit, key, scale]);
+  const base = el.fontSize ?? 64;
+  return (
+    <div ref={ref} style={{
+      ...box, display: 'flex', flexDirection: 'column', whiteSpace: 'pre-line',
+      justifyContent: V_ALIGN[el.vAlign ?? 'middle'], textAlign: el.align ?? 'center',
+      fontSize: base * scale, fontFamily: el.fontFamily, color: el.color ?? '#fff',
+      fontWeight: el.bold ? 800 : el.paragraphs ? 400 : 500, fontStyle: el.italic ? 'italic' : undefined, lineHeight: el.paragraphs ? 1.2 : 1.25,
+      textShadow: el.shadow ? '0 3px 12px rgba(0,0,0,.8)' : undefined, overflow: 'hidden',
+    }}>
+      {el.paragraphs
+        ? el.paragraphs.map((p, i) => (
+            <div key={i} style={{
+              fontSize: (p.fontSize ?? base) * scale, fontWeight: p.bold ? 700 : undefined, fontStyle: p.italic ? 'italic' : undefined,
+              color: p.color, textAlign: p.align, minHeight: '1.2em',
+            }}>
+              {TOKEN.test(p.text) ? <DynamicText text={p.text} /> : p.text}
+            </div>
+          ))
+        : el.text && TOKEN.test(el.text) ? <DynamicText text={el.text} /> : el.text}
+    </div>
+  );
+}
+
+/** The theme with this slide's own formatting applied on top. */
+export const slideTheme = (theme: Theme, slide: Slide): Theme => (slide.style ? { ...theme, ...slide.style } : theme);
+
+function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
+  const theme = slideTheme(base, slide);
+  const hasQr = !!slide.qr?.length;
+  const inner = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}`;
+  useLayoutEffect(() => setScale(1), [content]);
+  useLayoutEffect(() => {
+    const el = inner.current;
+    if (!el || theme.autoFit === false) return;
+    const availH = CANVAS_H - theme.padding * 2;
+    const availW = CANVAS_W - theme.padding * 2 - (hasQr ? 300 : 0);
+    const k = Math.min(availH / el.scrollHeight, availW / el.scrollWidth);
+    if (k < 0.99 && scale > 0.25) setScale((v) => Math.max(0.25, v * k * 0.98));
+  }, [scale, content, hasQr, theme.autoFit, theme.padding]);
+  const t = scale === 1 ? theme : { ...theme, fontSize: theme.fontSize * scale };
+  return (
+    <>
+      <div
+        className="layer text-layer"
+        style={{ padding: theme.padding, paddingRight: hasQr ? theme.padding + 300 : theme.padding, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
+      >
+        <div ref={inner} style={textStyle(t)}>
+          {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}
+          {slide.text && <Lines text={slide.text} />}
+          {slide.subtext && (
+            <div style={{ fontSize: t.fontSize * (theme.subScale ?? 0.62), color: theme.subColor ?? theme.color, marginTop: t.fontSize * 0.35, fontWeight: Math.min(theme.fontWeight, 500) }}>
+              <Lines text={slide.subtext} />
+            </div>
+          )}
+        </div>
+        {hasQr && (
+          <div className="qr-stack">
+            {slide.qr!.map((link) => <img key={link} src={qrDataUrl(link)} alt={link} />)}
+          </div>
+        )}
+      </div>
+      {slide.elements?.map((el) => <ElementView key={el.id} el={el} />)}
+      {slide.caption && <div className="slide-caption" style={{ fontFamily: theme.fontFamily, color: theme.color }}>{slide.caption}</div>}
+    </>
+  );
+}
+
+/** Keeps the outgoing slide on screen while the new one transitions in. */
+function TransitionLayer({ slide, theme, transition, animate }: { slide: Slide | null; theme: Theme; transition?: Transition; animate: boolean }) {
+  const [prev, setPrev] = useState<{ slide: Slide; theme: Theme } | null>(null);
+  const last = useRef<{ slide: Slide | null; theme: Theme }>({ slide, theme });
+  const kind = animate ? transition?.kind ?? 'cut' : 'cut';
+  const duration = transition?.duration ?? 300;
+  useEffect(() => {
+    const old = last.current;
+    last.current = { slide, theme };
+    if (kind === 'cut' || !old.slide || old.slide === slide) return;
+    setPrev({ slide: old.slide, theme: old.theme });
+    const t = setTimeout(() => setPrev(null), duration);
+    return () => clearTimeout(t);
+  }, [slide, theme, kind, duration]);
+  const style = { ['--tr' as string]: `${duration}ms` } as CSSProperties;
+  return (
+    <>
+      {prev && kind !== 'cut' && (
+        <div className={`layer tr-out tr-${kind}`} style={style} key={`out-${prev.slide.id}`}><SlideBody slide={prev.slide} theme={prev.theme} /></div>
+      )}
+      {slide && (
+        <div className={`layer ${kind !== 'cut' ? `tr-in tr-${kind}` : ''}`} style={style} key={`in-${slide.id}-${slide.text.length}`}>
+          <SlideBody slide={slide} theme={theme} />
+        </div>
+      )}
+    </>
+  );
+}
+
+const POS: Record<Prop['position'], CSSProperties> = {
+  'top-left': { top: 40, left: 40 }, top: { top: 40, left: '50%', transform: 'translateX(-50%)' }, 'top-right': { top: 40, right: 40 },
+  center: { top: '50%', left: '50%', transform: 'translate(-50%,-50%)' },
+  'bottom-left': { bottom: 40, left: 40 }, bottom: { bottom: 40, left: '50%', transform: 'translateX(-50%)' }, 'bottom-right': { bottom: 40, right: 40 },
+  full: { inset: 0 },
+};
+
+function PropBox({ prop, timers }: { prop: Prop; timers: Timer[] }) {
+  const url = useMediaUrl(prop.kind === 'image' ? prop.mediaId : null);
+  const now = useNow(prop.kind === 'clock' || prop.kind === 'timer' ? 250 : 60000);
+  let content: ReactNode = prop.text ?? '';
+  if (prop.kind === 'clock') content = new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (prop.kind === 'timer') {
+    const t = timers.find((x) => x.id === prop.timerId);
+    content = t ? formatClock(timerValue(t, now)) : '--:--';
+  }
+  if (prop.kind === 'image') {
+    content = url ? <img src={url} alt="" style={prop.position === 'full' ? { width: '100%', height: '100%', objectFit: 'cover' } : { height: prop.size * 3 }} /> : null;
+  }
+  return (
+    <div className="prop" style={{ ...POS[prop.position], color: prop.color, background: prop.background, fontSize: prop.size, padding: prop.kind === 'image' || prop.background === 'transparent' ? 0 : '0.25em 0.6em' }}>
+      {content}
+    </div>
+  );
+}
+
+function TimerOverlay({ timer }: { timer: Timer }) {
+  const now = useNow(250);
+  const v = timerValue(timer, now);
+  return <div className={`countdown-overlay ${v < 0 && timer.kind !== 'elapsed' ? 'over' : ''}`}>{formatClock(v)}</div>;
+}
+
+const KEY_FILL = { black: '#000', green: '#00b140', transparent: 'transparent', matte: '#000' } as const;
+
+/** App-relative asset path → absolute URL (works for the console, output windows and OBS). */
+export const assetUrl = (url: string) => (/^(https?:|data:|blob:)/.test(url) ? url : `${location.origin}/${url.replace(/^\//, '')}`);
+
+/** Full-screen church logo ("clear to logo"); falls back to the FreeCast mark. */
+function LogoLayer({ mediaId }: { mediaId: string | null }) {
+  const url = useMediaUrl(mediaId);
+  // Without a chosen logo, show the church logo from the templates on white.
+  return (
+    <div className="layer logo-layer" style={url ? undefined : { background: '#fff' }}>
+      <img src={url ?? assetUrl(CHURCH_LOGO_URL)} alt="" />
+    </div>
+  );
+}
+
+/** Renders a slide at 1920x1080 and scales it to fit its container. */
+export function SlideCanvas(p: CanvasProps) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const layers = p.screen?.layers ?? { background: true, slide: true, props: true, messages: true, timer: true };
+  const fill = KEY_FILL[p.screen?.key ?? 'black'];
+  const activeProps = layers.props ? p.props ?? [] : [];
+  const timer = layers.timer && p.outputTimerId ? p.timers?.find((t) => t.id === p.outputTimerId) : undefined;
+  const matte = p.screen?.key === 'matte';
+  const fx = p.bgEffect;
+  const m = p.screen?.mask;
+  const mask: CSSProperties | null = m && m.kind !== 'none'
+    ? { boxShadow: `0 0 0 3000px ${fill === 'transparent' ? '#000' : fill}`, inset: m.inset, borderRadius: m.kind === 'oval' ? '50%' : 0 }
+    : null;
+  return (
+    <div ref={ref} className={`canvas-frame ${p.className ?? ''}`} style={{ background: fill }}>
+      <TimersContext.Provider value={p.timers ?? []}>
+      <div className={`canvas ${matte ? 'matte' : ''}`} style={{ transform: `scale(${width / CANVAS_W})`, width: CANVAS_W, height: CANVAS_H }}>
+        {layers.background && !matte && (
+          <div className="layer bg-layer" style={fx?.blur ? { filter: `blur(${fx.blur}px)`, inset: -fx.blur * 2 } : undefined}>
+            <BackgroundLayer background={p.background} animate={!!p.animate} video={p.video} onTime={p.onVideoTime} />
+          </div>
+        )}
+        {layers.background && !matte && fx?.dim ? <div className="layer" style={{ background: `rgba(0,0,0,${fx.dim})` }} /> : null}
+        {layers.slide && <TransitionLayer slide={p.slide} theme={p.theme} transition={p.transition} animate={!!p.animate} />}
+        {(layers.announcements ?? true) && p.announcement && (
+          <div className="layer announcement-layer" key={p.announcement.slide.id}><SlideBody slide={p.announcement.slide} theme={p.announcement.theme} /></div>
+        )}
+        {activeProps.map((prop) => <PropBox key={prop.id} prop={prop} timers={p.timers ?? []} />)}
+        {timer && <TimerOverlay timer={timer} />}
+        {layers.slide && p.copyright && <div className="copyright-line">{p.copyright}</div>}
+        {layers.messages && p.message && (
+          <div className={`message-bar ${p.messageScroll ? 'ticker' : ''}`}>{p.messageScroll ? <span>{p.message}</span> : p.message}</div>
+        )}
+        {p.logo && <LogoLayer mediaId={p.logoMediaId ?? null} />}
+        {p.black && <div className="layer" style={{ background: '#000' }} />}
+        {mask && <div className="layer screen-mask" style={mask} />}
+      </div>
+      </TimersContext.Provider>
+    </div>
+  );
+}

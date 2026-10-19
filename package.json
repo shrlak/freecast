@@ -1,0 +1,123 @@
+{
+  "name": "freecast",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Free presentation software for worship and live events",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "start": "node server/serve.mjs",
+    "app": "npm run build && electron .",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist": "npm run build && electron-builder --publish never",
+    "icon": "node scripts/make-icon.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "tsc --noEmit",
+    "release": "npm run build && electron-builder --mac --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "ws": "^8.22.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@fontsource/arimo": "^5.3.0",
+    "@fontsource/carlito": "^5.3.0",
+    "@fontsource/nanum-gothic": "^5.3.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "jszip": "^3.10.2",
+    "pdfjs-dist": "^6.4.299",
+    "pptxgenjs": "^4.0.1",
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  },
+  "productName": "FreeCast",
+  "author": {
+    "name": "FreeCast"
+  },
+  "main": "electron/main.mjs",
+  "build": {
+    "appId": "app.freecast.desktop",
+    "productName": "FreeCast",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "server/**",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": null,
+      "extendInfo": {
+        "NSCameraUsageDescription": "FreeCast shows live camera feeds as slide backgrounds.",
+        "NSLocalNetworkUsageDescription": "FreeCast lets phones on your network act as remotes and stage displays."
+      }
+    },
+    "dmg": {
+      "title": "FreeCast"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "FreeCast"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "AudioVideo"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "shrlak",
+        "repo": "freecast",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

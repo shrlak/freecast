@@ -1,0 +1,427 @@
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { createInitialState, reducer, type Action } from '../domain/reducer';
+import { loadLibrary, normalizeLibrary, saveLibrary } from '../domain/persistence';
+import { activePlaylist, findPres } from '../domain/live';
+import { sequence } from '../domain/arrangement';
+import { stripChords, uid } from '../domain/lyrics';
+import { presentationFromSongFile } from '../domain/io/songFormats';
+import { exportBackup, importBackup } from '../domain/io/backup';
+import { exportPptx } from '../domain/io/pptxExport';
+import type { Presentation } from '../domain/types';
+import { useLiveBroadcast, useRelay } from '../ui/hooks';
+import { LibraryPanel } from '../ui/LibraryPanel';
+import { SlideGrid } from '../ui/SlideGrid';
+import { LivePanel } from '../ui/LivePanel';
+import { MediaBin } from '../ui/MediaBin';
+import { EditorModal } from '../ui/EditorModal';
+import { ThemeModal } from '../ui/ThemeModal';
+import { BibleModal } from '../ui/BibleModal';
+import { AiModal } from '../ui/AiModal';
+import { ScreensModal } from '../ui/ScreensModal';
+import { SundayWizard } from '../ui/sunday/SundayWizard';
+import { RetreatWizard } from '../ui/RetreatWizard';
+import { fetchOnlineSongs } from '../domain/online';
+import { runExternal } from '../domain/effects';
+import type { Macro, SlideAction } from '../domain/types';
+import { AudioPlayer } from '../ui/AudioPanel';
+import { filesToSlides } from '../ui/importFiles';
+import type { RemoteInfo } from './RemoteView';
+import { useMidi } from '../ui/midi';
+import { ClassicToolbar } from '../ui/ClassicToolbar';
+import { UpdateBanner } from '../ui/UpdateBanner';
+import { useCloudSync } from '../ui/useCloudSync';
+import { useServiceUploads } from '../ui/ppt/useServiceUploads';
+import { AccountModal } from '../ui/AccountModal';
+import { PptLayout } from '../ui/ppt/PptLayout';
+import { openOutput } from '../ui/LivePanel';
+import type { Commands, Layout, Modal, PptViewMode } from '../ui/ppt/commands';
+
+
+const KEYS: Record<string, Action> = {
+  ArrowRight: { type: 'live/next' }, ArrowDown: { type: 'live/next' }, PageDown: { type: 'live/next' }, ' ': { type: 'live/next' },
+  ArrowLeft: { type: 'live/prev' }, ArrowUp: { type: 'live/prev' }, PageUp: { type: 'live/prev' },
+  F1: { type: 'live/clearAll' }, F2: { type: 'live/clearText' }, F3: { type: 'live/clearBackground' },
+  F4: { type: 'prop/clearAll' }, F5: { type: 'live/message', message: null }, F6: { type: 'announce/stop' },
+  b: { type: 'live/toggleBlack' }, B: { type: 'live/toggleBlack' }, l: { type: 'live/logo' }, L: { type: 'live/logo' },
+};
+
+function isTyping(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+}
+
+function download(name: string, data: string, type: string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+export function OperatorView() {
+  const [state, dispatchRaw] = useReducer(reducer, undefined, () => createInitialState(loadLibrary()));
+  const [modal, setModal] = useState<Modal>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [midiOn, setMidiOn] = useState(() => localStorage.getItem('freecast.midi') === '1');
+  const [online, setOnline] = useState<{ status: 'loading' | 'ok' | 'error'; count: number; error?: string }>({ status: 'loading', count: 0 });
+  const [layout, setLayoutState] = useState<Layout>(() => (localStorage.getItem('freecast.layout') as Layout) || 'ppt');
+  const [view, setView] = useState<PptViewMode>('normal');
+  const [slideId, setSlideId] = useState<string | null>(null);
+  const setLayout = (l: Layout) => { localStorage.setItem('freecast.layout', l); setLayoutState(l); };
+  const fileRef = useRef<HTMLInputElement>(null);
+  const importKind = useRef<'library' | 'slides' | 'lyrics' | 'backup'>('slides');
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Stamp time on actions that record usage or touch timers, keeping the reducer pure.
+  // OBS steps in macros/schedules are side effects, so they run here rather than in the reducer.
+  const macrosRef = useRef<Macro[]>([]);
+  const schedulesRef = useRef<{ id: string; macroId: string }[]>([]);
+  const dispatch = useMemo(() => (a: Action) => {
+    if ((a.type === 'live/go' || a.type === 'live/next') && a.now == null) a = { ...a, now: Date.now() };
+    const macroId = a.type === 'macro/run' ? a.id : a.type === 'schedule/ran' ? schedulesRef.current.find((x) => x.id === a.id)?.macroId : undefined;
+    const macro = macroId ? macrosRef.current.find((m) => m.id === macroId) : undefined;
+    macro?.steps.forEach(runExternal);
+    dispatchRaw(a);
+  }, []);
+  const notifyRef = useRef<(m: string) => void>(() => undefined);
+  const notify = (msg: string) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 6000);
+  };
+
+  useEffect(() => saveLibrary(state.library), [state.library]);
+  const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
+  const service = useServiceUploads(state.library, dispatch, (m) => notifyRef.current(m));
+  // Files dragged onto the window go straight into this week's 주일예배.
+  const [dragging, setDragging] = useState(false);
+  const serviceRef = useRef(service);
+  serviceRef.current = service;
+  useEffect(() => {
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+    const enter = (e: DragEvent) => { if (hasFiles(e)) { depth++; setDragging(true); } };
+    const leave = () => { depth = Math.max(0, depth - 1); if (!depth) setDragging(false); };
+    const over = (e: DragEvent) => { if (hasFiles(e)) e.preventDefault(); };
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      if (files.length) serviceRef.current.drop(files);
+    };
+    window.addEventListener('dragenter', enter);
+    window.addEventListener('dragleave', leave);
+    window.addEventListener('dragover', over);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragenter', enter);
+      window.removeEventListener('dragleave', leave);
+      window.removeEventListener('dragover', over);
+      window.removeEventListener('drop', drop);
+    };
+  }, []);
+  macrosRef.current = state.library.macros;
+  schedulesRef.current = state.library.schedules;
+
+  // OBS steps in slide actions (directly or through a macro) run when the slide goes live.
+  useEffect(() => {
+    const run = (acts: SlideAction[] | undefined) => acts?.forEach((a) => {
+      if (a.type === 'runMacro') macrosRef.current.find((m) => m.id === a.macroId)?.steps.forEach(runExternal);
+      else runExternal(a);
+    });
+    run(state.live.slide?.actions);
+  }, [state.live.slide]);
+
+  // The 찬양 라이브러리 comes from the online server every session (kept in memory, never saved).
+  const loadOnline = () => {
+    setOnline({ status: 'loading', count: 0 });
+    fetchOnlineSongs(state.library.sunday.linesPerSlide)
+      .then((list) => {
+        dispatch({ type: 'online/songs', presentations: list });
+        setOnline({ status: 'ok', count: list.length });
+      })
+      .catch((e: Error) => setOnline({ status: 'error', count: 0, error: e.message }));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadOnline, []);
+  const latestLib = useRef(state.library);
+  latestLib.current = state.library;
+
+  const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
+    if (m.type !== 'command' || !m.command) return;
+    let c = m.command as Action & { now?: number };
+    if (c.type === 'macro/run') {
+      const id = c.id;
+      const macro = latestLib.current.macros.find((x) => x.id === id) ?? latestLib.current.macros.find((x) => x.name.toLowerCase() === id.toLowerCase());
+      if (!macro) return;
+      c = { ...c, id: macro.id };
+    }
+    if (c.type === 'macro/run' || c.type === 'timer/op') dispatch({ ...c, now: Date.now() } as Action);
+    else dispatch(c);
+  });
+  useLiveBroadcast(state.live, relay.send);
+
+  // Share the playlist and current slides with remotes.
+  const selected = state.library.presentations.find((p) => p.id === state.selectedId) ?? null;
+
+  const playlist = activePlaylist(state);
+  useEffect(() => {
+    const info: RemoteInfo = {
+      playlist: (playlist?.items ?? []).map((i, index) => ({ index, header: i.kind === 'header', title: i.kind === 'header' ? i.title : findPres(state.library, i.presentationId)?.title ?? '?' })),
+      playlistIndex: state.playlistIndex,
+      presentation: selected ? { id: selected.id, title: selected.title, slides: sequence(selected).map(({ slide }, seq) => ({ seq, group: slide.group, text: (slide.title ? `${slide.title}\n` : '') + stripChords(slide.text.replace(/\*\*/g, '')).slice(0, 160) })) } : null,
+      cursorSeq: state.cursor?.presentationId === selected?.id ? state.cursor?.seq ?? null : null,
+      macros: state.library.macros.map(({ id, name, color }) => ({ id, name, color })),
+    };
+    relay.send({ type: 'info', info });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, playlist, state.playlistIndex, state.cursor, state.library.macros, relay.connected]);
+
+  useMidi(midiOn, (a) => dispatch(a), state.library.macros);
+
+  // Slide auto-advance ("go to next" timers) — restarts whenever a different slide goes live.
+  const liveSlide = state.live.slide;
+  useEffect(() => {
+    if (!liveSlide?.autoAdvance) return;
+    const t = setTimeout(() => dispatch({ type: 'live/next' }), liveSlide.autoAdvance * 1000);
+    return () => clearTimeout(t);
+  }, [liveSlide, dispatch]);
+
+  // Announcements layer loops on its own: each slide's auto-advance, or 8 seconds.
+  const ann = state.live.announcement;
+  useEffect(() => {
+    if (!ann) return;
+    const t = setTimeout(() => dispatch({ type: 'announce/next' }), (ann.slide.autoAdvance ?? 8) * 1000);
+    return () => clearTimeout(t);
+  }, [ann, dispatch]);
+
+  // Scheduled macros: checked every 15 s; each schedule fires once per day/time slot.
+  const schedules = state.library.schedules;
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const slot = `${now.toISOString().slice(0, 10)} ${hhmm}`;
+      for (const sc of schedules) {
+        if (sc.enabled && sc.time === hhmm && sc.days.includes(now.getDay()) && sc.lastRun !== slot) {
+          dispatch({ type: 'schedule/ran', id: sc.id, slot, now: Date.now() });
+          notify(`Scheduled: ${sc.name}`);
+        }
+      }
+    };
+    tick();
+    const t = setInterval(tick, 15000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schedules, dispatch]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !modal) {
+        e.preventDefault();
+        const box = document.getElementById('library-search') as HTMLInputElement | null;
+        box?.focus();
+        box?.select();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !isTyping(e.target)) {
+        e.preventDefault();
+        dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
+        return;
+      }
+      if (modal || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (layoutRef.current === 'ppt') {
+        if (e.key === 'F5') {
+          e.preventDefault();
+          startShowRef.current(e.shiftKey);
+          return;
+        }
+        if (viewRef.current !== 'presenter' && ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp', ' '].includes(e.key)) return;
+      }
+      // Slide hotkeys of the selected presentation win over global keys.
+      const sel = state.library.presentations.find((p) => p.id === state.selectedId);
+      if (sel && e.key.length === 1) {
+        const seq = sequence(sel).findIndex(({ slide }) => slide.hotkey === e.key.toLowerCase());
+        if (seq >= 0) {
+          e.preventDefault();
+          dispatch({ type: 'live/go', presentationId: sel.id, seq });
+          return;
+        }
+      }
+      const action = KEYS[e.key];
+      if (!action) return;
+      e.preventDefault();
+      dispatch(action);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [modal, dispatch, state.library.presentations, state.selectedId]);
+
+  const startShow = (fromCurrent: boolean) => {
+    const pres = state.library.presentations.find((x) => x.id === state.selectedId);
+    if (!pres) return notify('먼저 프레젠테이션을 선택하세요');
+    const seq = fromCurrent && slideId ? Math.max(0, sequence(pres).findIndex((x) => x.slide.id === slideId)) : 0;
+    dispatch({ type: 'live/go', presentationId: pres.id, seq });
+    setView('presenter');
+    openOutput('output');
+  };
+  const endShow = () => {
+    dispatch({ type: 'live/clearAll' });
+    setView('normal');
+  };
+  const startShowRef = useRef(startShow);
+  startShowRef.current = startShow;
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const viewRef = useRef(view);
+  viewRef.current = view;
+
+  const pickFiles = (kind: typeof importKind.current, accept: string) => {
+    importKind.current = kind;
+    if (fileRef.current) {
+      fileRef.current.accept = accept;
+      fileRef.current.click();
+    }
+  };
+
+  const onFiles = async (files: File[]) => {
+    if (!files.length) return;
+    const kind = importKind.current;
+    try {
+      if (kind === 'backup') {
+        notify('Restoring backup…');
+        const lib = await importBackup(files[0]);
+        if (confirm('Replace your current library with this backup? (You can undo with ⌘Z.)')) dispatch({ type: 'library/replace', library: lib });
+      } else if (kind === 'library') {
+        const lib = normalizeLibrary(JSON.parse(await files[0].text()));
+        if (!lib) throw new Error('Not a FreeCast library file');
+        if (confirm('Replace your current library with this file? (You can undo with ⌘Z.)')) dispatch({ type: 'library/replace', library: lib });
+      } else if (kind === 'lyrics') {
+        const created: Presentation[] = [];
+        for (const f of files) created.push(presentationFromSongFile(f.name, await f.text(), state.library.sunday.linesPerSlide));
+        dispatch({ type: 'presentation/createMany', presentations: created });
+        notify(`Imported ${created.length} song${created.length === 1 ? '' : 's'}`);
+      } else {
+        notify('Importing…');
+        const slides = await filesToSlides(files, (m) => dispatch({ type: 'media/add', media: m }), notify);
+        const title = files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') : 'Imported slides';
+        dispatch({ type: 'presentation/create', presentation: { id: uid('p'), title, slides, themeId: 'theme_classic', folder: 'Imported' } });
+        notify(`Imported ${slides.length} slides`);
+      }
+    } catch (e) {
+      notify(`Import failed: ${(e as Error).message}`);
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const exportUsage = () => {
+    const rows = [['date', 'time', 'title', 'ccli'], ...state.library.usage.map((u) => {
+      const d = new Date(u.at);
+      return [d.toISOString().slice(0, 10), d.toTimeString().slice(0, 5), u.title, u.ccli ?? ''];
+    })];
+    download(`freecast-song-usage-${new Date().toISOString().slice(0, 10)}.csv`, rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv');
+  };
+
+  const exportPlaylistPptx = () => {
+    if (!playlist) return notify('재생목록이 없습니다');
+    exportPptx(state.library, { playlist }, playlist.name.replace(/\s*주일예배$/, '') || 'playlist').catch((e) => notify(String(e)));
+  };
+  const exportBackupZip = async () => {
+    notify('Packing backup…');
+    const blob = await exportBackup(state.library);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `freecast-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+    a.click();
+  };
+  const cmd: Commands = {
+    open: setModal,
+    notify,
+    pickFiles,
+    exportPlaylistPptx,
+    exportBackup: exportBackupZip,
+    exportLibrary: () => download(`freecast-library-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ ...state.library, presentations: state.library.presentations.filter((p) => !p.online) }, null, 2), 'application/json'),
+    exportUsage,
+    clearUsage: () => confirm('Clear the song usage log?') && dispatch({ type: 'usage/clear' }),
+    reloadOnline: loadOnline,
+    startShow,
+    endShow,
+    setView,
+    setLayout,
+    online,
+    relayConnected: relay.connected,
+    view,
+    slideId,
+    setSlideId,
+    cloud: cloud.status,
+    service,
+  };
+  notifyRef.current = notify;
+
+  return (
+    <div className={`app ${layout === 'ppt' ? 'app-ppt' : ''}`}>
+      <input ref={fileRef} type="file" multiple hidden onChange={(e) => onFiles(Array.from(e.target.files ?? []))} />
+      {layout === 'ppt' ? (
+        <PptLayout state={state} dispatch={dispatch} cmd={cmd} />
+      ) : (
+        <>
+          <ClassicToolbar state={state} dispatch={dispatch} cmd={cmd} hasSelection={!!selected} />
+          <div className="workspace">
+            <LibraryPanel state={state} dispatch={dispatch} onNew={() => setModal('new')} online={online} onReloadOnline={loadOnline} />
+            <div className="center-col">
+              <SlideGrid state={state} dispatch={dispatch} onEdit={() => selected && setModal('edit')} onThemes={() => setModal('themes')} notify={notify} />
+              <MediaBin state={state} dispatch={dispatch} />
+            </div>
+            <LivePanel state={state} dispatch={dispatch} />
+          </div>
+        </>
+      )}
+      {dragging && (
+        <div className="drop-overlay">
+          <div>
+            <b>이번 주 주일예배에 바로 넣기</b>
+            <span>콘티 PDF (이름에 “콘티”) → 찬양 · 가사 파일 → 찬양 · PPTX/PDF/그림 → 설교</span>
+          </div>
+        </div>
+      )}
+      <UpdateBanner />
+      <AudioPlayer state={state} dispatch={dispatch} />
+      {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
+
+      {(modal === 'edit' || modal === 'new') && (
+        <EditorModal
+          presentation={modal === 'new' ? null : selected}
+          themes={state.library.themes}
+          onClose={() => setModal(null)}
+          onSave={(p) => {
+            if (modal === 'new') dispatch({ type: 'presentation/create', presentation: p });
+            else dispatch({ type: 'presentation/update', id: p.id, patch: p });
+            setModal(null);
+          }}
+        />
+      )}
+      {modal === 'themes' && (
+        <ThemeModal themes={state.library.themes} initialId={selected?.themeId ?? state.library.themes[0].id}
+          background={selected?.background ?? state.live.background} dispatch={dispatch} onClose={() => setModal(null)} />
+      )}
+      {modal === 'bible' && (
+        <BibleModal onClose={() => setModal(null)} onCreate={(p, live) => {
+          dispatch({ type: 'presentation/create', presentation: p });
+          if (live) dispatch({ type: 'live/go', presentationId: p.id, seq: 0 });
+          setModal(null);
+        }} />
+      )}
+      {modal === 'ai' && <AiModal onClose={() => setModal(null)} onCreate={(p) => { dispatch({ type: 'presentation/create', presentation: p }); setModal(null); }} />}
+      {modal === 'screens' && (
+        <ScreensModal state={state} dispatch={dispatch} relayConnected={relay.connected} midi={midiOn}
+          onMidi={(on) => { setMidiOn(on); localStorage.setItem('freecast.midi', on ? '1' : '0'); }} onClose={() => setModal(null)} />
+      )}
+      {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
+      {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
+      {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} />}
+
+    </div>
+  );
+}
