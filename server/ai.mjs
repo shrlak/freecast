@@ -175,6 +175,17 @@ export async function aiMiddleware(req, res, next) {
       configured: true,
     });
   }
+  if (name === 'usage') {
+    // Today's per-model counts kept by the church Worker (shared with the ppt site, whose keys it holds).
+    const cfg = aiConfig();
+    try {
+      const r = await fetch(`${cfg.proxyUrl}/usage`, { headers: { Origin: cfg.proxyOrigin }, signal: AbortSignal.timeout(15000) });
+      const data = await r.json();
+      return send(res, r.ok ? 200 : 502, r.ok ? { ...data, via: cfg.proxyUrl, ownKeys: !!(cfg.geminiKey || cfg.openrouterKey) } : { error: data.error ?? `Worker ${r.status}` });
+    } catch (err) {
+      return send(res, 502, { error: `AI 서버에 연결할 수 없습니다: ${err.message}` });
+    }
+  }
   const handler = Object.hasOwn(handlers, name) ? handlers[name] : null;
   if (!handler || req.method !== 'POST') return send(res, 404, { error: 'Unknown AI endpoint' });
   try {

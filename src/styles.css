@@ -678,3 +678,25 @@ body[data-view='multiview'] { overflow: auto; }
 .drop-overlay { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: rgba(22,58,98,.55); pointer-events: none; }
 .drop-overlay > div { display: flex; flex-direction: column; gap: 8px; align-items: center; background: #fff; color: #163a62; border: 3px dashed #4bc789; border-radius: 14px; padding: 28px 36px; font-size: 14px; }
 .drop-overlay b { font-size: 20px; }
+.confession-modal { width: min(520px, 94vw); }
+.confession-now { font-size: 14px; }
+.confession-list { display: flex; flex-direction: column; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.confession-list button { text-align: left; border: none !important; border-radius: 0; padding: 7px 10px; }
+.confession-list button.on { background: #e4f6ec !important; color: #14532d; font-weight: 600; }
+.ai-usage-modal { width: min(720px, 96vw); }
+.ai-usage-total { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ai-usage-total > div { display: flex; flex-direction: column; align-items: center; padding: 10px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.ai-usage-total b { font-size: 22px; color: #163a62; font-variant-numeric: tabular-nums; }
+.ai-usage-total span { font-size: 11.5px; color: var(--muted); }
+.ai-usage-total .bad b, .ai-usage-num.bad { color: #b42318; }
+.ai-usage-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ai-usage-table th { text-align: left; font-weight: 600; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.ai-usage-table td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ai-usage-group td { background: var(--panel-2); font-weight: 600; color: #163a62; }
+.ai-usage-model { word-break: break-all; max-width: 260px; }
+.ai-usage-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ai-usage-meter { display: inline-block; width: 90px; height: 7px; border-radius: 4px; background: #edf1f5; overflow: hidden; margin-right: 8px; vertical-align: middle; }
+.ai-usage-meter i { display: block; height: 100%; border-radius: 4px; }
+.ai-usage-meter i.low { background: #4bc789; }
+.ai-usage-meter i.mid { background: #e9b800; }
+.ai-usage-meter i.high { background: #d13438; }

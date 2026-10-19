@@ -4,9 +4,10 @@
 //   download the new release .zip and swap the app bundle with a small script — when the app quits,
 //   or right away (with a relaunch) if the operator clicks the notice.
 // Nothing restarts on its own: an update never interrupts a running service.
-// Updates are checked at launch, every 4 hours, when the computer wakes, and right away when
-// macOS / Windows itself was updated since the last launch.
-import { app, Notification, powerMonitor, shell } from 'electron';
+// FreeCast follows the operating system: it looks for a new version on its own only when macOS
+// (or Windows) has been updated since the last launch, so FreeCast changes land together with OS
+// changes. "Check for Updates…" in the menu still checks by hand at any time.
+import { app, Notification, shell } from 'electron';
 import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -17,7 +18,6 @@ import updaterPkg from 'electron-updater';
 import { newer } from './version.mjs';
 
 const { autoUpdater } = updaterPkg;
-const CHECK_EVERY = 4 * 60 * 60 * 1000;
 
 let send = () => undefined;
 let state = { status: 'idle', version: null, progress: 0, error: null, osUpdated: false };
@@ -178,16 +178,16 @@ export function startUpdater({ publishConfig, sendToRenderer, settings, saveSett
   // macOS: a downloaded update installs itself when FreeCast quits (Windows does this in electron-updater).
   else app.on('will-quit', () => state.status === 'ready' && installMac(false));
 
-  const osVersion = `${process.platform} ${os.release()}`;
-  const osUpdated = settings.lastOsVersion && settings.lastOsVersion !== osVersion;
+  // The OS product version (macOS "26.1", Windows "10.0.26100"); earlier builds stored the kernel
+  // version instead, which counts as unchanged so switching formats is not mistaken for an OS update.
+  const osVersion = `${process.platform} ${process.getSystemVersion()}`;
+  const legacy = `${process.platform} ${os.release()}`;
+  const seen = settings.lastOsVersion;
+  const osUpdated = !!seen && seen !== osVersion && seen !== legacy;
   settings.lastOsVersion = osVersion;
   saveSettings();
-  if (osUpdated) {
-    set({ osUpdated: true });
-    notify('운영체제가 업데이트되었습니다', 'FreeCast 업데이트를 확인합니다…');
-  }
-
-  setTimeout(checkForUpdates, osUpdated ? 2000 : 10000);
-  setInterval(checkForUpdates, CHECK_EVERY);
-  powerMonitor.on('resume', () => setTimeout(checkForUpdates, 5000));
+  if (!osUpdated) return;
+  set({ osUpdated: true });
+  notify(process.platform === 'darwin' ? 'macOS가 업데이트되었습니다' : 'Windows가 업데이트되었습니다', 'FreeCast도 맞춰서 업데이트를 확인합니다…');
+  setTimeout(checkForUpdates, 3000);
 }

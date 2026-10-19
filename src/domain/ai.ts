@@ -39,7 +39,35 @@ export interface AiRetreat {
   songs: { title: string; lyrics: string }[];
 }
 
+/** One model's count for the current period, as the church Worker reports it (GET /usage). */
+export interface AiUsageModel {
+  provider: string;
+  model: string;
+  period: 'day' | 'month';
+  periodKey: string;
+  requests: number;
+  successfulRequests: number;
+  failedRequests: number;
+  totalTokens: number;
+  used: number;
+  limit: number | null;
+  updatedAt: string | null;
+}
+export interface AiUsage {
+  generatedAt: string;
+  models: AiUsageModel[];
+  via: string;
+  /** This computer uses its own API keys, which the Worker does not count. */
+  ownKeys: boolean;
+}
+
 export const ai = {
+  usage: async (): Promise<AiUsage> => {
+    const r = await fetch('/api/ai/usage');
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((data as { error?: string }).error ?? `AI 사용량을 불러오지 못했습니다 (${r.status})`);
+    return data as AiUsage;
+  },
   retreat: (pages: { page: number; data: string; text: string }[]) => post<AiRetreat>('retreat', { pages }),
   status: () => fetch('/api/ai/status').then((r) => (r.ok ? r.json() as Promise<{ model: string; configured: boolean }> : null)).catch(() => null),
   conti: (pages: { page: number; data: string; text: string }[], knownTitles: string[]) => post<AiConti>('conti', { pages, knownTitles }),

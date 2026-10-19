@@ -1,7 +1,7 @@
 import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Background, Presentation, Slide, SlideElement, TransitionKind } from '../../domain/types';
-import { BACKGROUND_PRESETS, presetBackground } from '../../domain/defaults';
+import { BACKGROUND_PRESETS, presetBackground, DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { SlideCanvas, assetUrl } from '../SlideCanvas';
@@ -311,12 +311,14 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             </Group>
             <Group label="예배 만들기">
               <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
+              <Big icon="🙌" label="공동체 고백송" title={`지금: ${lib.sunday.confessionSong || DEFAULT_CONFESSION_SONG} — 학기·해마다 바꾸기`} onClick={() => cmd.open('confession')} />
               <Big icon="⛺" label="수련회" onClick={() => cmd.open('retreat')} />
             </Group>
             <Group label="말씀 · 찬양">
               <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
               <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="Reload the online song library" onClick={cmd.reloadOnline} />
               <Big icon="✨" label="AI" onClick={() => cmd.open('ai')} />
+              <Big icon="📊" label="AI 사용량" title="오늘 AI를 얼마나 썼는지 (모델별 무료 한도)" onClick={() => cmd.open('aiUsage')} />
             </Group>
             <Group label="내보내기">
               <Big icon="⇩" label="PPTX (MMDD)" onClick={cmd.exportPlaylistPptx} />

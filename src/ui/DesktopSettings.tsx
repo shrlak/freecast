@@ -25,9 +25,9 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
 
   return (
     <div className="stack">
-      <h3>Software update <span className="muted small">FreeCast {info.version}</span></h3>
+      <h3>소프트웨어 업데이트 <span className="muted small">FreeCast {info.version}</span></h3>
       <UpdateCheck />
-      <p className="hint">FreeCast checks for updates at launch, every 4 hours, on wake, and right after a macOS / Windows update, then installs on restart.</p>
+      <p className="hint">FreeCast는 macOS(또는 Windows)가 업데이트된 뒤 처음 켤 때 새 버전을 확인하고, 앱을 종료할 때 설치합니다. 언제든 “업데이트 확인”으로 직접 확인할 수도 있습니다.</p>
       <h3>Displays</h3>
       <p className="hint">Pick a display for each output and it opens full-screen there; FreeCast remembers it next time.</p>
       {targets.map((t) => (
