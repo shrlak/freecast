@@ -20,8 +20,6 @@ export interface UpdateState {
   version: string | null;
   progress: number;
   error: string | null;
-  /** macOS / Windows was updated since FreeCast last ran. */
-  osUpdated: boolean;
 }
 
 export interface DesktopBridge {

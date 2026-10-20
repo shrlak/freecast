@@ -196,6 +196,7 @@ function StatusBar({ cmd, text }: { cmd: Commands; text: string }) {
       <button className="ppt-cloud" onClick={() => cmd.open('account')} title={cmd.cloud.message ?? ''}>
         {cmd.cloud.session ? `☁ ${cmd.cloud.session.username} · ${cmd.cloud.state === 'syncing' ? '동기화 중' : cmd.cloud.state === 'error' ? '동기화 오류' : '동기화됨'}` : '☁ 로그인 안 됨 (이 컴퓨터에만 저장)'}
       </button>
+      <button className="ppt-cloud" onClick={() => cmd.open('feedback')} title="고칠 점·원하는 기능을 개발자에게 보내기">💬 피드백</button>
       <span title={cmd.relayConnected ? '리모컨 연결됨' : '리모컨 오프라인'}><span className={`dot ${cmd.relayConnected ? 'on' : ''}`} /></span>
       <span className="ppt-views">
         <button className={cmd.view === 'normal' ? 'on' : ''} title="기본" onClick={() => cmd.setView('normal')}>▭</button>

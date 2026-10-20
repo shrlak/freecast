@@ -166,6 +166,9 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             <Group label="설정">
               <Big icon="🖥" label="화면 · 설정" onClick={() => cmd.open('screens')} />
             </Group>
+            <Group label="도움">
+              <Big icon="💬" label="피드백 보내기" title="고칠 점·원하는 기능을 개발자에게 보냅니다 — 반영되면 자동 업데이트" onClick={() => cmd.open('feedback')} />
+            </Group>
           </>
         )}
         {tab === '홈' && (

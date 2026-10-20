@@ -34,6 +34,7 @@ import { useServiceUploads } from '../ui/ppt/useServiceUploads';
 import { AccountModal } from '../ui/AccountModal';
 import { ConfessionSetting } from '../ui/sunday/ConfessionSetting';
 import { AiUsage } from '../ui/AiUsage';
+import { FeedbackModal } from '../ui/FeedbackModal';
 import { PrayerSetting } from '../ui/sunday/PrayerSetting';
 import { SongEditor } from '../ui/sunday/SongEditor';
 import { PptLayout } from '../ui/ppt/PptLayout';
@@ -430,6 +431,7 @@ export function OperatorView() {
       )}
       {modal === 'prayer' && <PrayerSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
       {modal === 'aiUsage' && <AiUsage onClose={() => setModal(null)} />}
+      {modal === 'feedback' && <FeedbackModal notify={notify} onClose={() => setModal(null)} />}
       {modal === 'confession' && <ConfessionSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
 
     </div>

@@ -27,14 +27,14 @@ function loadSettings() {
     let ai = {};
     if (raw.aiEnc && safeStorage.isEncryptionAvailable()) ai = JSON.parse(safeStorage.decryptString(Buffer.from(raw.aiEnc, 'base64')));
     else if (raw.aiPlain) ai = raw.aiPlain;
-    settings = { networkRemote: !!raw.networkRemote, ai, outputDisplays: raw.outputDisplays ?? {}, lastOsVersion: raw.lastOsVersion ?? null };
+    settings = { networkRemote: !!raw.networkRemote, ai, outputDisplays: raw.outputDisplays ?? {} };
   } catch {
     // first run
   }
 }
 
 function saveSettings() {
-  const out = { networkRemote: settings.networkRemote, outputDisplays: settings.outputDisplays, lastOsVersion: settings.lastOsVersion ?? null };
+  const out = { networkRemote: settings.networkRemote, outputDisplays: settings.outputDisplays };
   // AI proxy address and optional own Gemini / OpenRouter keys, encrypted with the OS keychain.
   if (Object.keys(settings.ai ?? {}).length) {
     if (safeStorage.isEncryptionAvailable()) out.aiEnc = safeStorage.encryptString(JSON.stringify(settings.ai)).toString('base64');
@@ -315,8 +315,6 @@ app.whenReady().then(async () => {
     startUpdater({
       publishConfig: PUBLISH,
       sendToRenderer: (st) => mainWindow?.webContents.send('desktop:update', st),
-      settings,
-      saveSettings,
     });
   }
   const notify = () => mainWindow?.webContents.send('desktop:displays', displayList());

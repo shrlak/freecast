@@ -26,7 +26,7 @@ export function UpdateBanner() {
   if (st.status === 'ready') {
     return (
       <div className="update-banner ready">
-        <span>✅ FreeCast {st.version} 업데이트가 준비되었습니다{st.osUpdated ? ' (운영체제 업데이트에 맞춘 버전)' : ''}.</span>
+        <span>✅ FreeCast {st.version} 업데이트가 준비되었습니다.</span>
         <button className="primary" onClick={() => desktop!.installUpdate()}>지금 재시작하여 업데이트</button>
         <button onClick={() => setHidden(true)}>나중에 (종료할 때 설치)</button>
       </div>

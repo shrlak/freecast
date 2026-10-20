@@ -4,10 +4,10 @@
 //   download the new release .zip and swap the app bundle with a small script — when the app quits,
 //   or right away (with a relaunch) if the operator clicks the notice.
 // Nothing restarts on its own: an update never interrupts a running service.
-// FreeCast follows the operating system: it looks for a new version on its own only when macOS
-// (or Windows) has been updated since the last launch, so FreeCast changes land together with OS
-// changes. "Check for Updates…" in the menu still checks by hand at any time.
-import { app, Notification, shell } from 'electron';
+// FreeCast looks for a new release on its own shortly after launch, every hour while it runs and
+// when the computer wakes from sleep, so a new version on GitHub reaches every installed copy.
+// "Check for Updates…" in the menu still checks by hand at any time.
+import { app, Notification, powerMonitor, shell } from 'electron';
 import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,7 +20,7 @@ import { newer } from './version.mjs';
 const { autoUpdater } = updaterPkg;
 
 let send = () => undefined;
-let state = { status: 'idle', version: null, progress: 0, error: null, osUpdated: false };
+let state = { status: 'idle', version: null, progress: 0, error: null };
 let macUpdate = null; // { version, zipUrl, appPath (downloaded .app) }
 let checking = false;
 let publish = null;
@@ -166,11 +166,10 @@ export function installUpdate() {
 
 export const updateState = () => state;
 
-/**
- * Start the updater. `publishConfig` is the GitHub repo that hosts releases;
- * `settings` persists the last OS version seen so an OS update triggers a check.
- */
-export function startUpdater({ publishConfig, sendToRenderer, settings, saveSettings }) {
+const CHECK_EVERY_MS = 60 * 60 * 1000;
+
+/** Start the updater. `publishConfig` is the GitHub repo that hosts releases. */
+export function startUpdater({ publishConfig, sendToRenderer }) {
   publish = publishConfig;
   send = sendToRenderer;
   if (!app.isPackaged || !publish) return;
@@ -178,16 +177,9 @@ export function startUpdater({ publishConfig, sendToRenderer, settings, saveSett
   // macOS: a downloaded update installs itself when FreeCast quits (Windows does this in electron-updater).
   else app.on('will-quit', () => state.status === 'ready' && installMac(false));
 
-  // The OS product version (macOS "26.1", Windows "10.0.26100"); earlier builds stored the kernel
-  // version instead, which counts as unchanged so switching formats is not mistaken for an OS update.
-  const osVersion = `${process.platform} ${process.getSystemVersion()}`;
-  const legacy = `${process.platform} ${os.release()}`;
-  const seen = settings.lastOsVersion;
-  const osUpdated = !!seen && seen !== osVersion && seen !== legacy;
-  settings.lastOsVersion = osVersion;
-  saveSettings();
-  if (!osUpdated) return;
-  set({ osUpdated: true });
-  notify(process.platform === 'darwin' ? 'macOS가 업데이트되었습니다' : 'Windows가 업데이트되었습니다', 'FreeCast도 맞춰서 업데이트를 확인합니다…');
-  setTimeout(checkForUpdates, 3000);
+  // Once an update is downloaded there is nothing more to fetch until it is installed.
+  const auto = () => state.status !== 'ready' && state.status !== 'downloading' && checkForUpdates();
+  setTimeout(auto, 10_000);
+  setInterval(auto, CHECK_EVERY_MS).unref?.();
+  powerMonitor.on('resume', () => setTimeout(auto, 15_000));
 }
