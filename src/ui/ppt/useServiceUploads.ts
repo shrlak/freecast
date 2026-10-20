@@ -13,8 +13,12 @@ import { loadScriptureChunks } from '../../domain/bible/slides';
 import { uid } from '../../domain/lyrics';
 import { loadServiceTemplates, pptxSlides, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
 import { templateDeckUpdates } from '../../domain/templates/register';
-import { scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
-import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
+import { announcementSlides, refreshFront, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
+import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
+import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
+import { parsePrayerTopics } from '../../domain/sunday/prayer';
+import { parseAnnouncements } from '../../domain/sunday/announcements';
+import { applyConfessionSong, pickConfessionSong } from '../../domain/templates/confession';
 import { loadTranslations } from '../BibleModal';
 import { filesToSlides } from '../importFiles';
 
@@ -42,7 +46,27 @@ export interface ServiceUploads {
   sermon: (files: File[]) => Promise<void>;
   /** Files dropped on the window: 콘티 PDF → 찬양, lyric files → 찬양, PPTX/PDF/images → 설교. */
   drop: (files: File[]) => void;
+  /** The church templates (throws when they cannot be loaded). */
+  needTemplates: () => Promise<ServiceTemplates>;
+  /** Bible verses (and the sermon title) straight into the selected 주일예배 playlist, in the church template's design. Resolves to the playlist's name. */
+  scripture: (info: ScriptureInput) => Promise<string>;
+  /**
+   * The wizard's changes straight into that week's playlist, section by section (only `parts`).
+   * `before` holds the sermon slides the wizard had earlier. Resolves to warnings, or null when that
+   * week has no playlist yet (the wizard creates it).
+   */
+  syncWizard: (d: WizardSync, parts: WizardPart[], before: Slide[], date: Date) => Promise<string[] | null>;
 }
+
+/** What the 주일예배 마법사 holds that goes into the playlist. */
+export interface WizardSync {
+  songs: SongDraft[]; refs: string; sermonTitle: string; preacher: string; confession: string;
+  sermonSlides: Slide[]; prayer: string; announcements: string; extraSlides: Slide[];
+}
+export type WizardPart = 'songs' | 'scripture' | 'sermon' | 'prayer' | 'announcements' | 'extra' | 'confession';
+export const WIZARD_PARTS: WizardPart[] = ['songs', 'scripture', 'sermon', 'prayer', 'announcements', 'extra', 'confession'];
+
+export interface ScriptureInput { refs: string; sermonTitle: string; preacher: string; translations: string[]; versesPerSlide: number }
 
 const LYRIC_FILE = /\.(txt|md|pro6|cho|chopro|chordpro|crd|xml)$/i;
 const CONTI_NAME = /콘티|conti/i;
@@ -53,12 +77,15 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
  * ppt program uses), section by section and slide by slide as they are read — the playlist can
  * be open, or live on screen, the whole time.
  */
-export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, notify: (m: string) => void): ServiceUploads {
+export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, notify: (m: string) => void, activePlaylistId: string | null = null): ServiceUploads {
   const [templates, setTemplates] = useState<ServiceUploads['templates']>('loading');
   const [busy, setBusy] = useState<string | null>(null);
   const [review, setReview] = useState<ContiReview | null>(null);
   const lib = useRef(library);
   lib.current = library;
+  const activeId = useRef(activePlaylistId);
+  activeId.current = activePlaylistId;
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
   const tpl = useRef<ServiceTemplates | null>(null);
 
   useEffect(() => {
@@ -97,7 +124,18 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     for (const u of templateDeckUpdates(library, tpl.current, new Date(clock))) dispatch({ type: 'presentation/update', id: u.id, patch: u.patch });
   }, [templates, library, dispatch, clock]);
 
-  const templatesNow = async () => tpl.current ?? (await loadServiceTemplates().catch(() => null));
+  /** The church templates, loaded again once if the first try failed. Never null: without them songs would be added in the old watercolor look. */
+  const templatesNow = async (): Promise<ServiceTemplates> => {
+    if (tpl.current) return tpl.current;
+    try {
+      tpl.current = await loadServiceTemplates();
+    } catch {
+      tpl.current = await loadServiceTemplates(true).catch(() => {
+        throw new Error('교회 PPT 템플릿을 불러오지 못했습니다 — 인터넷 연결을 확인하고 다시 시도해 주세요 (옛 디자인으로는 추가하지 않습니다)');
+      });
+    }
+    return tpl.current;
+  };
   const playlist = (id: string) => lib.current.playlists.find((p) => p.id === id);
 
   /** This week's playlist id, created from the templates when it does not exist yet. */
@@ -107,7 +145,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
       dispatch({ type: 'playlist/set', playlist: existing, activate: true });
       return existing.id;
     }
-    const built = createLiveService(lib.current, await templatesNow(), date);
+    const built = createLiveService(lib.current, await templatesNow().catch(() => null), date);
     dispatch({ type: 'presentation/createMany', presentations: built.presentations, playlist: built.playlist });
     await tick();
     return built.playlist.id;
@@ -144,7 +182,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   };
 
   const songFor = (draft: SongDraft, folder: string, t: ServiceTemplates | null): { pres: Presentation; isNew: boolean } => {
-    const existing = findSong(lib.current.presentations, draft.title);
+    const existing = (draft.presentationId && lib.current.presentations.find((p) => p.id === draft.presentationId)) || findSong(lib.current.presentations, draft.title);
     const progression = draft.progression?.length ? draft.progression : undefined;
     let base: Presentation;
     if (existing && !draft.sections.length) base = progression ? withProgression(existing, progression) : existing;
@@ -154,14 +192,14 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     return { pres: { ...base, id: base.id === existing?.id ? uid('p') : base.id, online: undefined, folder, background: CHURCH_BACKGROUNDS.watercolor }, isNew: true };
   };
 
-  /** Sermon title + 성경 말씀 from the 콘티's service info. */
-  const serviceInfo = async (id: string, info: { scripture: string; sermonTitle: string; preacher: string }, t: ServiceTemplates | null) => {
+  /** Sermon title + 성경 말씀 from the 콘티's or the Bible window's service info; the playlist's own 성경 말씀 deck is updated in place. */
+  const serviceInfo = async (id: string, info: { scripture: string; sermonTitle: string; preacher: string }, t: ServiceTemplates | null, opts: { translations?: string[]; versesPerSlide?: number } = {}) => {
     if (!t || (!info.scripture.trim() && !info.sermonTitle.trim())) return;
     const refs = parseRefs(info.scripture).refs;
     const pl = playlist(id);
     const sermonId = pl && sectionPresentations(pl, SECTION.sermon)[0];
     const sermon = sermonId && lib.current.presentations.find((p) => p.id === sermonId);
-    if (sermon) {
+    if (sermon && (refs.length || info.sermonTitle.trim() || info.preacher.trim())) {
       const title = sermonTitleSlide(t, { refs, sermonTitle: info.sermonTitle, preacher: info.preacher });
       const rest = sermon.slides[0]?.group === '설교' ? sermon.slides.slice(1) : sermon.slides;
       dispatch({ type: 'presentation/update', id: sermon.id, patch: { slides: [title, ...rest] } });
@@ -169,12 +207,18 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     if (!refs.length) return;
     const { sunday } = lib.current;
     const all = loadTranslations();
-    const translations = sunday.translations.map((x) => all.find((tr) => tr.id === x)).filter((x): x is (typeof all)[number] => !!x);
+    const translations = (opts.translations ?? sunday.translations).map((x) => all.find((tr) => tr.id === x)).filter((x): x is (typeof all)[number] => !!x);
     if (!translations.length) return;
-    const chunks = await loadScriptureChunks(refs, { translations, versesPerSlide: sunday.versesPerSlide });
-    const slides = scriptureSlides(t, { refs, chunks });
+    const chunks = await loadScriptureChunks(refs, { translations, versesPerSlide: opts.versesPerSlide ?? sunday.versesPerSlide });
+    const slides = scriptureSlides(t, { refs, chunks, sermonTitle: info.sermonTitle, preacher: info.preacher });
     if (!slides.length) return;
-    const p: Presentation = { id: uid('p'), title: '성경 말씀', slides, themeId: 'theme_classic', folder: liveFolder(upcomingSunday(new Date())), background: { kind: 'color', value: '#000000' } };
+    const bibleId = (pl && sectionPresentations(pl, SECTION.bible)[0]) || undefined;
+    if (bibleId && lib.current.presentations.some((p) => p.id === bibleId)) {
+      dispatch({ type: 'presentation/update', id: bibleId, patch: { slides } });
+      return;
+    }
+    const folder = sermon ? sermon.folder : liveFolder(upcomingSunday(new Date()));
+    const p: Presentation = { id: uid('p'), title: '성경 말씀', slides, themeId: 'theme_classic', folder, background: { kind: 'color', value: '#000000' } };
     await add(p);
     await place(id, SECTION.bible, [p.id], true);
   };
@@ -297,11 +341,121 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     })();
   };
 
+  /** The selected playlist when it is a 주일예배 (has a 성경 말씀 section), else this week's. Calls run one after another. */
+  const scripture = (info: ScriptureInput) => {
+    const job = queue.current.then(async () => {
+      const active = activeId.current ? playlist(activeId.current) : undefined;
+      const id = active && sectionRange(active, SECTION.bible) ? active.id : await ensure();
+      await serviceInfo(id, { scripture: info.refs, sermonTitle: info.sermonTitle, preacher: info.preacher }, await templatesNow(), info);
+      await tick();
+      return playlist(id)?.name ?? '';
+    });
+    queue.current = job.catch(() => undefined);
+    return job;
+  };
+
+  const syncWizard = (d: WizardSync, parts: WizardPart[], before: Slide[], date: Date) => {
+    const job = queue.current.then(async (): Promise<string[] | null> => {
+      const found = findLiveService(lib.current, date);
+      if (!found) return null;
+      const id = found.id;
+      const t = await templatesNow();
+      const folder = liveFolder(date);
+      const warnings: string[] = [];
+      const deckOf = (section: SectionTitle) => {
+        const pl = playlist(id);
+        const pid = pl && sectionPresentations(pl, section)[0];
+        return pid ? lib.current.presentations.find((p) => p.id === pid) : undefined;
+      };
+      /** Drop service decks that left the playlist (library songs and shared decks stay). */
+      const sweep = (ids: string[]) => {
+        for (const old of ids) {
+          const p = lib.current.presentations.find((x) => x.id === old);
+          const used = playlist(id)?.items.some((i) => i.kind !== 'header' && i.presentationId === old);
+          if (p && p.folder === folder && !used) dispatch({ type: 'presentation/delete', id: old });
+        }
+      };
+      /** One deck for a section: its slides replaced in place, made when missing, removed when empty. */
+      const setDeck = async (section: SectionTitle, title: string, slides: Slide[]) => {
+        const have = deckOf(section);
+        if (have && slides.length) return dispatch({ type: 'presentation/update', id: have.id, patch: { slides } });
+        if (have) {
+          await place(id, section, [], true);
+          return sweep([have.id]);
+        }
+        if (!slides.length) return;
+        const p: Presentation = { id: uid('p'), title, slides, themeId: 'theme_classic', folder, background: { kind: 'color', value: '#000000' } };
+        await add(p);
+        await place(id, section, [p.id], true);
+      };
+
+      for (const part of parts) {
+        if (part === 'songs') {
+          for (const [section, postSermon] of [[SECTION.songs, false], [SECTION.after, true]] as const) {
+            const pl = playlist(id);
+            const old = pl ? sectionPresentations(pl, section) : [];
+            const made: string[] = [];
+            for (const song of d.songs.filter((x) => !!x.postSermon === postSermon)) {
+              const { pres, isNew } = songFor(song, folder, t);
+              if (isNew) await add(pres);
+              made.push(pres.id);
+            }
+            await place(id, section, made, true);
+            await tick();
+            sweep(old.filter((x) => !made.includes(x)));
+          }
+        } else if (part === 'scripture') {
+          const refs = parseRefs(d.refs).refs;
+          if (refs.length) await serviceInfo(id, { scripture: d.refs, sermonTitle: d.sermonTitle, preacher: d.preacher }, t);
+          else await setDeck(SECTION.bible, '성경 말씀', []);
+        } else if (part === 'sermon') {
+          const gone = new Set([...before, ...d.sermonSlides].map((x) => x.id));
+          const have = deckOf(SECTION.sermon);
+          const kept = (have?.slides ?? []).filter((x) => !gone.has(x.id));
+          await setDeck(SECTION.sermon, `${mmdd(date)} 설교`, [...kept, ...d.sermonSlides]);
+        } else if (part === 'prayer') {
+          dispatch({ type: 'sunday/settings', patch: { prayerText: d.prayer.trim() } });
+          const front = deckOf(SECTION.front);
+          // The library's own Front deck follows the setting by itself; a service copy is refreshed here.
+          if (front && t && !front.templateKey?.startsWith('front:')) dispatch({ type: 'presentation/update', id: front.id, patch: { slides: refreshFront(front.slides, t, date, parsePrayerTopics(d.prayer)) } });
+        } else if (part === 'announcements') {
+          const items = parseAnnouncements(d.announcements);
+          const slides = t
+            ? announcementSlides(t, items)
+            : items.map((a, i) => ({ id: uid('s'), group: '광고', title: `${i + 1}. ${a.title}`, text: a.body.join('\n'), qr: a.links.length ? a.links : undefined }));
+          await setDeck(SECTION.announcements, '광고', slides);
+        } else if (part === 'extra') {
+          await setDeck('추가 자료' as SectionTitle, '추가 자료', d.extraSlides);
+        } else if (part === 'confession') {
+          const back = deckOf(SECTION.back);
+          if (!back) continue;
+          const { sunday } = lib.current;
+          const { song, missing } = pickConfessionSong(lib.current.presentations, [d.confession, sunday.confessionSong, DEFAULT_CONFESSION_SONG]);
+          if (missing) warnings.push(`공동체 고백 “${missing}” is not in the library${song ? ` — “${song.title}” is used instead` : ''}`);
+          const rewritten = song ? applyConfessionSong(back.slides, song, sunday.linesPerSlide) : null;
+          if (!rewritten) continue;
+          const slides = rewritten.map((x) => ({ ...x, id: uid('s') }));
+          if (back.folder === folder) dispatch({ type: 'presentation/update', id: back.id, patch: { slides } });
+          else {
+            // The library's shared Back deck keeps the season's song; this week gets its own copy.
+            const own: Presentation = { ...back, id: uid('p'), title: `${mmdd(date)} Back`, folder, slides, templateKey: undefined };
+            await add(own);
+            await place(id, SECTION.back, [own.id], true);
+          }
+        }
+      }
+      await tick();
+      return warnings;
+    });
+    queue.current = job.catch(() => undefined);
+    return job;
+  };
+
   const open = () => run('예배 여는 중…', async () => {
     const id = await ensure();
     const pl = playlist(id);
     await show(id, pl && sectionPresentations(pl, SECTION.front)[0]);
   });
 
-  return { templates, busy, open, conti, review, answerReview, cancelReview: () => setReview(null), lyrics, sermon, drop };
+  return { templates, busy, open, conti, review, answerReview, cancelReview: () => setReview(null), lyrics, sermon, drop, scripture, syncWizard, needTemplates: templatesNow };
 }

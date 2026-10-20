@@ -112,3 +112,14 @@ export function applyConfessionSong(back: Slide[], song: Presentation, maxLines 
   const end = block.lyrics[block.lyrics.length - 1] + 1;
   return [...back.slice(0, block.marker), { ...marker, group: '공동체 고백송' }, ...lyrics, ...back.slice(end)];
 }
+
+/**
+ * The 공동체 고백송 for one service: the first of `titles` (this week's pick, then the setting, then
+ * the default) that the library has. `missing` names a title that was asked for but is not there.
+ */
+export function pickConfessionSong(presentations: Presentation[], titles: (string | undefined)[]): { song?: Presentation; missing?: string } {
+  const wanted = titles.map((t) => t?.trim()).filter((t): t is string => !!t);
+  const song = wanted.map((t) => findConfessionSong(presentations, t)).find(Boolean);
+  const first = wanted[0];
+  return { song, missing: first && !findConfessionSong(presentations, first) ? first : undefined };
+}

@@ -8,7 +8,8 @@ import { mdy, mmdd, serviceDate, upcomingSunday } from '../../domain/sunday/noti
 import { buildService } from '../../domain/sunday/service';
 import { parseRefs, formatRef } from '../../domain/bible/refs';
 import { buildScripture, loadScriptureChunks } from '../../domain/bible/slides';
-import { loadServiceTemplates } from '../../domain/templates/serviceTemplates';
+import { findLiveService } from '../../domain/sunday/liveDeck';
+import { WIZARD_PARTS, type ServiceUploads, type WizardPart } from '../ppt/useServiceUploads';
 import { exportPptx } from '../../domain/io/pptxExport';
 import { qrDataUrl } from '../../domain/io/qr';
 import { loadTranslations } from '../BibleModal';
@@ -20,6 +21,8 @@ interface Props {
   dispatch: Dispatch<Action>;
   onClose: () => void;
   notify: (msg: string) => void;
+  /** The week's playlist, when it exists, follows every change made here. */
+  service: ServiceUploads;
 }
 
 interface Draft {
@@ -46,14 +49,16 @@ function emptyDraft(): Draft {
 
 function loadDraft(): Draft {
   try {
-    return { ...emptyDraft(), ...JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}') };
+    const saved = { ...emptyDraft(), ...JSON.parse(localStorage.getItem(DRAFT_KEY) ?? '{}') } as Draft;
+    // A draft of a Sunday that has passed is last week's: its 고백송, 광고 and songs must not carry over.
+    return saved.date < iso(new Date()) ? emptyDraft() : saved;
   } catch {
     return emptyDraft();
   }
 }
 
 /** 주일예배 builder: 7 steps that become this Sunday's playlist (and an optional MMDD.pptx). */
-export function SundayWizard({ state, dispatch, onClose, notify }: Props) {
+export function SundayWizard({ state, dispatch, onClose, notify, service }: Props) {
   const [step, setStep] = useState(0);
   const [d, setD] = useState<Draft>(loadDraft);
   const [busy, setBusy] = useState<string | null>(null);
@@ -78,6 +83,35 @@ export function SundayWizard({ state, dispatch, onClose, notify }: Props) {
     preacher: c.preacher || x.preacher,
     confession: c.confession || x.confession,
   }));
+
+  // When that week's playlist already exists, every change goes straight into it (only the part that changed).
+  const synced = useRef(d);
+  const settingsSig = JSON.stringify([sunday.translations, sunday.versesPerSlide, sunday.linesPerSlide]);
+  const syncedSettings = useRef(settingsSig);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const prev = synced.current;
+      const settingsChanged = syncedSettings.current !== settingsSig;
+      synced.current = d;
+      syncedSettings.current = settingsSig;
+      if (prev.date !== d.date) return;
+      const ids = (l: Slide[]) => l.map((x) => x.id).join();
+      const parts: WizardPart[] = [];
+      if (JSON.stringify(prev.songs) !== JSON.stringify(d.songs) || settingsChanged) parts.push('songs');
+      if (prev.refs !== d.refs || prev.sermonTitle !== d.sermonTitle || prev.preacher !== d.preacher || settingsChanged) parts.push('scripture');
+      if (ids(prev.sermonSlides) !== ids(d.sermonSlides)) parts.push('sermon');
+      if (prev.prayer !== d.prayer) parts.push('prayer');
+      if (prev.announcements !== d.announcements) parts.push('announcements');
+      if (ids(prev.extraSlides) !== ids(d.extraSlides)) parts.push('extra');
+      if (prev.confession !== d.confession) parts.push('confession');
+      if (!parts.length) return;
+      service.syncWizard(d, parts, prev.sermonSlides, new Date(`${d.date}T12:00:00`))
+        .then((w) => w?.length && notify(w.join('; ')))
+        .catch((e: Error) => notify(e.message));
+    }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, settingsSig]);
 
   const refs = parseRefs(d.refs);
   const topics = parsePrayerTopics(d.prayer);
@@ -104,9 +138,9 @@ export function SundayWizard({ state, dispatch, onClose, notify }: Props) {
       const scriptureSlides = refs.refs.length && chosen.length
         ? await buildScripture(refs.refs, { translations: chosen, versesPerSlide: sunday.versesPerSlide, sermonTitle: d.sermonTitle, preacher: d.preacher })
         : [];
-      // The church .pptx templates (same as the ppt program); the old look is the fallback offline.
-      const templates = await loadServiceTemplates().catch(() => null);
-      const chunks = templates && refs.refs.length && chosen.length
+      // The church .pptx templates (same as the ppt program) — never the old look: this throws when they cannot be loaded.
+      const templates = await service.needTemplates();
+      const chunks = refs.refs.length && chosen.length
         ? await loadScriptureChunks(refs.refs, { translations: chosen, versesPerSlide: sunday.versesPerSlide })
         : [];
       const built = buildService(state.library, {
@@ -114,14 +148,18 @@ export function SundayWizard({ state, dispatch, onClose, notify }: Props) {
         announcements: ann, extraSlides: d.extraSlides, confessionSong: d.confession,
         templates, scripture: { refs: refs.refs, chunks, sermonTitle: d.sermonTitle, preacher: d.preacher },
       });
-      dispatch({ type: 'presentation/createMany', presentations: built.presentations, playlist: built.playlist });
+      // That week's playlist already exists: update it in place instead of adding a second one.
+      const existing = findLiveService(state.library, date);
+      const syncWarnings = existing ? (await service.syncWizard(d, WIZARD_PARTS, [], date)) ?? [] : [];
+      if (!existing) dispatch({ type: 'presentation/createMany', presentations: built.presentations, playlist: built.playlist });
       if (d.prayer.trim()) dispatch({ type: 'sunday/settings', patch: { prayerText: d.prayer.trim() } });
       if (thenExport) {
         setBusy('Writing PPTX…');
         const lib = { ...state.library, presentations: [...state.library.presentations, ...built.presentations] };
         await exportPptx(lib, { playlist: built.playlist }, `${mmdd(date)}.pptx`);
       }
-      notify(`Playlist “${built.playlist.name}” created${built.warnings.length ? ` — ${built.warnings.join('; ')}` : ''}`);
+      const warnings = existing ? syncWarnings : built.warnings;
+      notify(`Playlist “${built.playlist.name}” ${existing ? 'updated' : 'created'}${warnings.length ? ` — ${warnings.join('; ')}` : ''}`);
       onClose();
     } catch (e) {
       notify((e as Error).message);

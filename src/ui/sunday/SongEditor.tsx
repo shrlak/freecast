@@ -9,8 +9,8 @@ import { useAutosave } from '../hooks';
 
 interface Part { id: string; label: string; text: string }
 
-const ADMIN_KEY = 'freecast.adminPassword';
-const readAdmin = () => {
+export const ADMIN_KEY = 'freecast.adminPassword';
+export const readAdmin = () => {
   try {
     return sessionStorage.getItem(ADMIN_KEY) ?? '';
   } catch {

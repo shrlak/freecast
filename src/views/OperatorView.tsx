@@ -18,6 +18,7 @@ import { ThemeModal } from '../ui/ThemeModal';
 import { BibleModal } from '../ui/BibleModal';
 import { AiModal } from '../ui/AiModal';
 import { ScreensModal } from '../ui/ScreensModal';
+import { SongLibraryModal } from '../ui/sunday/SongLibraryModal';
 import { SundayWizard } from '../ui/sunday/SundayWizard';
 import { RetreatWizard } from '../ui/RetreatWizard';
 import { fetchOnlineSongs } from '../domain/online';
@@ -99,7 +100,7 @@ export function OperatorView() {
 
   useEffect(() => saveLibrary(state.library), [state.library]);
   const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
-  const service = useServiceUploads(state.library, dispatch, (m) => notifyRef.current(m));
+  const service = useServiceUploads(state.library, dispatch, (m) => notifyRef.current(m), state.activePlaylistId);
   // Files dragged onto the window go straight into this week's 주일예배.
   const [dragging, setDragging] = useState(false);
   const serviceRef = useRef(service);
@@ -414,7 +415,7 @@ export function OperatorView() {
           background={selected?.background ?? state.live.background} dispatch={dispatch} onClose={() => setModal(null)} />
       )}
       {modal === 'bible' && (
-        <BibleModal onClose={() => setModal(null)} onCreate={(p, live) => {
+        <BibleModal service={service.scripture} onClose={() => setModal(null)} onCreate={(p, live) => {
           dispatch({ type: 'presentation/create', presentation: p });
           if (live) dispatch({ type: 'live/go', presentationId: p.id, seq: 0 });
           setModal(null);
@@ -425,11 +426,15 @@ export function OperatorView() {
         <ScreensModal state={state} dispatch={dispatch} relayConnected={relay.connected} midi={midiOn}
           onMidi={(on) => { setMidiOn(on); localStorage.setItem('freecast.midi', on ? '1' : '0'); }} onClose={() => setModal(null)} />
       )}
-      {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
+      {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}
       {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} />}
       {(modal === 'song' || modal === 'songNew') && (
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />
+      )}
+      {modal === 'songLibrary' && (
+        <SongLibraryModal songs={state.library.presentations} reloadOnline={loadOnline} notify={notify} onClose={() => setModal(null)}
+          onEdit={(id) => { dispatch({ type: 'select', id }); setModal('song'); }} />
       )}
       {service.review && (() => {
         const r = service.review;
