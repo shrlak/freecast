@@ -201,7 +201,9 @@ export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder
 
 /** Is this presentation a song (lyrics by part), as opposed to an announcement or a scripture deck? */
 export function isSong(p: Presentation): boolean {
-  const looksLikeSong = p.online || p.folder === 'Songs' || p.themeId === TEMPLATE_LYRICS_THEME;
+  // A song laid out by FreeCast (lyricsLayout) counts wherever it sits — a copy made for a service in an
+  // earlier version, in the old look, is brought into the template design (and gets its title slide) too.
+  const looksLikeSong = p.online || p.folder === 'Songs' || p.themeId === TEMPLATE_LYRICS_THEME || !!p.lyricsLayout;
   // Retreat songs come pre-laid-out as "Slide 1, 2…" in the retreat design and are left as they are.
   const parts = p.slides.filter((s) => s.group !== 'Title');
   return !!looksLikeSong && parts.length > 0 && parts.some((s) => !/^Slide( \d+)?$/.test(s.group));
@@ -210,7 +212,9 @@ export function isSong(p: Presentation): boolean {
 /** Songs that are not yet in the current template design (with this many lines per slide), restyled. */
 export function songStyleUpdates(presentations: Presentation[], tpl: ServiceTemplates, maxLines: number): Presentation[] {
   const key = songKey(tpl, maxLines);
-  return presentations.filter((p) => p.templateKey !== key && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
+  // (A song in the template design whose 진행 skips its title slide is redone too: the title must open the song.)
+  const skipsTitle = (p: Presentation) => !!p.arrangements?.some((a) => !a.groups.includes('Title')) && p.slides.some((s) => s.group === 'Title');
+  return presentations.filter((p) => (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
 }
 
 export interface ScriptureFill {
