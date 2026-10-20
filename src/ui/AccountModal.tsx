@@ -45,7 +45,7 @@ export function AccountModal({ cloud, onClose }: { cloud: CloudSync; onClose: ()
             <div className="stack">
               <p><b>{status.session.username}</b>(으)로 로그인됨</p>
               <p className="muted small">
-                {status.state === 'syncing' ? `동기화 중… ${status.message ?? ''}` : status.state === 'error' ? `동기화 오류: ${status.message}` : status.lastSync ? `마지막 동기화 ${new Date(status.lastSync).toLocaleTimeString()} · 서버 버전 ${status.session.version}` : '대기 중'}
+                {status.state === 'syncing' ? `동기화 중… ${status.message ?? ''}` : status.state === 'error' ? `동기화 오류: ${status.message}` : status.lastSync ? `마지막 동기화 ${new Date(status.lastSync).toLocaleString()}` : '대기 중'}
               </p>
               <p className="hint">이 컴퓨터의 프레젠테이션·재생목록·테마·미디어가 교회 서버(Cloudflare Worker)에 저장되고, 같은 계정으로 로그인한 모든 기기에서 열립니다. 두 기기에서 같은 프레젠테이션을 동시에 고치면 둘 다 남깁니다.</p>
               <div className="row gap-s">
