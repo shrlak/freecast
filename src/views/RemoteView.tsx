@@ -12,9 +12,18 @@ export interface RemoteInfo {
   macros: { id: string; name: string; color: string }[];
 }
 
-/** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network. */
+/** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network, or the internet address from Settings. */
 export function RemoteView() {
-  const [pin, setPin] = useState(() => localStorage.getItem('freecast.pin') ?? '');
+  const [pin, setPin] = useState(() => {
+    // A scanned QR link carries the PIN: keep it, then take it out of the address bar.
+    const fromLink = new URLSearchParams(location.search).get('pin');
+    if (fromLink) {
+      localStorage.setItem('freecast.pin', fromLink);
+      history.replaceState(null, '', `${location.pathname}?view=remote`);
+      return fromLink;
+    }
+    return localStorage.getItem('freecast.pin') ?? '';
+  });
   const [live, setLive] = useState<LiveState | null>(null);
   const [info, setInfo] = useState<RemoteInfo | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 // FreeCast desktop app: runs the FreeCast server inside the app and shows the console,
 // audience outputs and stage displays as native windows placed on your displays.
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, safeStorage, screen, session, shell, dialog } from 'electron';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,7 @@ import { lanAddresses, startServer } from '../server/app.mjs';
 import { checkForUpdates, installUpdate, startUpdater, updateState } from './updater.mjs';
 import { PUBLISH } from './publish.mjs';
 import { setAiConfigProvider } from '../server/ai.mjs';
+import { startTunnel } from '../server/tunnel.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(here, '..');
@@ -19,7 +21,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 // ---------- settings ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
-let settings = { networkRemote: false, ai: {}, outputDisplays: {} };
+let settings = { networkRemote: false, internetRemote: false, remotePin: '', ai: {}, outputDisplays: {} };
 
 function loadSettings() {
   try {
@@ -27,14 +29,14 @@ function loadSettings() {
     let ai = {};
     if (raw.aiEnc && safeStorage.isEncryptionAvailable()) ai = JSON.parse(safeStorage.decryptString(Buffer.from(raw.aiEnc, 'base64')));
     else if (raw.aiPlain) ai = raw.aiPlain;
-    settings = { networkRemote: !!raw.networkRemote, ai, outputDisplays: raw.outputDisplays ?? {} };
+    settings = { networkRemote: !!raw.networkRemote, internetRemote: !!raw.internetRemote, remotePin: typeof raw.remotePin === 'string' ? raw.remotePin : '', ai, outputDisplays: raw.outputDisplays ?? {} };
   } catch {
     // first run
   }
 }
 
 function saveSettings() {
-  const out = { networkRemote: settings.networkRemote, outputDisplays: settings.outputDisplays };
+  const out = { networkRemote: settings.networkRemote, internetRemote: settings.internetRemote, remotePin: settings.remotePin, outputDisplays: settings.outputDisplays };
   // AI proxy address and optional own Gemini / OpenRouter keys, encrypted with the OS keychain.
   if (Object.keys(settings.ai ?? {}).length) {
     if (safeStorage.isEncryptionAvailable()) out.aiEnc = safeStorage.encryptString(JSON.stringify(settings.ai)).toString('base64');
@@ -48,7 +50,27 @@ function saveSettings() {
 let running = null;
 async function restartServer() {
   await running?.close();
-  running = await startServer({ root: path.join(appRoot, 'dist'), port: PORT, host: settings.networkRemote ? '0.0.0.0' : '127.0.0.1' });
+  running = await startServer({ root: path.join(appRoot, 'dist'), port: PORT, host: settings.networkRemote ? '0.0.0.0' : '127.0.0.1', publicPin: () => (settings.internetRemote ? settings.remotePin : '') });
+}
+
+// ---------- internet remote (phones on any network) ----------
+let tunnel = null;
+let tunnelState = { status: 'off', url: null, error: null };
+
+function syncTunnel() {
+  tunnel?.stop();
+  tunnel = null;
+  tunnelState = { status: 'off', url: null, error: null };
+  if (!settings.internetRemote) return;
+  // Public visitors always need a PIN: make one the first time.
+  if (!/^\d{6}$/.test(settings.remotePin)) {
+    settings.remotePin = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    saveSettings();
+  }
+  tunnelState = { status: 'connecting', url: null, error: null };
+  tunnel = startTunnel(PORT, (st) => {
+    tunnelState = st;
+  });
 }
 const origin = () => `http://127.0.0.1:${PORT}`;
 
@@ -268,6 +290,7 @@ ipcMain.handle('desktop:info', (e) => {
     ai: { proxyUrl: settings.ai.proxyUrl ?? '', hasGeminiKey: !!settings.ai.geminiKey, hasOpenrouterKey: !!settings.ai.openrouterKey },
     networkRemote: settings.networkRemote,
     lanUrls: settings.networkRemote ? lanAddresses().map((ip) => `http://${ip}:${PORT}`) : [],
+    internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, pin: settings.internetRemote ? settings.remotePin : '' },
   };
 });
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
@@ -300,6 +323,17 @@ ipcMain.handle('desktop:setNetworkRemote', async (e, on) => {
   settings.networkRemote = !!on;
   saveSettings();
   await restartServer();
+});
+ipcMain.handle('desktop:setInternetRemote', (e, on) => {
+  if (!fromMain(e)) return;
+  settings.internetRemote = !!on;
+  saveSettings();
+  syncTunnel();
+});
+ipcMain.handle('desktop:newRemotePin', (e) => {
+  if (!fromMain(e)) return;
+  settings.remotePin = '';
+  syncTunnel();
 });
 ipcMain.handle('desktop:updateState', (e) => (fromMain(e) ? updateState() : null));
 ipcMain.handle('desktop:checkUpdates', (e) => (fromMain(e) ? checkForUpdates() : null));
@@ -344,6 +378,7 @@ app.whenReady().then(async () => {
   setAiConfigProvider(() => settings.ai);
   try {
     await restartServer();
+    syncTunnel();
   } catch (err) {
     splashWindow?.destroy();
     dialog.showErrorBox('FreeCast could not start', err.code === 'EADDRINUSE'
@@ -373,4 +408,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => app.quit());
-app.on('before-quit', () => running?.close());
+app.on('before-quit', () => {
+  tunnel?.stop();
+  running?.close();
+});
