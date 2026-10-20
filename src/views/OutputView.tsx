@@ -3,9 +3,11 @@ import { SlideCanvas } from '../ui/SlideCanvas';
 import { CANVAS_W } from '../domain/canvas';
 import { useLiveFeed } from '../ui/hooks';
 import { liveCanvasProps } from '../ui/liveProps';
+import { openLiveChannel } from '../domain/sync';
 
 /**
  * Audience output. Open it on the projector screen and press F (or double-click) for fullscreen.
+ * Keys pressed here (arrows, Space, Esc…) are passed to the console, so a show on a single screen still runs.
  * `?screen=<id>` picks a screen configuration (e.g. lower-third livestream on chroma green).
  */
 export function OutputView() {
@@ -23,12 +25,20 @@ export function OutputView() {
       if (document.fullscreenElement) document.exitFullscreen();
       else document.documentElement.requestFullscreen().catch(() => undefined);
     };
-    const onKey = (e: KeyboardEvent) => e.key.toLowerCase() === 'f' && toggle();
+    const ch = openLiveChannel(() => undefined);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key.toLowerCase() === 'f') return toggle();
+      // Every other key drives the show from the console, like PowerPoint's slide show window.
+      e.preventDefault();
+      ch.post({ type: 'key', key: e.key, shiftKey: e.shiftKey });
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('dblclick', toggle);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('dblclick', toggle);
+      ch.close();
     };
   }, []);
 

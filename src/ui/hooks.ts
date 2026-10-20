@@ -75,6 +75,8 @@ export function useLiveBroadcast(live: LiveState, relaySend: (m: unknown) => voi
   useEffect(() => {
     channel.current = openLiveChannel((m) => {
       if (m.type === 'hello') channel.current?.post({ type: 'state', state: latest.current });
+      // A slide show covering this very screen still answers to the arrow keys, Space and Esc.
+      if (m.type === 'key') window.dispatchEvent(new KeyboardEvent('keydown', { key: m.key, shiftKey: m.shiftKey, cancelable: true }));
     });
     return () => channel.current?.close();
   }, []);

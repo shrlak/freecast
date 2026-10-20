@@ -39,7 +39,8 @@ import { PrayerSetting } from '../ui/sunday/PrayerSetting';
 import { SongEditor } from '../ui/sunday/SongEditor';
 import { reviewNote } from '../ui/ppt/contiReview';
 import { PptLayout } from '../ui/ppt/PptLayout';
-import { openOutput } from '../ui/LivePanel';
+import { presentOutput } from '../ui/LivePanel';
+import { desktop } from '../domain/desktop';
 import type { Commands, Layout, Modal, PptViewMode } from '../ui/ppt/commands';
 
 
@@ -271,11 +272,12 @@ export function OperatorView() {
     const seq = fromCurrent && slideId ? Math.max(0, sequence(pres).findIndex((x) => x.slide.id === slideId)) : 0;
     dispatch({ type: 'live/go', presentationId: pres.id, seq });
     setView('presenter');
-    openOutput('output');
+    presentOutput();
   };
   const endShow = () => {
     dispatch({ type: 'live/clearAll' });
     setView('normal');
+    desktop?.endShow();
   };
   const startShowRef = useRef(startShow);
   startShowRef.current = startShow;
