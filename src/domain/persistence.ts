@@ -70,10 +70,16 @@ export function toFourThree(presentations: Library['presentations']): Library['p
   }));
 }
 
-/** Once: defaults matched to the church's own PPT — one Bible verse per slide (changeable afterwards). */
+/**
+ * Once each: defaults matched to the church's own PPT (changeable afterwards) —
+ * v1 one Bible verse per slide, v2 up to four lyric lines per slide.
+ */
 function churchStyle(sunday: Library['sunday'], saved: unknown): Library['sunday'] {
-  if (typeof saved === 'number' && saved >= 1) return sunday;
-  return { ...sunday, versesPerSlide: 1, styleVersion: 1 };
+  const done = typeof saved === 'number' ? saved : 0;
+  let next = sunday;
+  if (done < 1) next = { ...next, versesPerSlide: 1 };
+  if (done < 2) next = { ...next, linesPerSlide: 4 };
+  return { ...next, styleVersion: 2 };
 }
 
 export const isLibrary = (value: unknown): boolean => normalizeLibrary(value) !== null;

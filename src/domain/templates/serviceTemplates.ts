@@ -28,7 +28,7 @@ export interface ServiceTemplates {
   /** The church's current closing deck; missing when it could not be downloaded. */
   back?: Slide[];
   /** Content hashes of the decks, to tell when the church changed them. */
-  keys: { front: string; back?: string };
+  keys: { front: string; back?: string; song: string };
 }
 
 /** Where the ppt program publishes back-slides.pptx (it is kept out of the repo). */
@@ -57,7 +57,19 @@ const logoBlob = () => (currentLogo ??= fetch(new URL(CURRENT_LOGO, document.bas
 /** The picture as it should be stored: PowerPoint's crop applied, a replaced logo swapped for the current one. */
 async function pictureBlob(p: RenderedPictureShape): Promise<Blob | null> {
   const original = await fetch(p.imageUrl).then((r) => r.blob()).catch(() => null);
-  if (original && OLD_LOGOS.has(await fingerprint(original))) return (await logoBlob()) ?? original;
+  if (original && OLD_LOGOS.has(await fingerprint(original))) {
+    // The new logo has the same 4:3 layout as the old one, so the slide's crop of the old logo
+    // (its middle band) gives the new one the frame's exact shape — no squashing.
+    const logo = await logoBlob();
+    if (!logo) return original;
+    if (!p.crop) return logo;
+    const url = URL.createObjectURL(logo);
+    try {
+      return (await croppedPicture(url, p.crop)) ?? logo;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
   return p.crop ? croppedPicture(p.imageUrl, p.crop) : original;
 }
 
@@ -119,9 +131,9 @@ async function fetchDeck(name: string, ...fallbacks: string[]): Promise<{ data: 
   }
   if (!res?.ok) throw new Error(`${name}: ${res?.status ?? 'offline'}`);
   const data = await res.arrayBuffer();
-  // '-43f': 4:3 canvas, every part a separate editable object, current KCCP logo, Arial theme font
-  // (the key also names the cached images).
-  return { data, key: `tpl-${await hash(data)}-43f` };
+  // '-43g': 4:3 canvas, every part a separate editable object, current KCCP logo cropped like the
+  // old one, Arial theme font (the key also names the cached images).
+  return { data, key: `tpl-${await hash(data)}-43g` };
 }
 
 let cached: Promise<ServiceTemplates> | null = null;
@@ -162,6 +174,6 @@ async function build(): Promise<ServiceTemplates> {
     bibleVerse: bibleSlides[1],
     sermon: named(bibleSlides[2], '설교'),
     back: backSlides?.length ? backSlides : undefined,
-    keys: { front: front.key, back: backSlides?.length ? (await backDeck)?.key : undefined },
+    keys: { front: front.key, back: backSlides?.length ? (await backDeck)?.key : undefined, song: song.key },
   };
 }

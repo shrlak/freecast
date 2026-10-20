@@ -37,22 +37,47 @@ async function getJson<T>(path: string): Promise<T> {
 /** Stable id so playlists can keep referring to an online song across sessions. */
 export const onlineId = (title: string) => `online:${titleKey(title)}`;
 
-interface LibrarySong { title: string; key?: string; sections: { label: string; lines: string[] }[]; order?: string[] }
+/** One song as the church library stores it (library.json and the Worker's /libraries/lyrics). */
+export interface LibrarySong { title: string; key?: string; sections: { label: string; lines: string[] }[]; order?: string[]; verification?: string; updatedAt?: string }
 interface RetreatSong { title: string; slides: string[][] }
 
-/** The song library from the server (library.json + retreat-songs.json) as read-only presentations. */
+/**
+ * The 찬양 라이브러리 the ppt site registers songs into (the church Worker), through this app's
+ * server. Null when it cannot be reached — the bundled library.json is used alone then.
+ */
+export async function fetchSharedSongs(): Promise<{ entries: LibrarySong[]; deletedTitles: string[] } | null> {
+  try {
+    const r = await fetch('/api/songs', { headers: { accept: 'application/json' } });
+    if (!r.ok) return null;
+    const d = (await r.json()) as { entries?: LibrarySong[]; deletedTitles?: string[] };
+    return { entries: Array.isArray(d.entries) ? d.entries : [], deletedTitles: Array.isArray(d.deletedTitles) ? d.deletedTitles : [] };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The song library as the ppt site sees it: the bundled library.json with the songs registered in the
+ * shared library on top (a registered song replaces the bundled one of the same title; deleted titles
+ * are left out), plus retreat-songs.json — as read-only presentations.
+ */
 export async function fetchOnlineSongs(linesPerSlide: number): Promise<Presentation[]> {
   const seen = new Set<string>();
   const out: Presentation[] = [];
   const opts = { themeId: 'theme_sunday', linesPerSlide, folder: ONLINE_FOLDER };
   const background = CHURCH_BACKGROUNDS.watercolor;
-  for (const s of await getJson<LibrarySong[]>('library.json')) {
-    if (!s?.title || !Array.isArray(s.sections)) continue;
+  const [bundled, shared] = await Promise.all([getJson<LibrarySong[]>('library.json'), fetchSharedSongs()]);
+  const deleted = new Set((shared?.deletedTitles ?? []).map(titleKey));
+  const byTitle = new Map<string, LibrarySong>();
+  for (const s of bundled) if (s?.title && Array.isArray(s.sections)) byTitle.set(titleKey(s.title), s);
+  for (const s of shared?.entries ?? []) if (s?.title && Array.isArray(s.sections)) byTitle.set(titleKey(s.title), s);
+  for (const [key, s] of byTitle) {
+    if (deleted.has(key)) continue;
     const id = onlineId(s.title);
     if (seen.has(id)) continue;
     seen.add(id);
     const draft: SongDraft = { title: s.title, key: s.key || undefined, sections: s.sections, progression: s.order?.length ? s.order : undefined };
-    out.push({ ...songToPresentation(draft, opts), id, online: true, background });
+    out.push({ ...songToPresentation(draft, opts), id, online: true, background, songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } });
   }
   try {
     for (const s of await getJson<RetreatSong[]>('retreat-songs.json')) {
@@ -66,6 +91,29 @@ export async function fetchOnlineSongs(linesPerSlide: number): Promise<Presentat
     // optional file
   }
   return out;
+}
+
+/**
+ * Register (or update) a song in the shared 찬양 라이브러리, as the ppt site's 라이브러리 저장 does;
+ * needs the 관리자 password.
+ */
+export async function registerSharedSong(song: LibrarySong, adminPassword: string): Promise<void> {
+  const r = await fetch('/api/songs', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${adminPassword}` },
+    body: JSON.stringify({ entry: { ...song, verification: 'verified', updatedAt: new Date().toISOString() } }),
+  });
+  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `등록하지 못했습니다 (${r.status})`);
+}
+
+/** Delete a song from the shared 찬양 라이브러리 (관리자 password). */
+export async function deleteSharedSong(title: string, adminPassword: string): Promise<void> {
+  const r = await fetch('/api/songs', {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${adminPassword}` },
+    body: JSON.stringify({ title }),
+  });
+  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `삭제하지 못했습니다 (${r.status})`);
 }
 
 /** Fetch one Bible translation file from the server. */

@@ -10,6 +10,7 @@ import type { Announcement } from '../sunday/announcements';
 import type { PrayerTopic } from '../sunday/prayer';
 import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
+import { splitEvenly } from '../sunday/songs';
 import { fillSlide, fillTokens, withElementText } from './convert';
 import { CANVAS_H, CANVAS_W } from '../canvas';
 import type { ServiceTemplates } from './serviceTemplates';
@@ -134,32 +135,80 @@ export function templateLyricsTheme(tpl: ServiceTemplates): Theme {
 }
 
 /**
- * A song in the template's design: the title slide (watercolor) first, then its lyric slides on the
- * white lyric background with the song title small in the corner. The lyrics stay slide text, so
- * arrangements, the stage display and the OBS overlay keep working.
+ * A song in the church template's design (as the ppt program builds it from template.pptx): a title
+ * slide (watercolor), then each part split as evenly as possible into slides of at most `maxLines`
+ * lines, on the white lyric background with the song title in the corner and the logo. The lyrics
+ * stay slide text drawn by the lyrics theme (font, size, colour), so arrangements, the stage display
+ * and the OBS overlay keep working. Keeps the song's id, folder and arrangements; per-slide font /
+ * colour / background overrides are cleared so every song looks the same.
  */
-export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder: string): Presentation {
+export function restyleSong(song: Presentation, tpl: ServiceTemplates, maxLines: number): Presentation {
   const [lyricBox, titleBox] = [...texts(tpl.songLyrics)].sort((a, b) => area(b) - area(a));
   const title = song.title;
   // Everything on the template's lyric slide except its lyrics box: the logo, any boxes, and the
-  // song title in the corner (lyrics stay slide text, drawn by the theme).
+  // song title in the corner.
   const corner = fillSlide(
     { ...tpl.songLyrics, elements: (tpl.songLyrics.elements ?? []).filter((e) => e !== lyricBox) },
     (t, el) => (el === titleBox ? title : t),
   ).elements!;
-  const lyrics = song.slides
-    .filter((s) => s.group !== 'Title')
-    .map((s) => ({ ...s, id: uid('s'), caption: undefined, background: undefined, elements: [...corner.map((e) => ({ ...e, id: uid('e') })), ...(s.elements ?? [])] }));
+  const lyricSlide = (base: Partial<Slide> & Pick<Slide, 'group' | 'text'>): Slide => ({
+    ...base, id: uid('s'), caption: undefined, background: undefined, style: undefined, elements: corner.map((e) => ({ ...e, id: uid('e') })),
+  });
+
+  // A song already laid out the church's way at this size keeps its slide breaks (blank-line breaks
+  // included). Otherwise consecutive slides of one part are re-split together; a part with
+  // second-language lines (subtext) keeps its slides as they are, since its lines are paired.
+  const lyrics: Slide[] = [];
+  const body = song.slides.filter((s) => s.group !== 'Title');
+  const laidOut = song.lyricsLayout?.linesPerSlide === maxLines;
+  for (let i = 0; i < body.length; ) {
+    if (laidOut) {
+      lyrics.push(lyricSlide({ ...body[i] }));
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < body.length && body[j].group === body[i].group) j++;
+    const run = body.slice(i, j);
+    if (run.some((s) => s.subtext)) lyrics.push(...run.map((s) => lyricSlide({ ...s })));
+    else {
+      const lines = run.flatMap((s) => s.text.split('\n')).map((l) => l.trim()).filter(Boolean);
+      const { notes, label } = run[0];
+      for (const chunk of splitEvenly(lines, maxLines)) lyrics.push(lyricSlide({ group: run[0].group, text: chunk.join('\n'), notes, label }));
+    }
+    i = j;
+  }
   return {
     ...song,
-    id: uid('p'),
-    online: undefined,
-    folder,
     themeId: TEMPLATE_LYRICS_THEME,
     background: tpl.songLyrics.background,
-    slides: [fillSlide(tpl.songTitle, () => title), ...lyrics],
-    arrangements: song.arrangements?.map((a) => ({ ...a, groups: a.groups.filter((g) => g !== 'Title') })),
+    slides: [{ ...fillSlide(tpl.songTitle, () => title), group: 'Title' }, ...lyrics],
+    // Like the church's PPT each part plays once (arrangements stay available, switched off);
+    // the title slide opens every arrangement too.
+    arrangements: song.arrangements?.map((a) => ({ ...a, groups: ['Title', ...a.groups.filter((g) => g !== 'Title')] })),
+    arrangementId: undefined,
+    lyricsLayout: { linesPerSlide: maxLines },
+    templateKey: `song:${tpl.keys.song}|${maxLines}`,
   };
+}
+
+/** A copy of a song in the template's design for this week's service (new id, the service's folder). */
+export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder: string, maxLines = 4): Presentation {
+  return { ...restyleSong(song, tpl, maxLines), id: uid('p'), online: undefined, folder };
+}
+
+/** Is this presentation a song (lyrics by part), as opposed to an announcement or a scripture deck? */
+export function isSong(p: Presentation): boolean {
+  const looksLikeSong = p.online || p.folder === 'Songs' || p.themeId === TEMPLATE_LYRICS_THEME;
+  // Retreat songs come pre-laid-out as "Slide 1, 2…" in the retreat design and are left as they are.
+  const parts = p.slides.filter((s) => s.group !== 'Title');
+  return !!looksLikeSong && parts.length > 0 && parts.some((s) => !/^Slide( \d+)?$/.test(s.group));
+}
+
+/** Songs that are not yet in the current template design (with this many lines per slide), restyled. */
+export function songStyleUpdates(presentations: Presentation[], tpl: ServiceTemplates, maxLines: number): Presentation[] {
+  const key = `song:${tpl.keys.song}|${maxLines}`;
+  return presentations.filter((p) => p.templateKey !== key && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
 }
 
 export interface ScriptureFill {

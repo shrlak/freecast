@@ -5,6 +5,7 @@ import { groupColor, uid } from '../../domain/lyrics';
 import { sequence } from '../../domain/arrangement';
 import { SlideCanvas } from '../SlideCanvas';
 import { SlideFormat } from './SlideFormat';
+import { CanvasEditor } from './CanvasEditor';
 import { SlideDesigner } from '../SlideDesigner';
 import { SlideGrid } from '../SlideGrid';
 import { LibraryPanel } from '../LibraryPanel';
@@ -22,6 +23,8 @@ interface Props {
 export function PptLayout({ state, dispatch, cmd }: Props) {
   const [leftTab, setLeftTab] = useState<'slides' | 'library'>('slides');
   const [designing, setDesigning] = useState(false);
+  /** The object selected on the canvas (shown in the Format pane). */
+  const [selEl, setSelEl] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const p = state.library.presentations.find((x) => x.id === state.selectedId) ?? null;
   const slide = p?.slides.find((s) => s.id === cmd.slideId) ?? p?.slides[0] ?? null;
@@ -122,8 +125,10 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           <main className="ppt-center">
             <div className="ppt-stage">
               {p && slide ? (
-                <div className="ppt-canvas" onDoubleClick={() => setDesigning(true)} title="두 번 클릭하여 개체 편집">
-                  <SlideCanvas slide={slide} theme={theme} background={background} bgEffect={p.bgEffect} />
+                <div className="ppt-canvas">
+                  <CanvasEditor slide={slide} theme={theme} background={background} bgEffect={p.bgEffect}
+                    selectedId={selEl} onSelect={setSelEl}
+                    onChange={(patch) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch })} />
                 </div>
               ) : (
                 <div className="ppt-empty">
@@ -146,7 +151,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
         {cmd.view === 'normal' && p && slide && (
           <aside className="ppt-format">
             <div className="ppt-format-title">서식 · 슬라이드 {index + 1}</div>
-            <SlideFormat state={state} dispatch={dispatch} presentation={p} slide={slide} onDesign={() => setDesigning(true)} />
+            <SlideFormat state={state} dispatch={dispatch} presentation={p} slide={slide} onDesign={() => setDesigning(true)} selectedId={selEl} onSelect={setSelEl} />
           </aside>
         )}
       </div>

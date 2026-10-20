@@ -1,6 +1,6 @@
 // Actions for looks, stage layouts, playback markers, timelines and playlist templates.
 // Kept apart from reducer.ts so each file stays small.
-import type { Library, Look, PlaybackMarker, Playlist, StageLayout, Timeline } from './types';
+import type { Library, Look, PlaybackMarker, Playlist, Presentation, StageLayout, Timeline } from './types';
 import type { AppState } from './reducer';
 
 export type ExtraAction =
@@ -15,9 +15,11 @@ export type ExtraAction =
   | { type: 'live/videoClock'; endsAt: number | null }
   | { type: 'library/merge'; library: Library }
   /** Replace (or add) a playlist; the selected item stays selected when items move. */
-  | { type: 'playlist/set'; playlist: Playlist; activate?: boolean };
+  | { type: 'playlist/set'; playlist: Playlist; activate?: boolean }
+  /** Replace several presentations at once (one undo step); online songs stay online (not saved). */
+  | { type: 'presentation/replaceMany'; presentations: Presentation[] };
 
-const EXTRA = new Set<string>(['library/merge', 'playlist/set', 'look/save', 'look/delete', 'look/apply', 'stageLayout/upsert', 'stageLayout/delete', 'media/markers', 'timeline/set', 'playlist/duplicate', 'live/videoClock']);
+const EXTRA = new Set<string>(['library/merge', 'playlist/set', 'presentation/replaceMany', 'look/save', 'look/delete', 'look/apply', 'stageLayout/upsert', 'stageLayout/delete', 'media/markers', 'timeline/set', 'playlist/duplicate', 'live/videoClock']);
 export const isExtra = (a: { type: string }): a is ExtraAction => EXTRA.has(a.type);
 
 const upsert = <T extends { id: string }>(list: T[], item: T) =>
@@ -49,6 +51,10 @@ export function extraReducer(s: AppState, a: ExtraAction): AppState {
       if (!src) return s;
       const copy = { id: a.newId, name: a.name, items: src.items.map((i, n) => ({ ...i, id: `${a.newId}_${n}` })) };
       return { ...setLib({ playlists: [...lib.playlists, copy] }), activePlaylistId: copy.id, playlistIndex: null };
+    }
+    case 'presentation/replaceMany': {
+      const next = new Map(a.presentations.map((p) => [p.id, p]));
+      return setLib({ presentations: lib.presentations.map((p) => next.get(p.id) ?? p) });
     }
     case 'playlist/set': {
       const old = lib.playlists.find((p) => p.id === a.playlist.id);

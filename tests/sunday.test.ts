@@ -87,12 +87,16 @@ describe('songs', () => {
     expect(song.title).toBe('테스트 곡');
     const p = songToPresentation({ ...song, progression: ['V', 'C', 'C'] }, { themeId: 't', linesPerSlide: 2 });
     expect(p.slides.map((s) => s.group)).toEqual(['Verse', 'Verse', 'Chorus']);
-    expect(sequence(p).map((x) => x.slide.group)).toEqual(['Verse', 'Verse', 'Chorus', 'Chorus']);
+    // Like the church's PPT each part plays once; the 진행 is kept as an arrangement to switch on.
+    expect(sequence(p).map((x) => x.slide.group)).toEqual(['Verse', 'Verse', 'Chorus']);
+    expect(p.meta?.order).toEqual(['V', 'C', 'C']);
+    expect(sequence({ ...p, arrangementId: p.arrangements![0].id }).map((x) => x.slide.group)).toEqual(['Verse', 'Verse', 'Chorus', 'Chorus']);
   });
 
   it('numbers repeated parts and maps bare codes to them in order', () => {
     const p = songToPresentation({ title: 's', sections: [{ label: 'V', lines: ['a'] }, { label: 'C', lines: ['b'] }, { label: 'V', lines: ['c'] }], progression: ['V', 'C', 'V', 'C'] }, { themeId: 't', linesPerSlide: 2 });
-    expect(sequence(p).map((x) => x.slide.text)).toEqual(['a', 'b', 'c', 'b']);
+    expect(sequence(p).map((x) => x.slide.text)).toEqual(['a', 'b', 'c']);
+    expect(sequence({ ...p, arrangementId: p.arrangements![0].id }).map((x) => x.slide.text)).toEqual(['a', 'b', 'c', 'b']);
   });
 
   it('matches titles loosely', () => {
@@ -123,5 +127,22 @@ describe('service builder', () => {
     expect(back.slides[0].group).toMatch(/^공동체 고백/);
     expect(presentations.find((p) => p.title === '광고')!.slides[0].qr).toEqual(['https://x.org']);
     expect(warnings).toEqual([]);
+  });
+});
+
+describe('church slide planner (as the ppt program lays out songs)', async () => {
+  const { planSectionSlides } = await import('../src/domain/sunday/slidePlanner');
+  const texts = (parts: { slides: string[][] }[]) => parts.flatMap((p) => p.slides.map((s) => s.join('/')));
+  it('splits each part into up to 4 lines, 6 lines as 3 + 3', () => {
+    expect(texts(planSectionSlides([{ label: 'V1', lines: ['1', '2', '3', '4', '5', '6'] }], undefined, 4))).toEqual(['1/2/3', '4/5/6']);
+    expect(texts(planSectionSlides([{ label: 'V1', lines: ['1', '2', '3', '4'] }], undefined, 4))).toEqual(['1/2/3/4']);
+  });
+  it('starts a new slide at a blank line', () => {
+    expect(texts(planSectionSlides([{ label: 'C', lines: ['a', 'b', '', 'c'] }], undefined, 4))).toEqual(['a/b', 'c']);
+  });
+  it('plays each part once, in the order the 진행 first names it', () => {
+    const sections = [{ label: 'V1', lines: ['v1'] }, { label: 'V2', lines: ['v2'] }, { label: 'C', lines: ['c'] }, { label: 'B', lines: ['b'] }];
+    expect(texts(planSectionSlides(sections, ['I', 'V1', 'C', 'V2', 'C', 'B', 'C'], 4))).toEqual(['v1', 'c', 'v2', 'b']);
+    expect(texts(planSectionSlides(sections, ['V', 'C', 'V', 'C'], 4))).toEqual(['v1', 'c', 'v2']);
   });
 });

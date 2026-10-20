@@ -13,7 +13,7 @@ import { loadScriptureChunks } from '../../domain/bible/slides';
 import { uid } from '../../domain/lyrics';
 import { loadServiceTemplates, pptxSlides, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
 import { templateDeckUpdates } from '../../domain/templates/register';
-import { scriptureSlides, sermonTitleSlide, songInTemplate, templateLyricsTheme } from '../../domain/templates/fill';
+import { scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
 import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { loadTranslations } from '../BibleModal';
 import { filesToSlides } from '../importFiles';
@@ -72,6 +72,14 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
 
   // The library's 주일예배 Front / Back decks follow the church templates and this season's 고백송
   // (re-checked as songs load from the server and when the 고백송 setting changes).
+  // Every song — saved, online, or added later — in the church template's design, up to
+  // `linesPerSlide` lines per slide by part.
+  useEffect(() => {
+    if (templates !== 'ok' || !tpl.current) return;
+    const restyled = songStyleUpdates(library.presentations, tpl.current, library.sunday.linesPerSlide);
+    if (restyled.length) dispatch({ type: 'presentation/replaceMany', presentations: restyled });
+  }, [templates, library.presentations, library.sunday.linesPerSlide, dispatch]);
+
   // Re-checked every 30 minutes too, so the Front deck moves on to the next Sunday's date by itself.
   const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
@@ -135,7 +143,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     let base: Presentation;
     if (existing && (!draft.sections.length || existing.online)) base = progression ? withProgression(existing, progression) : existing;
     else base = songToPresentation({ ...draft, progression }, { themeId: 'theme_sunday', linesPerSlide: lib.current.sunday.linesPerSlide, folder });
-    if (t) return { pres: songInTemplate(base, t, folder), isNew: true };
+    if (t) return { pres: songInTemplate(base, t, folder, lib.current.sunday.linesPerSlide), isNew: true };
     if (base === existing) return { pres: existing, isNew: false };
     return { pres: { ...base, id: base.id === existing?.id ? uid('p') : base.id, online: undefined, folder, background: CHURCH_BACKGROUNDS.watercolor }, isNew: true };
   };
@@ -197,7 +205,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     const folder = liveFolder(upcomingSunday(new Date()));
     for (const f of files) {
       const song = presentationFromSongFile(f.name, await f.text(), lib.current.sunday.linesPerSlide);
-      const pres = t ? songInTemplate(song, t, folder) : { ...song, folder };
+      const pres = t ? songInTemplate(song, t, folder, lib.current.sunday.linesPerSlide) : { ...song, folder };
       await add(pres);
       await place(id, SECTION.songs, [pres.id]);
       await show(id, pres.id);

@@ -201,7 +201,7 @@ export function createSeedLibrary(): Library {
     usage: [],
     sunday: {
       frontId: 'p_front', prayerId: 'p_prayer', backId: 'p_back', confessionSong: DEFAULT_CONFESSION_SONG,
-      linesPerSlide: 2, translations: ['nkrv'], versesPerSlide: 1, styleVersion: 1,
+      linesPerSlide: 4, translations: ['nkrv'], versesPerSlide: 1, styleVersion: 2,
     },
     schedules: [],
     logoMediaId: null,

@@ -8,6 +8,9 @@ import { uid } from '../../domain/lyrics';
 import { assetUrl, slideTheme } from '../SlideCanvas';
 import { useMediaUrl } from '../hooks';
 import { SlideInspector } from '../SlideInspector';
+import { patchElement } from '../../domain/templates/convert';
+import { ElementFormat } from './ElementFormat';
+import { FontSize } from './FontSize';
 
 interface Props {
   state: AppState;
@@ -15,6 +18,9 @@ interface Props {
   presentation: Presentation;
   slide: Slide;
   onDesign: () => void;
+  /** The object selected on the slide (CanvasEditor); its settings show first. */
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
 }
 
 function Section({ title, children, open = true }: { title: string; children: ReactNode; open?: boolean }) {
@@ -32,14 +38,13 @@ function MediaThumb({ id, video }: { id: string; video: boolean }) {
   return video ? <video className="fmt-swatch-fill" src={url} muted /> : <img className="fmt-swatch-fill" src={url} alt="" />;
 }
 
-const SIZES = [36, 44, 54, 60, 66, 72, 80, 88, 96, 110, 128, 150];
 
 /**
  * PowerPoint-style Format pane for one slide: text, font (나눔고딕 / Arial / Calibri…),
  * size, colour, bold/italic/underline, alignment, spacing and background — for this slide
  * only, with "apply to all slides".
  */
-export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign }: Props) {
+export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign, selectedId, onSelect }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [applied, setApplied] = useState<string | null>(null);
   const base: Theme = state.library.themes.find((t) => t.id === p.themeId) ?? state.library.themes[0];
@@ -73,9 +78,25 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign 
   const bg = slide.background;
   const bgColor = bg?.kind === 'color' ? bg.value : '#000000';
 
+  const selected = slide.elements?.find((e) => e.id === selectedId);
+  const elements = slide.elements ?? [];
   return (
     <div className="slide-format">
       {applied && <div className="fmt-flash">✓ {applied}</div>}
+      {selected ? (
+        <ElementFormat
+          el={selected}
+          onChange={(patch) => upd({ elements: elements.map((e) => (e.id === selected.id ? patchElement(e, patch) : e)) })}
+          onDelete={() => { upd({ elements: elements.filter((e) => e.id !== selected.id) }); onSelect?.(null); }}
+          onOrder={(where) => {
+            const rest = elements.filter((e) => e.id !== selected.id);
+            upd({ elements: where === 'front' ? [...rest, selected] : [selected, ...rest] });
+          }}
+          addMedia={(m) => dispatch({ type: 'media/add', media: m })}
+        />
+      ) : (
+        <p className="hint">슬라이드에서 글자 · 로고 · 그림 · 도형을 클릭하면 여기서 바로 바꿀 수 있습니다. 글자는 두 번 클릭하면 슬라이드 위에서 바로 입력됩니다.</p>
+      )}
       <Section title="텍스트">
         <label>제목 (굵은 머리글)<input value={slide.title ?? ''} onChange={(e) => upd({ title: e.target.value || undefined })} /></label>
         <label>본문<textarea rows={5} value={slide.text} onChange={(e) => upd({ text: e.target.value })} /></label>
@@ -89,9 +110,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign 
             {!FONT_OPTIONS.some((f) => f.family === t.fontFamily) && <option value="">테마 글꼴</option>}
             {FONT_OPTIONS.map((f) => <option key={f.label} value={f.family} style={{ fontFamily: f.family }}>{f.label}</option>)}
           </select>
-          <select value={t.fontSize} onChange={(e) => setStyle({ fontSize: Number(e.target.value) })} title="글꼴 크기">
-            {[...new Set([...SIZES, t.fontSize])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n}</option>)}
-          </select>
+          <FontSize value={t.fontSize} onChange={(n) => setStyle({ fontSize: n })} />
         </div>
         <div className="fmt-row">
           <button className={`fmt-tog ${t.fontWeight >= 700 ? 'on' : ''}`} title="굵게" onClick={() => setStyle({ fontWeight: t.fontWeight >= 700 ? 400 : 700 })}><b>B</b></button>

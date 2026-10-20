@@ -31,7 +31,7 @@ const TPL: ServiceTemplates = {
     text('v2', '{{ETITLE}} {{CHAP}}:{{PARA}}\n{{BODY2}}', 736),
   ]),
   sermon: slide('설교', [text('sh', '설교\nSermon', 186), text('sp', '방태준 목사님', 822), text('stt', '{{SERMON_TITLE}}\n{{RANGE_KO}}', 482)]),
-  keys: { front: 'f1' },
+  keys: { front: 'f1', song: 's1' },
 };
 const els = (s: Slide) => (s.elements ?? []).map((e) => e.text);
 
@@ -118,7 +118,7 @@ describe('church template filling', () => {
     expect(out.slides[1].text).toBe('내가 누려왔던');
     expect(out.slides[1].caption).toBeUndefined();
     expect(els(out.slides[1])).toEqual(['은혜']); // small title in the corner
-    expect(out.arrangements![0].groups).toEqual(['Verse 1', 'Chorus']);
+    expect(out.arrangements![0].groups).toEqual(['Title', 'Verse 1', 'Chorus']); // the title slide opens it
   });
 
   it('derives the lyrics theme from the template’s lyric box', () => {
@@ -228,7 +228,7 @@ describe('공동체 고백송 and template deck sync', async () => {
   it('brings the library Front/Back decks in line with the templates and the 고백송', () => {
     const lib = createSeedLibrary();
     lib.presentations.push(song);
-    const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1' } };
+    const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1', song: 's1' } };
     const updates = templateDeckUpdates(lib, tpl);
     expect(updates.map((u) => u.id)).toEqual([lib.sunday.frontId, lib.sunday.backId]);
     const backPatch = updates[1].patch;
@@ -236,17 +236,17 @@ describe('공동체 고백송 and template deck sync', async () => {
     // Applied once, nothing more to do — until the template changes.
     const synced = { ...lib, presentations: lib.presentations.map((p) => updates.find((u) => u.id === p.id) ? { ...p, ...updates.find((u) => u.id === p.id)!.patch } : p) };
     expect(templateDeckUpdates(synced, tpl)).toEqual([]);
-    expect(templateDeckUpdates(synced, { ...tpl, keys: { front: 'f2', back: 'b1' } }).map((u) => u.id)).toEqual([lib.sunday.frontId]);
+    expect(templateDeckUpdates(synced, { ...tpl, keys: { front: 'f2', back: 'b1', song: 's1' } }).map((u) => u.id)).toEqual([lib.sunday.frontId]);
     // A deck the church edited by hand (not on template backgrounds) is left alone.
     const custom = { ...synced, presentations: synced.presentations.map((p) => (p.id === lib.sunday.backId ? { ...p, templateKey: undefined, slides: [{ id: 'mine', group: 'Back', text: '축도' }] } : p)) };
-    expect(templateDeckUpdates(custom, { ...tpl, keys: { front: 'f1', back: 'b2' } })).toEqual([]);
+    expect(templateDeckUpdates(custom, { ...tpl, keys: { front: 'f1', back: 'b2', song: 's1' } })).toEqual([]);
   });
 });
 
 describe('4:3 Front deck with this Sunday’s date and 기도제목', async () => {
   const { templateDeckUpdates } = await import('../src/domain/templates/register');
   const { toFourThree, normalizeLibrary } = await import('../src/domain/persistence');
-  const frontTpl = { ...TPL, front: [TPL.front[0], slide('Front', [text('d', '빛주사랑\n대학청년부\nmm/dd/202y', 800)]), TPL.front[2]], keys: { front: 'f1' } };
+  const frontTpl = { ...TPL, front: [TPL.front[0], slide('Front', [text('d', '빛주사랑\n대학청년부\nmm/dd/202y', 800)]), TPL.front[2]], keys: { front: 'f1', song: 's1' } };
 
   it('fills a date placeholder like mm/dd/202y', () => {
     const out = fillFront(frontTpl, new Date(2026, 9, 25), []);
@@ -300,7 +300,7 @@ describe('editable slides that keep their edits', async () => {
 
   const prayerSlide = slide('Front', [img('logo', 1200, 20), text('t1', '지금은 기도로 예배를 준비하는 시간입니다.'), text('t2', '기도제목 1\n기도제목 2', 300)]);
   const welcome = slide('Front', [img('w', 0, 300), text('d', '빛주사랑\n대학청년부\nmm/dd/202y', 800)]);
-  const tpl = { ...TPL, front: [prayerSlide, welcome], keys: { front: 'f1' } };
+  const tpl = { ...TPL, front: [prayerSlide, welcome], keys: { front: 'f1', song: 's1' } };
 
   it('leaves the corner logo off the 기도 준비 slide only', () => {
     const out = fillFront(tpl, new Date(2026, 9, 25), []);
@@ -331,7 +331,7 @@ describe('editable slides that keep their edits', async () => {
     expect(week2.patch.slides![1].elements!.some((e) => e.text === '내 메모')).toBe(true);
     expect(week2.patch.slides![1].elements!.find((e) => e.text?.includes('대학청년부'))!.text).toContain('11/01/2026');
     // A new church file rebuilds from the template.
-    const [newFile] = templateDeckUpdates(synced, { ...tpl, keys: { front: 'f2' } }, new Date(2026, 9, 21));
+    const [newFile] = templateDeckUpdates(synced, { ...tpl, keys: { front: 'f2', song: 's1' } }, new Date(2026, 9, 21));
     expect(newFile.patch.slides![1].elements!.some((e) => e.text === '내 메모')).toBe(false);
   });
 });
@@ -342,8 +342,65 @@ describe('church PPT style defaults', async () => {
     const old = { ...createSeedLibrary(), sunday: { ...createSeedLibrary().sunday, versesPerSlide: 2, styleVersion: undefined } };
     const lib = normalizeLibrary(old)!;
     expect(lib.sunday.versesPerSlide).toBe(1);
-    expect(lib.sunday.styleVersion).toBe(1);
+    expect(lib.sunday.linesPerSlide).toBe(4);
+    expect(lib.sunday.styleVersion).toBe(2);
     const chosen = normalizeLibrary({ ...lib, sunday: { ...lib.sunday, versesPerSlide: 3 } })!;
     expect(chosen.sunday.versesPerSlide).toBe(3);
+  });
+});
+
+describe('every song in the church template design', async () => {
+  const { restyleSong, isSong, songStyleUpdates } = await import('../src/domain/templates/fill');
+  const { splitEvenly } = await import('../src/domain/sunday/songs');
+  const lines = (n: number, p = 'L') => Array.from({ length: n }, (_, i) => `${p}${i + 1}`);
+
+  it('splits a part evenly into slides of at most 4 lines', () => {
+    expect(splitEvenly(lines(4), 4).map((c) => c.length)).toEqual([4]);
+    expect(splitEvenly(lines(6), 4).map((c) => c.length)).toEqual([3, 3]);
+    expect(splitEvenly(lines(9), 4).map((c) => c.length)).toEqual([3, 3, 3]);
+    expect(splitEvenly(lines(5), 4).map((c) => c.length)).toEqual([3, 2]);
+    expect(splitEvenly([], 4)).toEqual([]);
+  });
+
+  const song: Presentation = {
+    id: 'p_song', title: '좋으신 하나님', themeId: 'theme_sunday', folder: 'Songs',
+    slides: [
+      { id: 'a', group: 'Verse 1', text: 'v1\nv2', style: { fontSize: 120 } },
+      { id: 'b', group: 'Verse 1', text: 'v3\nv4' },
+      { id: 'c', group: 'Verse 1', text: 'v5\nv6' },
+      { id: 'd', group: 'Chorus', text: 'c1\nc2' },
+      { id: 'e', group: 'Bridge', text: '한국어', subtext: 'English' },
+    ],
+    arrangements: [{ id: 'ar', name: 'A', groups: ['Verse 1', 'Chorus', 'Verse 1'] }],
+  };
+
+  it('makes a title slide, then each part in slides of up to 4 lines, in the template design', () => {
+    const out = restyleSong(song, TPL, 4);
+    expect(out.id).toBe('p_song');
+    expect(out.folder).toBe('Songs');
+    expect(out.themeId).toBe(TEMPLATE_LYRICS_THEME);
+    expect(out.background).toEqual(TPL.songLyrics.background);
+    expect(out.slides.map((s) => [s.group, s.text])).toEqual([
+      ['Title', ''], ['Verse 1', 'v1\nv2\nv3'], ['Verse 1', 'v4\nv5\nv6'], ['Chorus', 'c1\nc2'], ['Bridge', '한국어'],
+    ]);
+    expect(out.slides[0].elements![0].text).toBe('좋으신 하나님');
+    expect(out.slides[1].style).toBeUndefined(); // per-slide overrides cleared
+    expect(out.slides[1].elements!.map((e) => e.text)).toEqual(['좋으신 하나님']); // corner title (no lyrics box)
+    expect(out.slides[4].subtext).toBe('English');
+    expect(out.arrangements![0].groups).toEqual(['Title', 'Verse 1', 'Chorus', 'Verse 1']);
+    // Restyling a restyled song gives the same slides (no doubled corner titles).
+    const again = restyleSong(out, TPL, 4);
+    expect(again.slides.map((s) => [s.group, s.text, s.elements?.length])).toEqual(out.slides.map((s) => [s.group, s.text, s.elements?.length]));
+  });
+
+  it('knows songs from other decks and restyles each song once', () => {
+    expect(isSong(song)).toBe(true);
+    expect(isSong({ ...song, folder: 'Imported', themeId: 'theme_classic' })).toBe(false);
+    expect(isSong({ id: 'w', title: 'Welcome', themeId: 't', folder: 'Songs', slides: [{ id: 's', group: 'Slide', text: 'Welcome!' }] })).toBe(false);
+    expect(isSong({ id: 'r', title: '수련회', themeId: 't', online: true, slides: [{ id: 's', group: 'Slide 1', text: '가사' }] })).toBe(false);
+    const first = songStyleUpdates([song], TPL, 4);
+    expect(first).toHaveLength(1);
+    expect(songStyleUpdates(first, TPL, 4)).toEqual([]);
+    expect(songStyleUpdates(first, TPL, 2)).toHaveLength(1); // a new lines-per-slide setting restyles again
   });
 });

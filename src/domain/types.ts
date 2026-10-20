@@ -155,6 +155,8 @@ export interface SongMeta {
   ccli?: string;
   key?: string;
   tempo?: string;
+  /** The song's 진행 as written on the 콘티 / in the library, e.g. ["I","V1","C","V2","C"]. */
+  order?: string[];
 }
 
 export type TransitionKind = 'cut' | 'fade' | 'slide' | 'zoom';
@@ -167,6 +169,10 @@ export interface Presentation {
   id: string;
   /** Which church template (and 고백송) this deck was last built from; set on decks FreeCast keeps in sync. */
   templateKey?: string;
+  /** A song's lyrics by part as written (blank lines kept) and its 진행 — what the song editor edits. */
+  songSource?: { sections: { label: string; lines: string[] }[]; order?: string[] };
+  /** Lyrics already laid out the church's way (each part once, blank-line breaks) at this many lines per slide. */
+  lyricsLayout?: { linesPerSlide: number };
   title: string;
   slides: Slide[];
   themeId: string;
@@ -355,7 +361,7 @@ export interface SundaySettings {
   linesPerSlide: number;
   translations: string[];
   versesPerSlide: number;
-  /** 1 = slide defaults matched to the church's own PPT (one verse per slide). */
+  /** Church-PPT defaults applied so far: 1 = one verse per slide, 2 = up to 4 lyric lines per slide. */
   styleVersion?: number;
 }
 

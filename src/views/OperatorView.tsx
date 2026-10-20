@@ -35,6 +35,7 @@ import { AccountModal } from '../ui/AccountModal';
 import { ConfessionSetting } from '../ui/sunday/ConfessionSetting';
 import { AiUsage } from '../ui/AiUsage';
 import { PrayerSetting } from '../ui/sunday/PrayerSetting';
+import { SongEditor } from '../ui/sunday/SongEditor';
 import { PptLayout } from '../ui/ppt/PptLayout';
 import { openOutput } from '../ui/LivePanel';
 import type { Commands, Layout, Modal, PptViewMode } from '../ui/ppt/commands';
@@ -424,6 +425,9 @@ export function OperatorView() {
       {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} />}
+      {(modal === 'song' || modal === 'songNew') && (
+        <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />
+      )}
       {modal === 'prayer' && <PrayerSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
       {modal === 'aiUsage' && <AiUsage onClose={() => setModal(null)} />}
       {modal === 'confession' && <ConfessionSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}

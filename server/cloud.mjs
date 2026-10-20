@@ -1,4 +1,6 @@
 // /api/cloud/* → the church Worker's /freecast/* routes (accounts + shared slide library).
+// /api/songs   → the Worker's /libraries/lyrics: the 찬양 라이브러리 the ppt site reads and registers
+//                songs into (GET for everyone; PUT / DELETE with the 관리자 password as a Bearer token).
 // Going through this local server means the Worker sees its allowed origin and the browser
 // never deals with CORS. FREECAST_CLOUD_URL overrides the Worker address (e.g. wrangler dev).
 import { aiConfig } from './aiProviders.mjs';
@@ -6,14 +8,17 @@ import { aiConfig } from './aiProviders.mjs';
 const cloudBase = () => (process.env.FREECAST_CLOUD_URL || aiConfig().proxyUrl).replace(/\/+$/, '');
 
 export async function cloudMiddleware(req, res, next) {
-  if (!req.url?.startsWith('/api/cloud/')) return next();
+  const songs = req.url === '/api/songs' || req.url?.startsWith('/api/songs?');
+  if (!req.url?.startsWith('/api/cloud/') && !songs) return next();
   if (req.headers['sec-fetch-site'] === 'cross-site') {
     res.writeHead(403, { 'content-type': 'application/json' });
     return res.end(JSON.stringify({ error: 'Cross-site requests are not allowed' }));
   }
-  const target = `${cloudBase()}/freecast/${req.url.slice('/api/cloud/'.length)}`;
+  const target = songs
+    ? `${aiConfig().proxyUrl.replace(/\/+$/, '')}/libraries/lyrics`
+    : `${cloudBase()}/freecast/${req.url.slice('/api/cloud/'.length)}`;
   const headers = { Origin: aiConfig().proxyOrigin };
-  for (const h of ['authorization', 'content-type']) if (req.headers[h]) headers[h] = req.headers[h];
+  for (const h of ['authorization', 'content-type', 'x-admin-password']) if (req.headers[h]) headers[h] = req.headers[h];
   try {
     const hasBody = !['GET', 'HEAD'].includes(req.method ?? 'GET');
     const upstream = await fetch(target, {

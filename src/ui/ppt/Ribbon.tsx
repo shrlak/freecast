@@ -9,6 +9,7 @@ import { Recorder } from '../Recorder';
 import { openOutput } from '../LivePanel';
 import { useMediaUrl } from '../hooks';
 import { ACCEPT, type Commands } from './commands';
+import { isSong } from '../../domain/templates/fill';
 
 interface Props {
   state: AppState;
@@ -316,6 +317,8 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="⛺" label="수련회" onClick={() => cmd.open('retreat')} />
             </Group>
             <Group label="말씀 · 찬양">
+              <Big icon="🎵" label="새 찬양" title="찬양 등록 — 제목·진행·파트별 가사 (주일예배 생성기와 같은 방식)" onClick={() => cmd.open('songNew')} />
+              <Big icon="✎" label="찬양 편집" title="선택한 찬양의 가사·진행 편집, 교회 찬양 라이브러리에 등록" disabled={!p || !isSong(p)} onClick={() => cmd.open('song')} />
               <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
               <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="Reload the online song library" onClick={cmd.reloadOnline} />
               <Big icon="✨" label="AI" onClick={() => cmd.open('ai')} />

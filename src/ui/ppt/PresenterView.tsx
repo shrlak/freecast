@@ -10,6 +10,7 @@ import { LivePanel } from '../LivePanel';
 import { SlideDesigner } from '../SlideDesigner';
 import { useNow } from '../hooks';
 import { SlideFormat } from './SlideFormat';
+import { CanvasEditor } from './CanvasEditor';
 import type { Commands } from './commands';
 
 interface Props {
@@ -76,6 +77,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
   const [edit, setEdit] = useState<{ presId: string; slideId: string } | null>(null);
   const [follow, setFollow] = useState(true);
   const [designing, setDesigning] = useState(false);
+  const [selEl, setSelEl] = useState<string | null>(null);
   const { live, cursor } = state;
   const lib = state.library;
   const p = cursor ? lib.presentations.find((x) => x.id === cursor.presentationId) : null;
@@ -166,12 +168,14 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
         </div>
         {editPres && editSlide ? (
           <div className="presenter-edit-body">
-            <div className="presenter-edit-canvas" onDoubleClick={() => setDesigning(true)} title="두 번 클릭: 개체 편집">
-              <SlideCanvas slide={editSlide} theme={editTheme} background={editSlide.background ?? editPres.background ?? null} bgEffect={editPres.bgEffect} />
+            <div className="presenter-edit-canvas">
+              <CanvasEditor slide={editSlide} theme={editTheme} background={editSlide.background ?? editPres.background ?? null} bgEffect={editPres.bgEffect}
+                selectedId={selEl} onSelect={setSelEl}
+                onChange={(patch) => dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch })} />
               <div className="muted small">{editPres.title} · {editSlide.group}</div>
             </div>
             <div className="presenter-format">
-              <SlideFormat state={state} dispatch={dispatch} presentation={editPres} slide={editSlide} onDesign={() => setDesigning(true)} />
+              <SlideFormat state={state} dispatch={dispatch} presentation={editPres} slide={editSlide} onDesign={() => setDesigning(true)} selectedId={selEl} onSelect={setSelEl} />
             </div>
           </div>
         ) : (

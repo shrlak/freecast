@@ -104,7 +104,7 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
   };
   const addSong = (song: SongDraft) => {
     const p = songPres(song);
-    if (p && tpl) add(songInTemplate(p, tpl, folder), true);
+    if (p && tpl) add(songInTemplate(p, tpl, folder, sunday.linesPerSlide), true);
     else if (p) add(p, !lib.presentations.includes(p));
   };
 

@@ -1,6 +1,7 @@
 import type { Presentation, Slide } from '../types';
 import { uid } from '../lyrics';
 import { expandCode, groupsOf } from '../arrangement';
+import { planSectionSlides } from './slidePlanner';
 
 export interface SongSection {
   /** Code or name as printed: "V1", "C", "Bridge". */
@@ -46,21 +47,42 @@ function uniqueGroupNames(sections: SongSection[]): string[] {
   });
 }
 
+/**
+ * A part's lines split into slides of at most `max` lines, as evenly as possible
+ * (6 lines with max 4 → 3 + 3, not 4 + 2).
+ */
+export function splitEvenly(lines: string[], max: number): string[][] {
+  const per = Math.max(1, max);
+  if (!lines.length) return [];
+  const count = Math.ceil(lines.length / per);
+  const out: string[][] = [];
+  let at = 0;
+  for (let k = 0; k < count; k++) {
+    const size = Math.ceil((lines.length - at) / (count - k));
+    out.push(lines.slice(at, at + size));
+    at += size;
+  }
+  return out;
+}
+
+/**
+ * A song as slides, laid out as the church's PPT does (slidePlanner.ts): each part once, in the
+ * order its 진행 first names it, blank lines as breaks, up to `linesPerSlide` lines per slide.
+ * The 진행 itself is kept (meta.order, and an arrangement the operator can switch on for repeats).
+ */
 export function songToPresentation(song: SongDraft, opts: { themeId: string; linesPerSlide: number; folder?: string }): Presentation {
-  const per = Math.max(1, opts.linesPerSlide);
-  const groups = uniqueGroupNames(song.sections);
-  const slides: Slide[] = [];
-  song.sections.forEach((sec, i) => {
-    const lines = sec.lines.map((l) => l.trim()).filter(Boolean);
-    for (let k = 0; k < lines.length; k += per) slides.push({ id: uid('s'), group: groups[i], text: lines.slice(k, k + per).join('\n') });
-  });
+  const parts = planSectionSlides(song.sections, song.progression, opts.linesPerSlide);
+  const groups = uniqueGroupNames(parts.map((p) => p.section));
+  const slides: Slide[] = parts.flatMap((part, i) => part.slides.map((lines) => ({ id: uid('s'), group: groups[i], text: lines.join('\n') })));
+  const meta = song.key || song.progression?.length ? { key: song.key || undefined, order: song.progression?.length ? song.progression : undefined } : undefined;
   const p: Presentation = {
     id: uid('p'),
     title: song.title,
     slides,
     themeId: opts.themeId,
     folder: opts.folder ?? 'Songs',
-    meta: song.key ? { key: song.key } : undefined,
+    meta,
+    lyricsLayout: { linesPerSlide: opts.linesPerSlide },
   };
   const order = song.progression?.map(expandCode).filter((g) => groups.includes(g) || groups.some((x) => x.startsWith(`${g} `)));
   if (order && order.length) {
@@ -76,8 +98,8 @@ export function songToPresentation(song: SongDraft, opts: { themeId: string; lin
         used.set(g, n + 1);
       }
     }
+    // Not switched on: like the church's PPT, each part plays once and repeats are jumped to live.
     p.arrangements = [{ id: uid('arr'), name: song.progression!.join('-'), groups: resolved }];
-    p.arrangementId = p.arrangements[0].id;
   }
   return p;
 }
