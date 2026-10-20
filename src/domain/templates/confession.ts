@@ -67,8 +67,24 @@ export function findConfessionSong(presentations: Presentation[], title: string)
   return all.find((p) => p.online) ?? [...all].sort((a, b) => lineCount(b) - lineCount(a))[0];
 }
 
+/**
+ * Lyric slides the church fixed by hand, keyed by `titleKey`: the 공동체 고백송 always prints exactly these,
+ * whatever way the library's copy of the song happens to be split.
+ */
+const FIXED_CHUNKS: Record<string, string[][]> = {
+  [titleKey('우리는 주의 움직이는 교회')]: [
+    ['우리는 주의 움직이는 교회', '이곳은 주님을 위한 자리', '내가 기도하는 모든 땅 위에서', '하나님 예배 받을 그날을 고대하네'],
+    ['나의 노래로 주님의 성전을 지으리', '높임을 받으소서', '이스라엘의 찬송 중 거하신 주님은', '거룩하십니다'],
+    ['두 손들어 주님의 보좌를 만들고', '온 맘 다해 경배하리', '그룹 날개 사이에 임하신 것처럼', '내 위에 임하소서'],
+    ['하나님 우리가 이곳에 섰으니', '이 땅을 치유하소서', '하나님 우리가 어디에 있든지', '주를 높이리다'],
+    ['열방들아 주님을 송축할지어다', '그 발아래 입 맞추라', '영원한 통치자 주 예수 그리스도', '그는 위대하신 왕'],
+  ],
+};
+
 /** The song's lyric slides as written (blank-line breaks kept), any slide over `maxLines` split evenly. */
 export function songChunks(song: Presentation, maxLines: number): string[][] {
+  const fixed = FIXED_CHUNKS[titleKey(song.title)];
+  if (fixed) return fixed;
   return song.slides
     .filter((slide) => slide.group !== 'Title' && !slide.disabled)
     .map((slide) => stripChords(slide.text).split('\n').map((l) => l.trim()).filter(Boolean))
