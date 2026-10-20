@@ -3,6 +3,7 @@ import type {
   Presentation, Prop, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer,
 } from './types';
 import { sequence } from './arrangement';
+import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
 import { activePlaylist, findPres, goLive, nextCursor, prevCursor, themeFor, type Cursor, type NavState } from './live';
@@ -27,6 +28,7 @@ export type Action =
   | { type: 'presentation/createMany'; presentations: Presentation[]; playlist?: Playlist }
   | { type: 'presentation/update'; id: string; patch: Partial<Omit<Presentation, 'id'>> }
   | { type: 'presentation/delete'; id: string }
+  | { type: 'services/finish'; playlistIds: string[]; presentationIds: string[] }
   | { type: 'slide/update'; presentationId: string; slideId: string; patch: Partial<Omit<Slide, 'id'>> }
   | { type: 'arrangement/upsert'; presentationId: string; arrangement: Arrangement }
   | { type: 'arrangement/delete'; presentationId: string; id: string }
@@ -225,6 +227,19 @@ function core(s: AppState, a: Action): AppState {
         selectedId: s.selectedId === a.id ? null : s.selectedId,
         playlistIndex: null,
         cursor: s.cursor?.presentationId === a.id ? null : s.cursor,
+      };
+    }
+    case 'services/finish': {
+      const gone = new Set(a.presentationIds);
+      const drop = new Set(a.playlistIds);
+      let playlists = lib.playlists.filter((p) => !drop.has(p.id)).map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || !gone.has(i.presentationId)) }));
+      if (!playlists.length) playlists = [{ id: uid('pl'), name: '재생목록', items: [] }];
+      return {
+        ...setLib(s, { presentations: lib.presentations.filter((p) => !gone.has(p.id)), playlists }),
+        activePlaylistId: playlists.some((p) => p.id === s.activePlaylistId) ? s.activePlaylistId : playlists[0].id,
+        selectedId: s.selectedId && gone.has(s.selectedId) ? null : s.selectedId,
+        playlistIndex: null,
+        cursor: s.cursor && gone.has(s.cursor.presentationId) ? null : s.cursor,
       };
     }
     case 'slide/update':

@@ -150,3 +150,35 @@ describe('church slide planner (as the ppt program lays out songs)', async () =>
     expect(texts(planSectionSlides(sections, ['V', 'C', 'V', 'C'], 4))).toEqual(['v1', 'c', 'v2']);
   });
 });
+
+describe('주일예배 cleanup after Sunday 5 pm', async () => {
+  const { finishedServices, serviceEnd } = await import('../src/domain/sunday/cleanup');
+  const { createSeedLibrary } = await import('../src/domain/defaults');
+  const pres = (id: string, folder?: string) => ({ id, title: id, slides: [], themeId: 'theme_classic', folder });
+  const lib = () => {
+    const l = createSeedLibrary();
+    return {
+      ...l,
+      presentations: [...l.presentations, pres('song', '1018 주일예배'), pres('shared', '1018 주일예배'), pres('next', '1025 주일예배')],
+      playlists: [
+        ...l.playlists,
+        { id: 'old', name: '1018 주일예배', items: [{ id: 'a', presentationId: 'song' }, { id: 'b', presentationId: 'shared' }] },
+        { id: 'new', name: '1025 주일예배', items: [{ id: 'c', presentationId: 'next' }, { id: 'd', presentationId: 'shared' }] },
+      ],
+    };
+  };
+  it('ends a service at 5 pm that Sunday', () => {
+    expect(serviceEnd('1018 주일예배', new Date(2026, 9, 20))).toEqual(new Date(2026, 9, 18, 17));
+    expect(serviceEnd('Sunday Service', new Date())).toBeNull();
+  });
+  it('keeps the service until 5 pm', () => {
+    expect(finishedServices(lib(), new Date(2026, 9, 18, 16, 59))).toEqual({ playlistIds: [], presentationIds: [] });
+  });
+  it('removes the finished service and its decks, but not decks another service still uses', () => {
+    expect(finishedServices(lib(), new Date(2026, 9, 18, 17))).toEqual({ playlistIds: ['old'], presentationIds: ['song'] });
+  });
+  it('moves on to next Sunday once this one has ended', () => {
+    expect(upcomingSunday(new Date(2026, 9, 18, 16, 59)).getDate()).toBe(18);
+    expect(upcomingSunday(new Date(2026, 9, 18, 17, 0)).getDate()).toBe(25);
+  });
+});

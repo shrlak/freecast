@@ -31,6 +31,7 @@ import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
 import { UpdateBanner } from '../ui/UpdateBanner';
 import { useCloudSync } from '../ui/useCloudSync';
+import { finishedServices } from '../domain/sunday/cleanup';
 import { useServiceUploads } from '../ui/ppt/useServiceUploads';
 import { AccountModal } from '../ui/AccountModal';
 import { ConfessionSetting } from '../ui/sunday/ConfessionSetting';
@@ -100,6 +101,16 @@ export function OperatorView() {
 
   useEffect(() => saveLibrary(state.library), [state.library]);
   const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
+  // Sunday 5 pm: the finished 주일예배 (playlist + its decks) is removed here and from the church server.
+  useEffect(() => {
+    const clear = () => {
+      const done = finishedServices(latestLib.current, new Date());
+      if (done.playlistIds.length || done.presentationIds.length) dispatch({ type: 'services/finish', ...done });
+    };
+    clear();
+    const t = setInterval(clear, 60_000);
+    return () => clearInterval(t);
+  }, [dispatch]);
   const service = useServiceUploads(state.library, dispatch, (m) => notifyRef.current(m), state.activePlaylistId);
   // Files dragged onto the window go straight into this week's 주일예배.
   const [dragging, setDragging] = useState(false);

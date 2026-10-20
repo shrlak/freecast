@@ -80,10 +80,14 @@ function pushSong(out: ParsedNotice, line: string) {
   if (title) out.songs.push(key ? { title, key } : { title });
 }
 
-/** The Sunday on or after `from` (today if it is Sunday). */
+/** Sunday's 주일예배 is over from this hour: the finished service is cleared and the next Sunday takes over. */
+export const SERVICE_END_HOUR = 17;
+
+/** The Sunday on or after `from` (today if it is Sunday — until 5 pm, when the service has ended). */
 export function upcomingSunday(from: Date): Date {
   const d = new Date(from.getFullYear(), from.getMonth(), from.getDate());
-  d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+  const over = d.getDay() === 0 && from.getHours() >= SERVICE_END_HOUR;
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7) + (over ? 7 : 0));
   return d;
 }
 
