@@ -722,6 +722,8 @@ body[data-view='multiview'] { overflow: auto; }
 .ce-box.on { border: 2px solid #2e9e66; box-shadow: 0 0 0 1px rgba(255,255,255,.8); }
 .ce-handle { position: absolute; right: -6px; bottom: -6px; width: 11px; height: 11px; background: #fff; border: 2px solid #2e9e66; border-radius: 2px; cursor: nwse-resize; }
 .ce-typing { position: absolute; box-sizing: border-box; margin: 0; padding: 0; resize: none; border: 2px solid #2e9e66; background: rgba(255,255,255,.08); outline: none; overflow: hidden; white-space: pre-wrap; z-index: 2; }
+/* Typing on the slide shows the slide itself — never the form-field white of .app-ppt / .presenter textareas. */
+.app-ppt .ce-typing, .presenter .ce-typing, .ce-typing { background: transparent; border-color: #2e9e66; caret-color: currentColor; }
 /* font size: presets, ±1, double-click to type */
 .font-size { display: inline-flex; align-items: center; gap: 2px; }
 .font-size .fs-step, .font-size .fs-type { padding: 2px 7px; min-width: 0; }
