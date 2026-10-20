@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as 
 import type { Background, BackgroundEffect, Slide, SlideElement, Theme } from '../../domain/types';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
 import { patchElement } from '../../domain/templates/convert';
+import { NO_GUIDES, snapMove, type SnapGuides } from '../../domain/snap';
 import { SlideCanvas, slideTheme } from '../SlideCanvas';
 import { useWidth } from '../hooks';
 
@@ -34,6 +35,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [preview, setPreview] = useState<{ id: string; box: Box } | null>(null);
+  const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);
   const drag = useRef<Drag | null>(null);
   const commitTimer = useRef<number | undefined>(undefined);
   const theme = slideTheme(baseTheme, slide);
@@ -107,16 +109,22 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     const dy = (e.clientY - d.startY) / k;
     if (Math.abs(dx) + Math.abs(dy) < 3 && !d.moved) return;
     d.moved = true;
-    const box = d.mode === 'move'
-      ? { ...d.orig, x: Math.round(d.orig.x + dx), y: Math.round(d.orig.y + dy) }
-      : { ...d.orig, w: Math.max(20, Math.round(d.orig.w + dx)), h: Math.max(20, Math.round(d.orig.h + dy)) };
-    setPreview({ id: d.id, box });
+    if (d.mode === 'move') {
+      // Hold Alt to move freely, without snapping to the guides.
+      const moved = { ...d.orig, x: Math.round(d.orig.x + dx), y: Math.round(d.orig.y + dy) };
+      const snapped = e.altKey ? { box: moved, guides: NO_GUIDES } : snapMove(moved, elements.filter((x) => x.id !== d.id));
+      setGuides(snapped.guides);
+      setPreview({ id: d.id, box: snapped.box });
+    } else {
+      setPreview({ id: d.id, box: { ...d.orig, w: Math.max(20, Math.round(d.orig.w + dx)), h: Math.max(20, Math.round(d.orig.h + dy)) } });
+    }
   };
   const onPointerUp = () => {
     const d = drag.current;
     drag.current = null;
     if (d && preview?.id === d.id) updateElement(d.id, preview.box);
     setPreview(null);
+    setGuides(NO_GUIDES);
     // A click on text (no drag) puts the cursor in it, as in PowerPoint.
     if (d && !d.moved && d.mode === 'move' && elements.find((e) => e.id === d.id)?.kind === 'text') startEditing(d.id);
   };
@@ -179,6 +187,8 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
             {selectedId === el.id && !editing && <span className="ce-handle" onPointerDown={(e) => onPointerDown(e, el.id, 'resize')} />}
           </div>
         ))}
+        {guides.v.map((x) => <div key={`v${x}`} className="ce-guide ce-guide-v" style={{ left: x * k }} />)}
+        {guides.h.map((y) => <div key={`h${y}`} className="ce-guide ce-guide-h" style={{ top: y * k }} />)}
         {editing && (
           <textarea className="ce-typing" autoFocus value={draft} style={{ ...at(editing === SLIDE_TEXT ? textBox : boxOf(elements.find((e) => e.id === editing)!)), ...editorStyle(editing) }}
             onChange={(e) => type(e.target.value)} onBlur={stopEditing} onPointerDown={(e) => e.stopPropagation()}

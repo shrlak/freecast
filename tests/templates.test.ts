@@ -70,6 +70,8 @@ describe('PPTX slide conversion', () => {
     const bigger = patchElement({ ...el, fontSize: 60 }, { fontSize: 120 });
     expect(bigger.paragraphs!.map((p) => p.fontSize)).toEqual([120, 80]);
     expect(patchElement(el, { color: '#ff0000' }).paragraphs!.every((p) => p.color === undefined)).toBe(true);
+    // The box grows with the font, around its centre.
+    expect(patchElement({ ...el, fontSize: 60 }, { fontSize: 120 })).toMatchObject({ x: -350, y: 0, w: 2600, h: 400 });
   });
 
   it('fills tokens and drops lines whose value is missing', () => {
@@ -130,11 +132,15 @@ describe('church template filling', () => {
 
   it('fills the Bible and sermon templates', () => {
     const { refs } = parseRefs('요한복음 3:16-17');
-    const chunk = { ref: refs[0], label: '요한복음 3:16-17', nameKo: '요한복음', nameEn: 'John', chapter: 3, verses: '16-17', lines: ['16 하나님이', '17 하나님이'], lines2: [], texts: ['하나님이 세상을', '하나님이 그 아들을'], texts2: [] };
+    const chunk = { ref: refs[0], label: '요한복음 3:16-17', nameKo: '요한복음', nameEn: 'John', chapter: 3, verses: '16-17', lines: ['16 하나님이', '17 하나님이'], lines2: [], texts: ['하나님이 세상을', '하나님이 그 아들을'], texts2: [], langs: ['ko'] as ['ko'] };
     const slides = scriptureSlides(TPL, { refs, chunks: [chunk] });
     expect(slides).toHaveLength(2);
     expect(els(slides[0])[0]).toBe('요한복음 3:16-17\nJohn 3:16-17');
     expect(els(slides[1])).toEqual(['요한복음 3:16-17\nJohn 3:16-17', '요한복음 3장 16-17절\n하나님이 세상을 하나님이 그 아들을']);
+    // English picked first: the Korean verse still goes under the Korean name, the English one below.
+    const enFirst = { ...chunk, texts: ['For God so loved'], texts2: chunk.texts, langs: ['en', 'ko'] as ['en', 'ko'] };
+    const [, verse] = scriptureSlides(TPL, { refs, chunks: [enFirst] });
+    expect(els(verse).slice(1)).toEqual(['요한복음 3장 16-17절\n하나님이 세상을 하나님이 그 아들을', 'John 3:16-17\nFor God so loved']);
     const sermon = sermonTitleSlide(TPL, { refs, sermonTitle: '사랑', preacher: '김목사' });
     expect(els(sermon)).toEqual(['설교\nSermon', '김목사', '사랑\n요한복음 3:16-17']);
   });
