@@ -9,6 +9,8 @@ import { buildService } from '../../domain/sunday/service';
 import { parseRefs, formatRef } from '../../domain/bible/refs';
 import { buildScripture, loadScriptureChunks } from '../../domain/bible/slides';
 import { findLiveService } from '../../domain/sunday/liveDeck';
+import { withSharedSongs } from '../../domain/online';
+import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { WIZARD_PARTS, type ServiceUploads, type WizardPart } from '../ppt/useServiceUploads';
 import { exportPptx } from '../../domain/io/pptxExport';
 import { qrDataUrl } from '../../domain/io/qr';
@@ -143,7 +145,8 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
       const chunks = refs.refs.length && chosen.length
         ? await loadScriptureChunks(refs.refs, { translations: chosen, versesPerSlide: sunday.versesPerSlide })
         : [];
-      const built = buildService(state.library, {
+      const library = { ...state.library, presentations: await withSharedSongs(state.library.presentations, [d.confession, sunday.confessionSong, DEFAULT_CONFESSION_SONG], sunday.linesPerSlide) };
+      const built = buildService(library, {
         date, songs: d.songs, scriptureSlides, sermonSlides: d.sermonSlides, prayerTopics: topics,
         announcements: ann, extraSlides: d.extraSlides, confessionSong: d.confession,
         templates, scripture: { refs: refs.refs, chunks, sermonTitle: d.sermonTitle, preacher: d.preacher },

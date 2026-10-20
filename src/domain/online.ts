@@ -56,6 +56,32 @@ export async function fetchSharedSongs(): Promise<{ entries: LibrarySong[]; dele
   }
 }
 
+type SongOpts = { themeId: string; linesPerSlide: number; folder: string };
+
+function onlineSong(s: LibrarySong, opts: SongOpts, background: Presentation['background']): Presentation {
+  const draft: SongDraft = { title: s.title, key: s.key || undefined, sections: s.sections, progression: s.order?.length ? s.order : undefined };
+  return { ...songToPresentation(draft, opts), id: onlineId(s.title), online: true, background, songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } };
+}
+
+/**
+ * The library with the shared server's current copy of each title swapped in (the library is read once
+ * per session, and a bundled copy of the same title can be older). Unchanged when the server cannot be reached.
+ */
+export async function withSharedSongs(presentations: Presentation[], titles: (string | undefined)[], linesPerSlide: number): Promise<Presentation[]> {
+  const wanted = new Set(titles.filter((t): t is string => !!t?.trim()).map(titleKey));
+  if (!wanted.size) return presentations;
+  const shared = await fetchSharedSongs();
+  if (!shared) return presentations;
+  const deleted = new Set(shared.deletedTitles.map(titleKey));
+  const opts = { themeId: 'theme_sunday', linesPerSlide, folder: ONLINE_FOLDER };
+  const fresh = shared.entries
+    .filter((s) => s?.title && Array.isArray(s.sections) && wanted.has(titleKey(s.title)) && !deleted.has(titleKey(s.title)))
+    .map((s) => onlineSong(s, opts, CHURCH_BACKGROUNDS.watercolor));
+  if (!fresh.length) return presentations;
+  const ids = new Set(fresh.map((p) => p.id));
+  return [...presentations.filter((p) => !(p.online && ids.has(p.id))), ...fresh];
+}
+
 /**
  * The song library as the ppt site sees it: the bundled library.json with the songs registered in the
  * shared library on top (a registered song replaces the bundled one of the same title; deleted titles
@@ -73,11 +99,10 @@ export async function fetchOnlineSongs(linesPerSlide: number): Promise<Presentat
   for (const s of shared?.entries ?? []) if (s?.title && Array.isArray(s.sections)) byTitle.set(titleKey(s.title), s);
   for (const [key, s] of byTitle) {
     if (deleted.has(key)) continue;
-    const id = onlineId(s.title);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const draft: SongDraft = { title: s.title, key: s.key || undefined, sections: s.sections, progression: s.order?.length ? s.order : undefined };
-    out.push({ ...songToPresentation(draft, opts), id, online: true, background, songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } });
+    const song = onlineSong(s, opts, background);
+    if (seen.has(song.id)) continue;
+    seen.add(song.id);
+    out.push(song);
   }
   try {
     for (const s of await getJson<RetreatSong[]>('retreat-songs.json')) {
