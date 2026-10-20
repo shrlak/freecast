@@ -6,6 +6,7 @@ import { qrDataUrl } from './qr';
 import { stripChords } from '../lyrics';
 import { pptxFont } from '../fonts';
 import { CANVAS_W } from '../canvas';
+import { resolveBackground } from '../autoBackground';
 
 const W = 10;
 const H = 7.5;
@@ -66,7 +67,7 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
     if (slide.disabled) continue;
     const theme: Theme = slide.style ? { ...baseTheme, ...slide.style } : baseTheme;
     const s = pptx.addSlide();
-    const bg = slide.background ?? p.background;
+    const bg = resolveBackground(slide, p);
     if (bg?.kind === 'image') {
       const data = await urlData(bg.url);
       s.background = data ? { data } : { color: 'FFFFFF' };

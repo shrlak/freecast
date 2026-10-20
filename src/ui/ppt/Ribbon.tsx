@@ -233,7 +233,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <div className="rb-gallery">
                 {lib.themes.map((t) => (
                   <button key={t.id} className={`rb-theme ${p?.themeId === t.id ? 'on' : ''}`} title={t.name} disabled={!p} onClick={() => updatePres({ themeId: t.id })}>
-                    <SlideCanvas slide={sample} theme={t} background={p?.background ?? presetBackground('KCCP Navy')} />
+                    <SlideCanvas slide={sample} theme={t} background={p?.background ?? presetBackground('Black')} />
                     <span>{t.name}</span>
                   </button>
                 ))}

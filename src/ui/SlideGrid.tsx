@@ -1,6 +1,6 @@
 import { memo, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../domain/reducer';
-import type { Background, Presentation, Slide, Theme } from '../domain/types';
+import type { Presentation, Slide, Theme } from '../domain/types';
 import { groupColor, uid } from '../domain/lyrics';
 import { groupsOf, sequence } from '../domain/arrangement';
 import { ai } from '../domain/ai';
@@ -9,6 +9,7 @@ import { SlideCanvas } from './SlideCanvas';
 import { SlideInspector } from './SlideInspector';
 import { SlideDesigner } from './SlideDesigner';
 import { TimelineBar } from './TimelineBar';
+import { resolveBackground } from '../domain/autoBackground';
 
 interface Props {
   state: AppState;
@@ -19,14 +20,14 @@ interface Props {
 }
 
 const Thumb = memo(function Thumb(props: {
-  slide: Slide; num: number; theme: Theme; background: Background | null; live: boolean; onClick: () => void; onInspect: () => void;
+  slide: Slide; num: number; theme: Theme; pres: Presentation; live: boolean; onClick: () => void; onInspect: () => void;
   bgEffect?: { dim: number; blur: number };
 }) {
   const { slide } = props;
   return (
     <div className={`thumb ${props.live ? 'live' : ''} ${slide.disabled ? 'disabled' : ''}`} style={{ ['--group' as string]: groupColor(slide.group) }}>
       <button className="thumb-main" onClick={props.onClick} onContextMenu={(e) => { e.preventDefault(); props.onInspect(); }} title="Click: go live · Right-click: quick edit">
-        <SlideCanvas slide={slide} theme={props.theme} background={slide.background ?? props.background} bgEffect={props.bgEffect} />
+        <SlideCanvas slide={slide} theme={props.theme} background={resolveBackground(slide, props.pres)} bgEffect={props.bgEffect} />
         <span className="thumb-label">
           <span className="thumb-num">{props.num}</span>
           <span className="truncate">{slide.label || slide.group || 'Slide'}</span>
@@ -86,7 +87,6 @@ export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) 
     return <main className="panel center-empty"><p>Select a presentation from the library, or create a new one.</p></main>;
   }
   const theme = state.library.themes.find((t) => t.id === p.themeId) ?? state.library.themes[0];
-  const background = p.background ?? state.live.background;
   const seq = sequence(p);
   const liveSeq = state.cursor?.presentationId === p.id ? state.cursor.seq : -1;
   const inspected = p.slides.find((s) => s.id === inspect);
@@ -138,7 +138,7 @@ export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) 
             slide={slide}
             num={i + 1}
             theme={theme}
-            background={background}
+            pres={p}
             live={i === liveSeq}
             bgEffect={p.bgEffect}
             onClick={() => dispatch({ type: 'live/go', presentationId: p.id, seq: i, now: Date.now() })}
@@ -161,7 +161,7 @@ export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) 
         if (!sl) return null;
         return (
           <SlideDesigner
-            slide={sl} theme={theme} background={background} media={state.library.media}
+            slide={sl} theme={theme} background={resolveBackground(sl, p)} media={state.library.media}
             addMedia={(m) => dispatch({ type: 'media/add', media: m })}
             onClose={() => setDesign(null)}
             onSave={(elements, text) => {

@@ -136,7 +136,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
 
       <Section title="배경">
         <div className="fmt-swatches">
-          <button className={`fmt-swatch ${!bg ? 'on' : ''}`} title="프레젠테이션 배경 사용" onClick={() => setBg(undefined)}><span className="fmt-swatch-fill fmt-none">자동</span></button>
+          <button className={`fmt-swatch ${!bg ? 'on' : ''}`} title="자동 — 섹션과 슬라이드의 텍스트를 보고 배경을 정합니다" onClick={() => setBg(undefined)}><span className="fmt-swatch-fill fmt-none">자동</span></button>
           {BACKGROUND_PRESETS.map((b) => (
             <button key={b.name} className="fmt-swatch" title={b.name} onClick={() => setBg(b.background)}>
               {b.background.kind === 'image' ? <img className="fmt-swatch-fill" src={assetUrl(b.background.url)} alt="" />

@@ -12,6 +12,7 @@ import { useNow } from '../hooks';
 import { SlideFormat } from './SlideFormat';
 import { CanvasEditor } from './CanvasEditor';
 import type { Commands } from './commands';
+import { resolveBackground } from '../../domain/autoBackground';
 
 interface Props {
   state: AppState;
@@ -50,7 +51,7 @@ function AllSlides({ state, dispatch, onEdit }: { state: AppState; dispatch: Dis
                       dispatch({ type: 'live/go', presentationId: p.id, seq });
                     }}
                     onContextMenu={(e) => { e.preventDefault(); onEdit(p.id, slide.id); }}>
-                    <SlideCanvas slide={slide} theme={theme} background={slide.background ?? p.background ?? null} bgEffect={p.bgEffect} />
+                    <SlideCanvas slide={slide} theme={theme} background={resolveBackground(slide, p)} bgEffect={p.bgEffect} />
                     <span className="all-label" style={{ background: groupColor(slide.group) }}>{seq + 1} {slide.label || slide.group}</span>
                   </button>
                 );
@@ -138,7 +139,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
               <div className="presenter-label">다음 슬라이드</div>
               {nextSlide && nextPres ? (
                 <button className="presenter-next" onClick={() => dispatch({ type: 'live/next' })} title="클릭하여 다음 슬라이드 표시">
-                  <SlideCanvas slide={nextSlide} theme={nextTheme} background={nextSlide.background ?? nextPres.background ?? live.background} />
+                  <SlideCanvas slide={nextSlide} theme={nextTheme} background={resolveBackground(nextSlide, nextPres)} />
                 </button>
               ) : <div className="presenter-end">쇼의 끝</div>}
               <div className="presenter-label">노트</div>
@@ -169,7 +170,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
         {editPres && editSlide ? (
           <div className="presenter-edit-body">
             <div className="presenter-edit-canvas">
-              <CanvasEditor slide={editSlide} theme={editTheme} background={editSlide.background ?? editPres.background ?? null} bgEffect={editPres.bgEffect}
+              <CanvasEditor slide={editSlide} theme={editTheme} background={resolveBackground(editSlide, editPres)} bgEffect={editPres.bgEffect}
                 selectedId={selEl} onSelect={setSelEl}
                 onChange={(patch) => dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch })} />
               <div className="muted small">{editPres.title} · {editSlide.group}</div>
@@ -186,7 +187,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
       {controls && <LivePanel state={state} dispatch={dispatch} />}
 
       {designing && editPres && editSlide && (
-        <SlideDesigner slide={editSlide} theme={editTheme} background={editSlide.background ?? editPres.background ?? null} media={lib.media}
+        <SlideDesigner slide={editSlide} theme={editTheme} background={resolveBackground(editSlide, editPres)} media={lib.media}
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
           onClose={() => setDesigning(false)}
           onSave={(elements, text) => {

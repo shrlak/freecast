@@ -57,7 +57,7 @@ describe('layers, props, timers, macros', () => {
   it('runs a macro: background, prop and timer in one go', () => {
     const s = run(fresh(), { type: 'macro/run', id: 'macro_pre', now: 1000 });
     expect(s.live.activeProps).toContain('prop_countdown');
-    expect(s.live.background?.kind).toBe('gradient');
+    expect(s.live.background).toEqual({ kind: 'color', value: '#000000' });
     expect(s.library.timers.find((t) => t.id === 'timer_service')!.running).toBe(true);
     expect(s.live.timers).toBe(s.library.timers);
   });
