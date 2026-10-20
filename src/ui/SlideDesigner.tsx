@@ -3,6 +3,7 @@ import type { Background, MediaMeta, Slide, SlideElement, Theme } from '../domai
 import { uid } from '../domain/lyrics';
 import { putMedia } from '../domain/media';
 import { patchElement } from '../domain/templates/convert';
+import { NO_GUIDES, snapMove, type SnapGuides } from '../domain/snap';
 import { CANVAS_H, CANVAS_W, ElementView as SlideElementSlot, SlideCanvas } from './SlideCanvas';
 import { useAutosave, useWidth } from './hooks';
 
@@ -17,14 +18,12 @@ interface Props {
   onClose: () => void;
 }
 
-const SNAP = 12;
-
 /** WYSIWYG slide editor: free-positioned text boxes, images and shapes on top of the slide. */
 export function SlideDesigner({ slide, theme, background, media, addMedia, onSave, onClose }: Props) {
   const [els, setEls] = useState<SlideElement[]>(slide.elements ?? []);
   const [text, setText] = useState(slide.text);
   const [sel, setSel] = useState<string | null>(null);
-  const [guides, setGuides] = useState<{ v: boolean; h: boolean }>({ v: false, h: false });
+  const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);
   const [ref, width] = useWidth<HTMLDivElement>();
   const fileRef = useRef<HTMLInputElement>(null);
   const k = width / CANVAS_W || 1;
@@ -47,22 +46,17 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
       const dx = (ev.clientX - start.x) / k;
       const dy = (ev.clientY - start.y) / k;
       if (mode === 'move') {
-        let x = Math.round(start.el.x + dx);
-        let y = Math.round(start.el.y + dy);
-        const cx = x + start.el.w / 2;
-        const cy = y + start.el.h / 2;
-        const v = Math.abs(cx - CANVAS_W / 2) < SNAP;
-        const h = Math.abs(cy - CANVAS_H / 2) < SNAP;
-        if (v) x = Math.round(CANVAS_W / 2 - start.el.w / 2);
-        if (h) y = Math.round(CANVAS_H / 2 - start.el.h / 2);
-        setGuides({ v, h });
-        update(el.id, { x, y });
+        const moved = { x: Math.round(start.el.x + dx), y: Math.round(start.el.y + dy), w: start.el.w, h: start.el.h };
+        // Hold Alt to move freely, without snapping to the guides.
+        const snapped = ev.altKey ? { box: moved, guides: NO_GUIDES } : snapMove(moved, els.filter((o) => o.id !== el.id));
+        setGuides(snapped.guides);
+        update(el.id, { x: snapped.box.x, y: snapped.box.y });
       } else {
         update(el.id, { w: Math.max(40, Math.round(start.el.w + dx)), h: Math.max(30, Math.round(start.el.h + dy)) });
       }
     };
     const up = () => {
-      setGuides({ v: false, h: false });
+      setGuides(NO_GUIDES);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
     };
@@ -132,8 +126,8 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
                   {el.id === sel && <span className="designer-handle" onPointerDown={(e) => drag(e, el, 'resize')} />}
                 </div>
               ))}
-              {guides.v && <div className="guide-v" />}
-              {guides.h && <div className="guide-h" />}
+              {guides.v.map((x) => <div key={`v${x}`} className="guide-v" style={{ left: x * k }} />)}
+              {guides.h.map((y) => <div key={`h${y}`} className="guide-h" style={{ top: y * k }} />)}
             </div>
           </div>
           <aside className="designer-side stack">
