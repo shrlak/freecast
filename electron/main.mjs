@@ -113,8 +113,23 @@ function displayList() {
   }));
 }
 
-/** Open (or move) an output/stage window. With a display it goes fullscreen there. */
-function openView(url, displayId) {
+const isMac = process.platform === 'darwin';
+/**
+ * Cover a display with no animation. On macOS this is the pre-Lion "simple" fullscreen (no new Space,
+ * no slide-in), the way PowerPoint and ProPresenter take over a projector.
+ */
+function setCover(win, on) {
+  if (isMac) win.setSimpleFullScreen(on);
+  else win.setFullScreen(on);
+}
+const isCovering = (win) => (isMac ? win.isSimpleFullScreen() : win.isFullScreen());
+
+/**
+ * Open (or move) an output/stage window. With a display it goes fullscreen there.
+ * `present`: a slide show is starting, so cover a display right away like PowerPoint — the saved one,
+ * else the connected projector/TV, else this screen — without ever showing a window first.
+ */
+function openView(url, displayId, present = false) {
   const u = new URL(url, origin());
   if (u.origin !== origin()) return;
   const key = `${u.searchParams.get('view')}:${u.searchParams.get('screen') ?? ''}:${u.searchParams.get('layout') ?? ''}`;
@@ -124,29 +139,54 @@ function openView(url, displayId) {
     settings.outputDisplays[screenId] = displayId;
     saveSettings();
   }
-  const display = screen.getAllDisplays().find((d) => d.id === displayId);
+  const displays = screen.getAllDisplays();
+  let display = displays.find((d) => d.id === displayId);
+  if (!display && present) {
+    const consoleDisplay = mainWindow ? screen.getDisplayMatching(mainWindow.getBounds()) : screen.getPrimaryDisplay();
+    display = displays.find((d) => d.id !== consoleDisplay.id) ?? consoleDisplay;
+  }
+  // The console keeps the keyboard when the show is on another screen (presenter view).
+  const sameScreen = !!display && !!mainWindow && screen.getDisplayMatching(mainWindow.getBounds()).id === display.id;
+  const keepFocus = present && !sameScreen;
   let win = viewWindows.get(key);
   if (!win || win.isDestroyed()) {
+    // Born on its display already covering it: no window appears first and then grows.
     win = new BrowserWindow({
       width: 960, height: 540, title: 'FreeCast', backgroundColor: '#000000', autoHideMenuBar: true, icon: APP_ICON,
+      ...(display ? { ...display.bounds, fullscreen: !isMac } : {}),
       show: false, webPreferences,
     });
+    if (display && isMac) setCover(win, true);
     win.on('closed', () => viewWindows.delete(key));
     viewWindows.set(key, win);
     win.loadURL(u.toString());
-    win.once('ready-to-show', () => win.show());
+    win.once('ready-to-show', () => {
+      if (keepFocus) win.showInactive();
+      else win.show();
+    });
+    return win;
   }
-  if (display) {
-    win.setFullScreen(false);
+  const alreadyThere = display && isCovering(win) && screen.getDisplayMatching(win.getBounds()).id === display.id;
+  if (display && !alreadyThere) {
+    setCover(win, false);
     win.setBounds(display.bounds);
-    win.setFullScreen(true);
-  } else if (displayId === null && win.isFullScreen()) {
-    win.setFullScreen(false);
+    setCover(win, true);
+  } else if (displayId === null && isCovering(win)) {
+    setCover(win, false);
     win.setSize(960, 540);
     win.center();
   }
-  win.focus();
+  if (keepFocus) win.showInactive();
+  else win.focus();
   return win;
+}
+
+/** The window a slide show opened itself (closed again when the show ends, like PowerPoint). */
+let showKey = null;
+function closeShow() {
+  const win = showKey && viewWindows.get(showKey);
+  if (win && !win.isDestroyed()) win.close();
+  showKey = null;
 }
 
 function buildMenu() {
@@ -233,6 +273,15 @@ ipcMain.handle('desktop:info', (e) => {
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
   if (!fromMain(e) || typeof url !== 'string') return;
   openView(url, typeof displayId === 'number' ? displayId : displayId === null ? null : undefined);
+});
+ipcMain.handle('desktop:present', (e, url) => {
+  if (!fromMain(e) || typeof url !== 'string') return;
+  const before = new Set(viewWindows.values());
+  const win = openView(url, undefined, true);
+  if (win && !before.has(win)) showKey = [...viewWindows].find(([, w]) => w === win)?.[0] ?? null;
+});
+ipcMain.handle('desktop:endShow', (e) => {
+  if (fromMain(e)) closeShow();
 });
 ipcMain.handle('desktop:setAiConfig', (e, patch) => {
   if (!fromMain(e) || !patch || typeof patch !== 'object') return;

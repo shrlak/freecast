@@ -25,6 +25,10 @@ export interface UpdateState {
 export interface DesktopBridge {
   info(): Promise<DesktopInfo>;
   openView(url: string, displayId?: number | null): Promise<void>;
+  /** Slide show starts: cover the projector (or this screen) right away, like PowerPoint. */
+  present(url: string): Promise<void>;
+  /** Slide show ends: close the window `present` opened. */
+  endShow(): Promise<void>;
   setAiConfig(patch: { proxyUrl?: string; geminiKey?: string; openrouterKey?: string }): Promise<void>;
   setNetworkRemote(on: boolean): Promise<void>;
   closeOutputs(): Promise<void>;

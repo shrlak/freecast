@@ -4,6 +4,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('freecastDesktop', {
   info: () => ipcRenderer.invoke('desktop:info'),
   openView: (url, displayId) => ipcRenderer.invoke('desktop:openView', url, displayId),
+  present: (url) => ipcRenderer.invoke('desktop:present', url),
+  endShow: () => ipcRenderer.invoke('desktop:endShow'),
   setAiConfig: (patch) => ipcRenderer.invoke('desktop:setAiConfig', patch),
   setNetworkRemote: (on) => ipcRenderer.invoke('desktop:setNetworkRemote', on),
   closeOutputs: () => ipcRenderer.invoke('desktop:closeOutputs'),

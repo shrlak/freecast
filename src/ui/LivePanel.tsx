@@ -22,6 +22,12 @@ export function openOutput(view: 'output' | 'stage', extra = '', displayId?: num
   else window.open(url, `freecast-${view}${extra}`, 'popup,width=960,height=540');
 }
 
+/** Slide show output: fullscreen on the connected screen straight away in the desktop app. */
+export function presentOutput() {
+  if (desktop) desktop.present(`${location.origin}${location.pathname}?view=output`);
+  else openOutput('output');
+}
+
 const TABS = ['Macros', 'Messages', 'Timers', 'Props', 'Audio', 'OBS'] as const;
 
 export function LivePanel({ state, dispatch }: Props) {

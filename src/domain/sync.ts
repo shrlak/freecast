@@ -1,6 +1,10 @@
 import type { LiveState } from './types';
 
-export type LiveMessage = { type: 'state'; state: LiveState } | { type: 'hello' };
+export type LiveMessage =
+  | { type: 'state'; state: LiveState }
+  | { type: 'hello' }
+  /** A key pressed on a fullscreen output window — the console handles it as if pressed there. */
+  | { type: 'key'; key: string; shiftKey: boolean };
 
 const CHANNEL = 'freecast-live';
 
