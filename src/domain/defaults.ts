@@ -22,11 +22,14 @@ export const DEFAULT_THEMES: Theme[] = [
 export const BG_WHITE_LOGO: Background = { kind: 'image', url: 'backgrounds/white-logo.png', fit: 'cover' };
 export const BG_BLACK: Background = { kind: 'color', value: '#000000' };
 export const BG_WHITE: Background = { kind: 'color', value: '#ffffff' };
+/** The 찬양 제목 slide: deep blue, lighter in the middle, so the title stands out before the white lyric slides. */
+export const BG_SONG_TITLE: Background = { kind: 'gradient', value: 'radial-gradient(ellipse at 50% 45%, #2b5fa8 0%, #14305c 55%, #0a1a35 100%)' };
 
 export const BACKGROUND_PRESETS: { name: string; background: Background }[] = [
   { name: 'KCCP 흰색 + 로고', background: BG_WHITE_LOGO },
   { name: 'Black', background: BG_BLACK },
   { name: 'White', background: BG_WHITE },
+  { name: '찬양 제목', background: BG_SONG_TITLE },
 ];
 
 export const presetBackground = (name: string): Background => (BACKGROUND_PRESETS.find((p) => p.name === name) ?? BACKGROUND_PRESETS[1]).background;

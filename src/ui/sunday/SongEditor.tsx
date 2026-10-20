@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
 import type { Library, Presentation } from '../../domain/types';
-import { songToPresentation, findSong, type SongDraft, type SongSection } from '../../domain/sunday/songs';
+import { songToPresentation, findSong, titleKey, type SongDraft, type SongSection } from '../../domain/sunday/songs';
 import { planSectionSlides } from '../../domain/sunday/slidePlanner';
 import { deleteSharedSong, registerSharedSong } from '../../domain/online';
 import { uid } from '../../domain/lyrics';
@@ -10,11 +10,19 @@ import { useAutosave } from '../hooks';
 interface Part { id: string; label: string; text: string }
 
 export const ADMIN_KEY = 'freecast.adminPassword';
+/** The 관리자 password used before on this computer (kept so edits can reach the shared library without asking again). */
 export const readAdmin = () => {
   try {
-    return sessionStorage.getItem(ADMIN_KEY) ?? '';
+    return localStorage.getItem(ADMIN_KEY) ?? sessionStorage.getItem(ADMIN_KEY) ?? '';
   } catch {
     return '';
+  }
+};
+export const rememberAdmin = (password: string) => {
+  try {
+    localStorage.setItem(ADMIN_KEY, password);
+  } catch {
+    // storage blocked: ask again next time
   }
 };
 
@@ -51,9 +59,10 @@ export interface SongReview {
 /**
  * 찬양 편집 · 등록, the way the ppt site's song card works: title, key, 진행 (I-V1-C-…), and the
  * lyrics by part — a line break is the next line, a blank line starts the next slide; each part is
- * split into slides of up to 4 lines (6 lines → 3 + 3). Edits save by themselves: a library song
- * straight into the church's shared 찬양 라이브러리 once the 관리자 password has been used, anything
- * else on this computer; 등록 registers the song in the shared library (the one the ppt site uses).
+ * split into slides of up to 4 lines (6 lines → 3 + 3). Edits save by themselves, with no password:
+ * the song replaces its entry in this computer's 찬양 라이브러리 at once (one song per title, the
+ * newest), and also goes to the church's shared library when the 관리자 password has been used
+ * here before; 등록 registers the song in the shared library (the one the ppt site uses).
  */
 export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnline, review }: {
   library: Library; dispatch: Dispatch<Action>; song: Presentation | null; onClose: () => void; notify: (m: string) => void; reloadOnline: () => void;
@@ -67,10 +76,13 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const [parts, setParts] = useState<Part[]>(() =>
     draft?.sections.length ? draft.sections.map((s) => ({ id: uid('pt'), label: s.label, text: s.lines.join('\n') })) : partsOf(song));
   const [admin, setAdmin] = useState(readAdmin);
-  // The password last accepted by the server — autosave never sends one still being typed.
+  // The password last accepted by the server — autosave never sends one still being typed, and never asks.
   const [trustedAdmin, setTrustedAdmin] = useState(readAdmin);
   const [saveState, setSaveState] = useState<string | null>(null);
   const localId = useRef<string | null>(song && !song.online ? song.id : null);
+  // Saving makes the song this computer's own copy, so what `song` is changes mid-edit; these stay.
+  const fromLibrary = useRef(!!song?.online);
+  const libraryTitle = useRef(song?.title ?? '');
   const sharedSave = useRef<Promise<void> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,29 +101,33 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const writeLocal = (e: ReturnType<typeof entry>) => {
     const p = songToPresentation({ title: e.title, key: e.key, sections: e.sections, progression: e.order.length ? e.order : undefined }, { themeId: 'theme_sunday', linesPerSlide: per, folder: song && !song.online ? song.folder ?? 'Songs' : 'Songs' });
     const withSource = { ...p, songSource: { sections: e.sections, order: e.order.length ? e.order : undefined } };
-    const local = localId.current ?? library.presentations.find((x) => !x.online && x.title === e.title)?.id ?? null;
+    const local = localId.current ?? findSong(library.presentations.filter((x) => !x.online), e.title)?.id ?? null;
     const { id: newId, ...patch } = withSource;
-    if (local) dispatch({ type: 'presentation/update', id: local, patch: { ...patch, templateKey: undefined } });
-    else dispatch({ type: 'presentation/createMany', presentations: [withSource] });
+    const stamped = { ...patch, updatedAt: Date.now(), templateKey: undefined };
+    if (local) dispatch({ type: 'presentation/update', id: local, patch: stamped });
+    else dispatch({ type: 'presentation/createMany', presentations: [{ ...withSource, updatedAt: stamped.updatedAt }] });
+    // The edited copy is now the library's entry for this title; the older copies go.
+    dispatch({ type: 'songs/dedupe' });
     localId.current = local ?? newId;
   };
 
   // A library song keeps its title in the shared library (a new title there would be a new song).
-  const shared = !!song?.online && !!trustedAdmin && title.trim() === song.title;
+  const shared = fromLibrary.current && !!trustedAdmin && title.trim() === libraryTitle.current;
   const registered = useRef(false);
   useAutosave(entry(), (e) => {
     if (registered.current) return;
+    // Always into this computer's library first — no password involved.
+    writeLocal(e);
     if (shared) {
       setSaveState('저장 중…');
       const job = registerSharedSong(e, trustedAdmin)
-        .then(() => setSaveState('✓ 교회 찬양 라이브러리에 자동 저장됨'))
-        .catch((err: Error) => setSaveState(`⚠ 자동 저장 실패: ${err.message}`));
+        .then(() => setSaveState('✓ 찬양 라이브러리에 자동 저장됨 (교회 공유 라이브러리 포함)'))
+        .catch((err: Error) => setSaveState(`✓ 찬양 라이브러리에 자동 저장됨 · 교회 공유 라이브러리에는 반영하지 못함 (${err.message})`));
       sharedSave.current = job;
     } else {
-      writeLocal(e);
-      setSaveState('✓ 이 컴퓨터에 자동 저장됨');
+      setSaveState('✓ 찬양 라이브러리에 자동 저장됨');
     }
-  }, { delay: shared ? 1500 : 700, enabled: !review && valid });
+  }, { delay: 700, enabled: !review && valid });
 
   /** Closing: the last edit is already saved; the shared library is re-read when it changed. */
   const done = () => {
@@ -128,11 +144,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
       await job();
       registered.current = true;
       setTrustedAdmin(admin);
-      try {
-        sessionStorage.setItem(ADMIN_KEY, admin);
-      } catch {
-        // private window: ask again next time
-      }
+      rememberAdmin(admin);
     } catch (e) {
       setError((e as Error).message);
       setBusy(null);
@@ -158,6 +170,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     if (!song || !confirm(`교회 찬양 라이브러리에서 “${song.title}”을(를) 삭제할까요? 모든 컴퓨터와 주일예배 생성기에서 사라집니다.`)) return;
     withAdmin('삭제 중…', async () => {
       await deleteSharedSong(song.title, admin);
+      for (const p of library.presentations) if (!p.online && titleKey(p.title) === titleKey(song.title)) dispatch({ type: 'presentation/delete', id: p.id });
       notify(`“${song.title}”을(를) 교회 찬양 라이브러리에서 삭제했습니다`);
     });
   };
@@ -211,7 +224,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
         </div>
         <footer className="song-editor-foot">
           {error && <div className="warn">{error}</div>}
-          <label className="row gap-xs muted small">관리자 비밀번호
+          <label className="row gap-xs muted small" title="자동 저장에는 필요하지 않습니다 — 교회 공유 라이브러리에 등록 · 삭제할 때만 씁니다">관리자 비밀번호 (등록 · 삭제용)
             <input type="password" value={admin} onChange={(e) => setAdmin(e.target.value)} autoComplete="off" style={{ width: 150 }} />
           </label>
           <span className="grow" />
@@ -223,7 +236,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
             </>
           ) : (
             <>
-              {song?.online && <button className="danger" disabled={!!busy} onClick={remove}>라이브러리에서 삭제</button>}
+              {fromLibrary.current && <button className="danger" disabled={!!busy} onClick={remove}>라이브러리에서 삭제</button>}
               <span className={saveState?.startsWith('⚠') ? 'warn small' : 'muted small'}>{saveState ?? '편집하면 자동으로 저장됩니다'}</span>
               <button disabled={!valid || !!busy} onClick={register}>{busy ?? '교회 찬양 라이브러리에 등록'}</button>
               <button className="primary" onClick={done}>닫기</button>

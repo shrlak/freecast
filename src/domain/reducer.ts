@@ -6,6 +6,7 @@ import { sequence } from './arrangement';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
 import { activePlaylist, findPres, goLive, nextCursor, prevCursor, themeFor, type Cursor, type NavState } from './live';
+import { dedupeSongs } from './sunday/dedupe';
 import { resetTimer, startTimer, stopTimer } from './timers';
 
 export type { Cursor } from './live';
@@ -86,6 +87,7 @@ export type Action =
   | { type: 'schedule/ran'; id: string; slot: string; now: number }
   | { type: 'slide/runActions'; actions: SlideAction[]; now: number }
   | { type: 'online/songs'; presentations: Presentation[] }
+  | { type: 'songs/dedupe' }
   | { type: 'noop' }
   | ExtraAction
   | { type: 'undo' }
@@ -118,6 +120,16 @@ const mapPlaylist = (s: AppState, fn: (p: Playlist) => Playlist) => {
   const active = activePlaylist(s);
   return active ? setLib(s, { playlists: s.library.playlists.map((p) => (p.id === active.id ? fn(p) : p)) }) : s;
 };
+/** Songs sharing a title become one (the newest); playlists and the selection follow the survivor. */
+function dedupeLibrarySongs(s: AppState): AppState {
+  const { presentations, replaced } = dedupeSongs(s.library.presentations);
+  if (!replaced.size) return s;
+  const playlists = s.library.playlists.map((pl) => ({
+    ...pl,
+    items: pl.items.map((item) => (item.kind === 'header' || !replaced.has(item.presentationId) ? item : { ...item, presentationId: replaced.get(item.presentationId)! })),
+  }));
+  return { ...setLib(s, { presentations, playlists }), selectedId: (s.selectedId && replaced.get(s.selectedId)) || s.selectedId };
+}
 const usesMedia = (b: Background | null | undefined, id: string) => b?.kind === 'media' && b.mediaId === id;
 
 function live(s: AppState, c: Cursor, now?: number): AppState {
@@ -220,8 +232,10 @@ function core(s: AppState, a: Action): AppState {
     case 'online/songs': {
       const local = lib.presentations.filter((p) => !p.online);
       const localIds = new Set(local.map((p) => p.id));
-      return setLib(s, { presentations: [...local, ...a.presentations.filter((p) => !localIds.has(p.id))] });
+      return dedupeLibrarySongs(setLib(s, { presentations: [...local, ...a.presentations.filter((p) => !localIds.has(p.id))] }));
     }
+    case 'songs/dedupe':
+      return dedupeLibrarySongs(s);
     case 'arrangement/upsert':
       return mapPres(s, a.presentationId, (p) => ({ ...p, arrangements: upsert(p.arrangements ?? [], a.arrangement), arrangementId: a.arrangement.id }));
     case 'arrangement/delete':
@@ -403,7 +417,7 @@ function core(s: AppState, a: Action): AppState {
 }
 
 /** Actions that change the library but should not be undoable. */
-const NO_HISTORY = new Set<Action['type']>(['timer/op', 'macro/run', 'usage/clear', 'library/replace', 'schedule/ran', 'slide/runActions', 'online/songs', 'live/videoClock', 'library/merge']);
+const NO_HISTORY = new Set<Action['type']>(['timer/op', 'macro/run', 'usage/clear', 'library/replace', 'schedule/ran', 'slide/runActions', 'online/songs', 'songs/dedupe', 'live/videoClock', 'library/merge']);
 
 function historyKey(a: Action): string {
   const id = (a as { id?: string }).id ?? (a as { theme?: Theme }).theme?.id ?? (a as { slideId?: string }).slideId ?? '';
