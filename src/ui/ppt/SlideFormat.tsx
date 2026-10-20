@@ -94,9 +94,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
           }}
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
         />
-      ) : (
-        <p className="hint">슬라이드의 글자를 클릭하면 바로 입력할 수 있고, 로고 · 그림 · 도형을 클릭하면 여기서 설정을 바꿀 수 있습니다. 끌면 옮겨지고, 모서리를 끌면 크기가 바뀝니다.</p>
-      )}
+      ) : null}
       <Section title="글꼴">
         <div className="fmt-row">
           <select className="grow" value={FONT_OPTIONS.find((f) => f.family === t.fontFamily)?.family ?? ''} onChange={(e) => setStyle({ fontFamily: e.target.value || undefined })}>

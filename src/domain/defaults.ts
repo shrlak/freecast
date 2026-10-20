@@ -19,6 +19,8 @@ export const DEFAULT_THEMES: Theme[] = [
 ];
 
 export const BACKGROUND_PRESETS: { name: string; background: Background }[] = [
+  // The church template's white slide with the KCCP 빛주사랑 logo in the top-right corner.
+  { name: 'KCCP 흰색 + 로고', background: { kind: 'image', url: 'backgrounds/white-logo.png', fit: 'cover' } },
   { name: 'KCCP Navy', background: { kind: 'gradient', value: 'linear-gradient(160deg,#0d2742 0%,#163a62 60%,#1f4f7f 100%)' } },
   { name: 'KCCP Green', background: { kind: 'gradient', value: 'linear-gradient(150deg,#163a62 0%,#2e9e66 70%,#4bc789 100%)' } },
   { name: 'KCCP Light', background: { kind: 'gradient', value: 'linear-gradient(180deg,#ffffff 0%,#ffffff 86%,#fde718 86%,#fde718 93%,#4bc789 93%)' } },
