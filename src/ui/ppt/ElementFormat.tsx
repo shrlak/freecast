@@ -1,14 +1,12 @@
 import { useRef } from 'react';
-import type { HAlign, MediaFit, SlideElement, VAlign } from '../../domain/types';
-import { FONT_OPTIONS } from '../../domain/fonts';
+import type { MediaFit, SlideElement } from '../../domain/types';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
-import { FontSize } from './FontSize';
+import { TextFormatPanel } from './TextFormatPanel';
+import { changeCase } from '../../domain/textFormat';
 
 const KIND: Record<string, string> = { text: '텍스트 상자', image: '그림', shape: '도형', video: '동영상', camera: '카메라' };
-const ALIGNS: [HAlign, string][] = [['left', '⇤'], ['center', '≡'], ['right', '⇥']];
-const VALIGNS: [VAlign, string][] = [['top', '⤒'], ['middle', '↕'], ['bottom', '⤓']];
 
 /** The size a text box shows (its first real line's size when lines are styled one by one). */
 const sizeOf = (el: SlideElement) => el.paragraphs?.find((p) => p.text.trim())?.fontSize ?? el.fontSize ?? 64;
@@ -51,23 +49,17 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
       {el.kind === 'text' && (
         <>
           <label className="stack">텍스트<textarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
-          <div className="row gap-xs wrap">
-            <select value={FONT_OPTIONS.find((f) => f.family === el.fontFamily)?.family ?? ''} onChange={(e) => onChange({ fontFamily: e.target.value || undefined })} title="글꼴">
-              <option value="">{el.fontFamily ? el.fontFamily.split(',')[0].replace(/"/g, '') : '기본 글꼴'}</option>
-              {FONT_OPTIONS.map((f) => <option key={f.label} value={f.family}>{f.label}</option>)}
-            </select>
-            <FontSize value={sizeOf(el)} onChange={(n) => onChange({ fontSize: n * (el.fontSize ?? sizeOf(el)) / sizeOf(el) })} />
-          </div>
-          <div className="row gap-xs wrap">
-            <button className={`fmt-tog ${el.bold ? 'on' : ''}`} onClick={() => onChange({ bold: !el.bold })}><b>B</b></button>
-            <button className={`fmt-tog ${el.italic ? 'on' : ''}`} onClick={() => onChange({ italic: !el.italic })}><i>I</i></button>
-            <button className={`fmt-tog ${el.shadow ? 'on' : ''}`} onClick={() => onChange({ shadow: !el.shadow })} title="그림자">S</button>
-            <label className="fmt-color" title="글자 색"><input type="color" value={(el.paragraphs?.[0]?.color ?? el.color ?? '#ffffff').slice(0, 7)} onChange={(e) => onChange({ color: e.target.value })} />A</label>
-            <span className="grow" />
-            {ALIGNS.map(([a, icon]) => <button key={a} className={`fmt-tog ${(el.align ?? 'center') === a ? 'on' : ''}`} onClick={() => onChange({ align: a })}>{icon}</button>)}
-            {VALIGNS.map(([a, icon]) => <button key={a} className={`fmt-tog ${(el.vAlign ?? 'middle') === a ? 'on' : ''}`} onClick={() => onChange({ vAlign: a })}>{icon}</button>)}
-          </div>
-          <label className="check small"><input type="checkbox" checked={!!el.autoFit} onChange={(e) => onChange({ autoFit: e.target.checked })} /> 상자에 맞게 글자 줄이기</label>
+          <TextFormatPanel
+            value={{
+              fontFamily: el.fontFamily, fontSize: sizeOf(el), bold: !!el.bold, italic: !!el.italic, underline: !!el.underline, strike: !!el.strike,
+              shadow: !!el.shadow, letterSpacing: el.letterSpacing ?? 0, color: (el.paragraphs?.find((p) => p.text.trim())?.color ?? el.color ?? '#ffffff').slice(0, 7),
+              highlight: el.highlight, align: el.align ?? 'center', vAlign: el.vAlign ?? 'middle', lineHeight: el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25),
+              list: el.list, indent: el.indent ?? 0, columns: el.columns ?? 1, vertical: !!el.vertical, autoFit: !!el.autoFit,
+            }}
+            onChange={({ fontSize, ...rest }) => onChange({ ...rest, ...(fontSize === undefined ? {} : { fontSize: fontSize * (el.fontSize ?? sizeOf(el)) / sizeOf(el) }) })}
+            onChangeCase={(kind) => onChange({ text: changeCase(el.text ?? '', kind) })}
+            onClear={() => onChange({ bold: false, italic: false, underline: undefined, strike: undefined, shadow: false, letterSpacing: undefined, highlight: undefined, list: undefined, indent: undefined, columns: undefined, vertical: undefined, lineHeight: undefined })}
+          />
         </>
       )}
 

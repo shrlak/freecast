@@ -1,4 +1,6 @@
-export type HAlign = 'left' | 'center' | 'right';
+export type HAlign = 'left' | 'center' | 'right' | 'justify';
+/** Bullets or numbering in front of each line (PowerPoint's 글머리 기호 / 번호 매기기). */
+export type ListStyle = 'bullet' | 'circle' | 'square' | 'check' | 'arrow' | 'number' | 'number-paren' | 'roman' | 'alpha' | 'hangul';
 export type VAlign = 'top' | 'middle' | 'bottom';
 
 /** Text styling, sized against the 1440x1080 (4:3) canvas. */
@@ -32,12 +34,25 @@ export interface Theme {
   gradient?: string;
   italic?: boolean;
   underline?: boolean;
+  /** PowerPoint text options (글꼴 / 단락 groups). */
+  strike?: boolean;
+  /** Character spacing in canvas pixels (0 = normal). */
+  letterSpacing?: number;
+  /** Text highlight colour. */
+  highlight?: string;
+  list?: ListStyle;
+  /** Indent level (each level 60 canvas pixels). */
+  indent?: number;
+  columns?: number;
+  /** Vertical text (세로 쓰기). */
+  vertical?: boolean;
 }
 
 /** Per-slide text formatting that overrides the presentation's theme for that slide only. */
 export type SlideStyle = Partial<Pick<Theme,
   'fontFamily' | 'fontSize' | 'fontWeight' | 'color' | 'align' | 'vAlign' | 'lineHeight' | 'shadow' | 'uppercase' |
-  'subColor' | 'strokeColor' | 'strokeWidth' | 'italic' | 'underline' | 'padding'>>;
+  'subColor' | 'strokeColor' | 'strokeWidth' | 'italic' | 'underline' | 'padding' | 'strike' | 'letterSpacing' | 'highlight' |
+  'list' | 'indent' | 'columns' | 'vertical' | 'autoFit' | 'glowColor'>>;
 
 export type MediaType = 'image' | 'video' | 'audio';
 /** 'fill' stretches to the box (how PowerPoint draws a picture in its frame). */
@@ -111,6 +126,16 @@ export interface SlideElement {
   paragraphs?: ElementParagraph[];
   /** Shrink the text until it fits the box. */
   autoFit?: boolean;
+  /** PowerPoint text options, as on the slide text (see Theme). */
+  underline?: boolean;
+  strike?: boolean;
+  letterSpacing?: number;
+  lineHeight?: number;
+  highlight?: string;
+  list?: ListStyle;
+  indent?: number;
+  columns?: number;
+  vertical?: boolean;
   /** What a template text box is for, so weekly updates can find it after edits ('prayer' = 기도제목 box). */
   role?: 'prayer';
 }

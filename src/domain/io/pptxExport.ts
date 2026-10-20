@@ -1,5 +1,5 @@
 import PptxGenJS from 'pptxgenjs';
-import type { Background, Library, Playlist, Presentation, Theme } from '../types';
+import type { Background, Library, ListStyle, Playlist, Presentation, Theme } from '../types';
 import { sequence } from '../arrangement';
 import { getMedia } from '../media';
 import { qrDataUrl } from './qr';
@@ -16,6 +16,20 @@ function firstColor(b: Background | undefined | null): string {
   if (b.kind === 'color') return b.value.replace('#', '').slice(0, 6);
   if (b.kind === 'gradient') return (/#([0-9a-f]{6})/i.exec(b.value)?.[1] ?? '000000');
   return '000000';
+}
+
+/** 취소선, 문자 간격, 강조 색, 글머리 기호 / 번호, 들여쓰기, 세로 쓰기 — in PowerPoint's terms. */
+function textOptions(f: { strike?: boolean; letterSpacing?: number; highlight?: string; list?: ListStyle; indent?: number; vertical?: boolean }) {
+  const numbered = f.list === 'number' || f.list === 'number-paren' || f.list === 'roman' || f.list === 'alpha' || f.list === 'hangul';
+  const numberType = ({ 'number-paren': 'arabicParenR', roman: 'romanUcPeriod', alpha: 'alphaUcPeriod' } as const)[f.list as 'roman'] ?? 'arabicPeriod';
+  return {
+    strike: f.strike ? ('sngStrike' as const) : undefined,
+    charSpacing: f.letterSpacing ? f.letterSpacing * 0.5 : undefined,
+    highlight: f.highlight?.replace('#', ''),
+    bullet: f.list ? (numbered ? { type: 'number' as const, style: numberType } : { characterCode: { circle: '25CB', square: '25A0', check: '2713', arrow: '27A2' }[f.list as 'circle'] ?? '2022' }) : undefined,
+    indentLevel: f.indent || undefined,
+    vert: f.vertical ? ('eaVert' as const) : undefined,
+  };
 }
 
 async function dataUrl(mediaId: string): Promise<string | null> {
@@ -79,6 +93,7 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
     s.addText(runs, {
       x: pad, y: pad, w: W - pad * 2 - (slide.qr?.length ? 2 : 0), h: H - pad * 2,
       fontFace: fontFace(theme), fontSize: theme.fontSize * 0.5, color, italic: theme.italic, underline: theme.underline ? { style: 'sng' } : undefined,
+      ...textOptions(theme),
       align: theme.align, valign, lineSpacingMultiple: theme.lineHeight,
       shadow: theme.shadow ? { type: 'outer', blur: 6, offset: 2, angle: 45, color: '000000', opacity: 0.6 } : undefined,
       fit: 'shrink',
@@ -89,7 +104,7 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
     for (const el of slide.elements ?? []) {
       const box = { x: el.x * PX, y: el.y * PX, w: el.w * PX, h: el.h * PX, rotate: el.rotation };
       if (el.kind === 'text' && el.text) {
-        s.addText(el.text, { ...box, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: 'shrink' });
+        s.addText(el.text, { ...box, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: 'shrink' });
       } else if (el.kind === 'image' && el.mediaId) {
         const data = await dataUrl(el.mediaId);
         if (data) s.addImage({ ...box, data, sizing: { type: el.fit === 'cover' ? 'cover' : 'contain', w: box.w, h: box.h } });

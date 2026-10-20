@@ -744,3 +744,44 @@ body[data-view='multiview'] { overflow: auto; }
 .ef-range { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .presenter .element-format { background: #1f2b24; }
 .ppt-section { margin: 10px 4px 4px 22px; padding: 2px 8px; font-size: 11.5px; font-weight: 700; color: #163a62; border-left: 4px solid; background: var(--panel-2); border-radius: 0 4px 4px 0; }
+.list-marker { display: inline-block; margin-right: .45em; }
+
+/* PowerPoint 홈 → 글꼴 / 단락 groups (TextFormatPanel) */
+.ppt-text-format { display: flex; flex-direction: column; gap: 3px; }
+.ppt-group-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.ppt-row { display: flex; align-items: center; gap: 1px; flex-wrap: wrap; }
+.ppt-font { flex: 1; min-width: 96px; height: 26px; }
+.ppt-btn { display: inline-flex; align-items: center; justify-content: center; gap: 1px; min-width: 26px; height: 26px; padding: 0 4px; border: 1px solid transparent !important; border-radius: 3px; background: transparent !important; color: #252423; cursor: pointer; }
+.ppt-btn:hover { background: #edebe9 !important; }
+.ppt-btn.on { background: #c8c6c4 !important; border-color: #a19f9d !important; }
+.ppt-caret-btn { min-width: 14px; padding: 0 2px; }
+.ppt-icon { display: block; flex: none; }
+.ppt-caret { display: block; flex: none; opacity: .75; }
+.ppt-sep { width: 1px; height: 18px; background: #e1dfdd; margin: 0 4px; }
+.ppt-drop { position: relative; display: inline-flex; align-items: center; }
+.ppt-drop.split > .ppt-btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; padding-right: 2px; }
+.ppt-menu { position: fixed; z-index: 200; top: 0; left: 0; min-width: 170px; max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; padding: 4px; background: #fff; color: #252423; border: 1px solid #c8c6c4; border-radius: 4px; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.ppt-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 5px 8px; border: none !important; border-radius: 2px; background: transparent !important; color: inherit; font-size: 12px; cursor: pointer; }
+.ppt-item:hover { background: #edebe9 !important; }
+.ppt-item.on { background: #e1dfdd !important; font-weight: 600; }
+.ppt-menu-label { font-size: 11px; font-weight: 600; color: #605e5c; padding: 4px 6px 2px; }
+.ppt-palette { display: grid; grid-template-columns: repeat(10, 16px); gap: 3px; padding: 4px 6px; }
+.ppt-menu .ppt-palette:has(> :nth-child(15):last-child) { grid-template-columns: repeat(5, 18px); }
+.ppt-chip { width: 16px; height: 16px; min-width: 0; padding: 0 !important; border: 1px solid #c8c6c4 !important; border-radius: 0; cursor: pointer; }
+.ppt-chip:hover, .ppt-chip.on { outline: 2px solid #f29d49; outline-offset: 0; }
+.ppt-list-grid { display: grid; grid-template-columns: repeat(3, 56px); gap: 4px; padding: 4px; }
+.ppt-list-cell { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; height: 56px; padding: 4px; font-size: 10px; line-height: 1.3; border: 1px solid #e1dfdd !important; background: #fff !important; color: #252423; cursor: pointer; }
+.ppt-list-cell:hover, .ppt-list-cell.on { border-color: #f29d49 !important; background: #fff4e6 !important; }
+.ppt-slider { flex-direction: column; align-items: stretch; gap: 2px; border-top: 1px solid #edebe9 !important; margin-top: 2px; }
+.ppt-slider span { color: #605e5c; }
+.ppt-autofit { margin-top: 4px; }
+.fmt-apply { padding: 8px 12px; }
+.font-size { gap: 0; border: 1px solid #c8c6c4; border-radius: 3px; background: #fff; height: 26px; }
+.font-size .fs-input { width: 40px; border: none !important; height: 24px; padding: 0 4px; text-align: left; background: transparent; }
+.fs-menu { min-width: 60px; }
+.presenter .ppt-btn, .presenter-edit .ppt-btn { color: inherit; }
+.presenter .ppt-btn:hover { background: rgba(255,255,255,.08) !important; }
+.presenter .ppt-btn.on { background: rgba(255,255,255,.18) !important; }
+.fmt-body .ppt-text-format select.ppt-font { width: auto; flex: 1 1 110px; }
+.ppt-text-format .font-size .fs-input { width: 40px !important; flex: none; }
+.ppt-text-format .font-size { flex: none; }
