@@ -32,6 +32,8 @@ jobs:
   build:
     needs: tag
     strategy:
+      # One platform failing must not cancel the others.
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -45,6 +47,25 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Package and publish
-        run: npx electron-builder ${{ matrix.os == 'macos-latest' && '--mac' || '--win' }} --publish always
+        run: npx electron-builder ${{ matrix.os == 'macos-latest' && '--mac --arm64 --x64' || '--win --x64' }} --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Every release carries all three installers (Apple Silicon Mac, Intel Mac, Windows); fail loudly if one is missing.
+  verify:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the release has all three installers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          assets="$(gh release view "v$v" --json assets --jq '.assets[].name')"
+          echo "$assets"
+          missing=0
+          for f in "FreeCast-$v-arm64.dmg" "FreeCast-$v.dmg" "FreeCast-Setup-$v.exe"; do
+            echo "$assets" | grep -qxF "$f" || { echo "::error::Release v$v is missing $f"; missing=1; }
+          done
+          exit $missing
