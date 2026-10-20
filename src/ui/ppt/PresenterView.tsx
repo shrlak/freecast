@@ -191,7 +191,6 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
           onClose={() => setDesigning(false)}
           onSave={(elements, text) => {
             dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch: { elements: elements.length ? elements : undefined, text } });
-            setDesigning(false);
           }} />
       )}
     </div>

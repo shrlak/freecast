@@ -166,7 +166,6 @@ export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) 
             onClose={() => setDesign(null)}
             onSave={(elements, text) => {
               dispatch({ type: 'slide/update', presentationId: p.id, slideId: sl.id, patch: { elements: elements.length ? elements : undefined, text } });
-              setDesign(null);
             }}
           />
         );

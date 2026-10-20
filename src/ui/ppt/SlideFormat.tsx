@@ -2,7 +2,6 @@ import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Background, Presentation, Slide, SlideStyle, Theme } from '../../domain/types';
 import { BACKGROUND_PRESETS } from '../../domain/defaults';
-import { FONT_OPTIONS } from '../../domain/fonts';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { assetUrl, slideTheme } from '../SlideCanvas';
@@ -10,7 +9,8 @@ import { useMediaUrl } from '../hooks';
 import { SlideInspector } from '../SlideInspector';
 import { patchElement } from '../../domain/templates/convert';
 import { ElementFormat } from './ElementFormat';
-import { FontSize } from './FontSize';
+import { TextFormatPanel } from './TextFormatPanel';
+import { changeCase } from '../../domain/textFormat';
 
 interface Props {
   state: AppState;
@@ -95,42 +95,37 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
         />
       ) : null}
-      <Section title="글꼴">
-        <div className="fmt-row">
-          <select className="grow" value={FONT_OPTIONS.find((f) => f.family === t.fontFamily)?.family ?? ''} onChange={(e) => setStyle({ fontFamily: e.target.value || undefined })}>
-            {!FONT_OPTIONS.some((f) => f.family === t.fontFamily) && <option value="">테마 글꼴</option>}
-            {FONT_OPTIONS.map((f) => <option key={f.label} value={f.family} style={{ fontFamily: f.family }}>{f.label}</option>)}
-          </select>
-          <FontSize value={t.fontSize} onChange={(n) => setStyle({ fontSize: n })} />
-        </div>
-        <div className="fmt-row">
-          <button className={`fmt-tog ${t.fontWeight >= 700 ? 'on' : ''}`} title="굵게" onClick={() => setStyle({ fontWeight: t.fontWeight >= 700 ? 400 : 700 })}><b>B</b></button>
-          <button className={`fmt-tog ${t.italic ? 'on' : ''}`} title="기울임" onClick={() => setStyle({ italic: !t.italic })}><i>I</i></button>
-          <button className={`fmt-tog ${t.underline ? 'on' : ''}`} title="밑줄" onClick={() => setStyle({ underline: !t.underline })}><u>U</u></button>
-          <button className={`fmt-tog ${t.shadow ? 'on' : ''}`} title="그림자" onClick={() => setStyle({ shadow: !t.shadow })}>S</button>
-          <button className={`fmt-tog ${t.uppercase ? 'on' : ''}`} title="대문자" onClick={() => setStyle({ uppercase: !t.uppercase })}>Aa</button>
-          <label className="fmt-color" title="글자 색"><span style={{ background: t.color }} />A<input type="color" value={t.color} onChange={(e) => setStyle({ color: e.target.value })} /></label>
-          <label className="fmt-color" title="둘째 줄 색"><span style={{ background: t.subColor ?? t.color }} />2<input type="color" value={t.subColor ?? t.color} onChange={(e) => setStyle({ subColor: e.target.value })} /></label>
-        </div>
-        <div className="fmt-row">
-          {(['left', 'center', 'right'] as const).map((a) => (
-            <button key={a} className={`fmt-tog ${t.align === a ? 'on' : ''}`} title={{ left: '왼쪽 맞춤', center: '가운데 맞춤', right: '오른쪽 맞춤' }[a]} onClick={() => setStyle({ align: a })}>{{ left: '⇤', center: '≡', right: '⇥' }[a]}</button>
-          ))}
-          <span className="fmt-sep" />
-          {(['top', 'middle', 'bottom'] as const).map((a) => (
-            <button key={a} className={`fmt-tog ${t.vAlign === a ? 'on' : ''}`} title={{ top: '위쪽', middle: '가운데', bottom: '아래쪽' }[a]} onClick={() => setStyle({ vAlign: a })}>{{ top: '⤒', middle: '↕', bottom: '⤓' }[a]}</button>
-          ))}
-        </div>
-        <label>줄 간격 <span className="muted">{t.lineHeight.toFixed(2)}</span><input type="range" min={0.9} max={2.2} step={0.05} value={t.lineHeight} onChange={(e) => setStyle({ lineHeight: Number(e.target.value) })} /></label>
+      <Section title="글꼴 · 단락">
+        <TextFormatPanel
+          value={{
+            fontFamily: t.fontFamily, fontSize: t.fontSize, bold: t.fontWeight >= 700, italic: !!t.italic, underline: !!t.underline,
+            strike: !!t.strike, shadow: t.shadow, letterSpacing: t.letterSpacing ?? 0, color: t.color, highlight: t.highlight,
+            align: t.align, vAlign: t.vAlign, lineHeight: t.lineHeight, list: t.list, indent: t.indent ?? 0, columns: t.columns ?? 1,
+            vertical: !!t.vertical, autoFit: t.autoFit !== false,
+          }}
+          onChange={({ bold, ...rest }) => setStyle({ ...rest, ...(bold === undefined ? {} : { fontWeight: bold ? 700 : 400 }) })}
+          onChangeCase={(kind) => upd({ text: changeCase(slide.text, kind), ...(slide.title ? { title: changeCase(slide.title, kind) } : {}), ...(slide.subtext ? { subtext: changeCase(slide.subtext, kind) } : {}) })}
+          onClear={() => upd({ style: undefined })}
+          shortcuts={!selected}
+        />
+      </Section>
+
+      <Section title="텍스트 옵션" open={false}>
+        <label className="check small"><input type="checkbox" checked={t.uppercase} onChange={(e) => setStyle({ uppercase: e.target.checked })} /> 모두 대문자로 표시</label>
         <label>여백 <span className="muted">{t.padding}px</span><input type="range" min={0} max={400} step={10} value={t.padding} onChange={(e) => setStyle({ padding: Number(e.target.value) })} /></label>
-        <label>윤곽선 <span className="muted">{t.strokeWidth ?? 0}px</span>
+        <label>텍스트 윤곽선 <span className="muted">{t.strokeWidth ?? 0}px</span>
           <div className="fmt-row"><input className="grow" type="range" min={0} max={12} value={t.strokeWidth ?? 0} onChange={(e) => setStyle({ strokeWidth: Number(e.target.value) })} /><input type="color" value={t.strokeColor ?? '#000000'} onChange={(e) => setStyle({ strokeColor: e.target.value })} /></div>
         </label>
         <div className="fmt-row">
-          <button className="grow" onClick={() => applyToAll('style')}>모든 슬라이드에 적용</button>
-          <button disabled={!slide.style} onClick={() => upd({ style: undefined })} title="테마 서식으로 되돌리기">초기화</button>
+          <label className="fmt-color" title="텍스트 효과 · 네온"><span style={{ background: t.glowColor ?? 'transparent' }} />네온<input type="color" value={t.glowColor ?? '#ffffff'} onChange={(e) => setStyle({ glowColor: e.target.value })} /></label>
+          {t.glowColor && <button className="mini-btn" onClick={() => setStyle({ glowColor: undefined })}>네온 없음</button>}
+          <label className="fmt-color" title="둘째 줄 (번역 · 둘째 성경) 색"><span style={{ background: t.subColor ?? t.color }} />둘째 줄 색<input type="color" value={t.subColor ?? t.color} onChange={(e) => setStyle({ subColor: e.target.value })} /></label>
         </div>
       </Section>
+      <div className="fmt-row fmt-apply">
+        <button className="grow" onClick={() => applyToAll('style')}>서식을 모든 슬라이드에 적용</button>
+        <button disabled={!slide.style} onClick={() => upd({ style: undefined })} title="테마 서식으로 되돌리기">초기화</button>
+      </div>
 
       <Section title="배경">
         <div className="fmt-swatches">

@@ -10,7 +10,7 @@ import { fillSlide } from './convert';
 import { fillFront, refreshFront } from './fill';
 import { parsePrayerTopics } from '../sunday/prayer';
 import { mdy, upcomingSunday } from '../sunday/notice';
-import { applyConfessionSong, findConfessionSong, songSections } from './confession';
+import { applyConfessionSong, findConfessionSong, songChunks } from './confession';
 import type { ServiceTemplates } from './serviceTemplates';
 
 const PLACEHOLDER_SLIDES = { front: 'front_prayer', back: 'back_confession' } as const;
@@ -53,7 +53,7 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
     const title = lib.sunday.confessionSong.trim() || DEFAULT_CONFESSION_SONG;
     const song = findConfessionSong(lib.presentations, title);
     const lines = lib.sunday.linesPerSlide;
-    const lyrics = song ? songSections(song) : [];
+    const lyrics = song ? songChunks(song, lines) : [];
     const backKey = `back:${tpl.keys.back}|${song ? `${song.title}:${lines}:${hash(JSON.stringify(lyrics))}` : '-'}`;
     if (back.templateKey !== backKey) {
       if (back.templateKey?.startsWith(`back:${tpl.keys.back}|`)) {

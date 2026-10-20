@@ -403,10 +403,9 @@ export function OperatorView() {
           presentation={modal === 'new' ? null : selected}
           themes={state.library.themes}
           onClose={() => setModal(null)}
-          onSave={(p) => {
-            if (modal === 'new') dispatch({ type: 'presentation/create', presentation: p });
+          onSave={(p, isNew) => {
+            if (isNew) dispatch({ type: 'presentation/create', presentation: p });
             else dispatch({ type: 'presentation/update', id: p.id, patch: p });
-            setModal(null);
           }}
         />
       )}

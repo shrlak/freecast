@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import type { Background, Prop, Screen, Slide, SlideElement, Theme, Timer, Transition } from '../domain/types';
+import type { Background, ListStyle, Prop, Screen, Slide, SlideElement, Theme, Timer, Transition } from '../domain/types';
+import { INDENT_PX, listMarkers } from '../domain/textFormat';
 import { stripChords } from '../domain/lyrics';
 import { CHURCH_LOGO_URL } from '../domain/defaults';
+import { TEMPLATE_LYRICS_THEME } from '../domain/templates/fill';
 import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
 import { useMediaUrl, useNow, useWidth } from './hooks';
@@ -129,28 +131,47 @@ export function textStyle(theme: Theme): CSSProperties {
     lineHeight: theme.lineHeight,
     textTransform: theme.uppercase ? 'uppercase' : 'none',
     fontStyle: theme.italic ? 'italic' : undefined,
-    textDecoration: theme.underline ? 'underline' : undefined,
+    textDecoration: decoration(theme),
+    letterSpacing: theme.letterSpacing || undefined,
+    ...columnsAndDirection(theme),
     textShadow: [glow, theme.gradient ? '' : shadow].filter(Boolean).join(', ') || 'none',
     ...(theme.gradient ? { color: 'transparent' } : {}),
   };
 }
 
-/** Lines wrapped in **…** render bold (prayer topic titles). */
-function Lines({ text }: { text: string }) {
+/** 밑줄 and 취소선 together. */
+const decoration = (f: { underline?: boolean; strike?: boolean }) => [f.underline && 'underline', f.strike && 'line-through'].filter(Boolean).join(' ') || undefined;
+
+/** 단 (columns) and 텍스트 방향 (vertical text). */
+const columnsAndDirection = (f: { columns?: number; vertical?: boolean }): CSSProperties => ({
+  ...(f.columns && f.columns > 1 ? { columnCount: f.columns, columnGap: '1.2em', display: 'block' } : {}),
+  ...(f.vertical ? { writingMode: 'vertical-rl' } : {}),
+});
+
+/** A line with its bullet / number and its highlight. */
+function ListLine({ marker, highlight, children }: { marker: string | null; highlight?: string; children: ReactNode }) {
+  const body = highlight ? <span style={{ background: highlight, boxDecorationBreak: 'clone', WebkitBoxDecorationBreak: 'clone' }}>{children}</span> : children;
+  return marker ? <><span className="list-marker">{marker}</span>{body}</> : <>{body}</>;
+}
+
+/** Lines wrapped in **…** render bold (prayer topic titles); bullets / numbering and highlight as the slide sets. */
+function Lines({ text, list, highlight }: { text: string; list?: ListStyle; highlight?: string }) {
+  const lines = stripChords(text).split('\n');
+  const markers = listMarkers(lines, list);
   return (
     <>
-      {stripChords(text).split('\n').map((line, i) => {
+      {lines.map((line, i) => {
         const bold = /^\*\*(.+)\*\*$/.exec(line);
         const content = bold ? bold[1] : line;
         const body = TOKEN.test(content) ? <DynamicText text={content} /> : content || '\u00a0';
-        return <div key={i}>{bold ? <strong style={{ fontWeight: 800 }}>{body}</strong> : body}</div>;
+        return <div key={i}><ListLine marker={markers[i]} highlight={line.trim() ? highlight : undefined}>{bold ? <strong style={{ fontWeight: 800 }}>{body}</strong> : body}</ListLine></div>;
       })}
     </>
   );
 }
 
 const V_ALIGN = { top: 'flex-start', middle: 'center', bottom: 'flex-end' } as const;
-const H_ALIGN = { left: 'flex-start', center: 'center', right: 'flex-end' } as const;
+const H_ALIGN = { left: 'flex-start', center: 'center', right: 'flex-end', justify: 'stretch' } as const;
 
 /** One free-positioned object from the slide editor. */
 export function ElementView({ el }: { el: SlideElement }) {
@@ -172,7 +193,7 @@ export function ElementView({ el }: { el: SlideElement }) {
 function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const key = `${el.text}|${el.w}|${el.h}|${el.fontSize}|${JSON.stringify(el.paragraphs?.map((p) => p.fontSize))}`;
+  const key = `${el.text}|${el.w}|${el.h}|${el.fontSize}|${el.letterSpacing}|${el.list}|${el.indent}|${el.columns}|${el.vertical}|${el.lineHeight}|${JSON.stringify(el.paragraphs?.map((p) => p.fontSize))}`;
   useLayoutEffect(() => setScale(1), [key]);
   useLayoutEffect(() => {
     const node = ref.current;
@@ -181,12 +202,20 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
     if (k < 0.99 && scale > 0.3) setScale((v) => Math.max(0.3, v * k * 0.97));
   }, [el.autoFit, key, scale]);
   const base = el.fontSize ?? 64;
+  const lines = el.paragraphs ? el.paragraphs.map((p) => p.text) : (el.text ?? '').split('\n');
+  const markers = listMarkers(lines, el.list);
+  const styled = !!(el.list || el.highlight);
+  const lineBody = (text: string, i: number) => (
+    <ListLine marker={markers[i]} highlight={text.trim() ? el.highlight : undefined}>{TOKEN.test(text) ? <DynamicText text={text} /> : text}</ListLine>
+  );
   return (
     <div ref={ref} style={{
       ...box, display: 'flex', flexDirection: 'column', whiteSpace: 'pre-line',
       justifyContent: V_ALIGN[el.vAlign ?? 'middle'], textAlign: el.align ?? 'center',
       fontSize: base * scale, fontFamily: el.fontFamily, color: el.color ?? '#fff',
-      fontWeight: el.bold ? 800 : el.paragraphs ? 400 : 500, fontStyle: el.italic ? 'italic' : undefined, lineHeight: el.paragraphs ? 1.2 : 1.25,
+      fontWeight: el.bold ? 800 : el.paragraphs ? 400 : 500, fontStyle: el.italic ? 'italic' : undefined, lineHeight: el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25),
+      textDecoration: decoration(el), letterSpacing: el.letterSpacing ? el.letterSpacing * scale : undefined,
+      paddingLeft: el.indent ? el.indent * INDENT_PX * scale : undefined, ...columnsAndDirection(el),
       textShadow: el.shadow ? '0 3px 12px rgba(0,0,0,.8)' : undefined, overflow: 'hidden',
     }}>
       {el.paragraphs
@@ -195,10 +224,11 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
               fontSize: (p.fontSize ?? base) * scale, fontWeight: p.bold ? 700 : undefined, fontStyle: p.italic ? 'italic' : undefined,
               color: p.color, textAlign: p.align, minHeight: '1.2em',
             }}>
-              {TOKEN.test(p.text) ? <DynamicText text={p.text} /> : p.text}
+              {lineBody(p.text, i)}
             </div>
           ))
-        : el.text && TOKEN.test(el.text) ? <DynamicText text={el.text} /> : el.text}
+        : styled ? lines.map((l, i) => <div key={i}>{l ? lineBody(l, i) : '\u00a0'}</div>)
+          : el.text && TOKEN.test(el.text) ? <DynamicText text={el.text} /> : el.text}
     </div>
   );
 }
@@ -211,26 +241,39 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const hasQr = !!slide.qr?.length;
   const inner = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}`;
-  useLayoutEffect(() => setScale(1), [content]);
+  // Lyric lines never wrap (a long line would leave one word alone on the next line): the text shrinks instead.
+  // A line too long to fit even at 60% size (a whole verse typed as one line) wraps as before.
+  const [tooLong, setTooLong] = useState(false);
+  const lyricLines = theme.noWrap ?? theme.id === TEMPLATE_LYRICS_THEME;
+  const noWrap = lyricLines && !tooLong;
+  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}|${lyricLines}|${theme.letterSpacing}|${theme.list}|${theme.indent}|${theme.columns}|${theme.vertical}`;
+  useLayoutEffect(() => {
+    setScale(1);
+    setTooLong(false);
+  }, [content]);
   useLayoutEffect(() => {
     const el = inner.current;
     if (!el || theme.autoFit === false) return;
     const availH = CANVAS_H - theme.padding * 2;
     const availW = CANVAS_W - theme.padding * 2 - (hasQr ? 300 : 0);
     const k = Math.min(availH / el.scrollHeight, availW / el.scrollWidth);
+    if (noWrap && scale * k < 0.6 && availW / el.scrollWidth < 0.99) {
+      setScale(1);
+      setTooLong(true);
+      return;
+    }
     if (k < 0.99 && scale > 0.25) setScale((v) => Math.max(0.25, v * k * 0.98));
-  }, [scale, content, hasQr, theme.autoFit, theme.padding]);
-  const t = scale === 1 ? theme : { ...theme, fontSize: theme.fontSize * scale };
+  }, [scale, content, hasQr, theme.autoFit, theme.padding, noWrap]);
+  const t = scale === 1 ? theme : { ...theme, fontSize: theme.fontSize * scale, letterSpacing: theme.letterSpacing && theme.letterSpacing * scale };
   return (
     <>
       <div
         className="layer text-layer"
         style={{ padding: theme.padding, paddingRight: hasQr ? theme.padding + 300 : theme.padding, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
       >
-        <div ref={inner} style={textStyle(t)}>
+        <div ref={inner} style={{ ...textStyle(t), whiteSpace: noWrap ? 'pre' : undefined, marginLeft: theme.indent ? theme.indent * INDENT_PX * scale : undefined, alignSelf: theme.align === 'justify' ? 'stretch' : undefined }}>
           {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}
-          {slide.text && <Lines text={slide.text} />}
+          {slide.text && <Lines text={slide.text} list={theme.list} highlight={theme.highlight} />}
           {slide.subtext && (
             <div style={{ fontSize: t.fontSize * (theme.subScale ?? 0.62), color: theme.subColor ?? theme.color, marginTop: t.fontSize * 0.35, fontWeight: Math.min(theme.fontWeight, 500) }}>
               <Lines text={slide.subtext} />

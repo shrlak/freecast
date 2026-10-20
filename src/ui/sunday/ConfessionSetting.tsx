@@ -4,6 +4,7 @@ import type { Library } from '../../domain/types';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { titleKey } from '../../domain/sunday/songs';
 import { findConfessionSong, songSections } from '../../domain/templates/confession';
+import { useAutosave } from '../hooks';
 
 /**
  * This season's 공동체 고백송 (it changes every semester or year). Saving it rewrites the
@@ -27,13 +28,12 @@ export function ConfessionSetting({ library, dispatch, onClose, notify }: { libr
   const chosen = findConfessionSong(library.presentations, title);
   const lines = chosen ? songSections(chosen).flat().length : 0;
 
-  const save = () => {
-    const t = title.trim();
-    if (!t) return;
+  // Saved as soon as a song in the library is chosen (a title still being typed is not saved).
+  useAutosave(title.trim(), (t) => {
+    if (t === current) return;
     dispatch({ type: 'sunday/settings', patch: { confessionSong: t } });
     notify(`공동체 고백송을 “${t}”(으)로 바꿨습니다 — 주일예배 Back 슬라이드가 곧 바뀝니다`);
-    onClose();
-  };
+  }, { enabled: !!chosen });
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -43,7 +43,7 @@ export function ConfessionSetting({ library, dispatch, onClose, notify }: { libr
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="wizard-body stack">
-          <p className="hint">학기마다 · 해마다 바뀌는 고백송을 여기서 정합니다. 저장하면 주일예배 Back 슬라이드의 고백송 부분이 이 노래로 바뀌고, 앞으로 만드는 모든 주일예배에 들어갑니다. (한 주만 다른 노래를 쓰려면 주일예배 마법사에서 바꾸세요.)</p>
+          <p className="hint">학기마다 · 해마다 바뀌는 고백송을 여기서 정합니다. 고르면 주일예배 Back 슬라이드의 고백송 부분이 이 노래로 바뀌고, 앞으로 만드는 모든 주일예배에 들어갑니다. (한 주만 다른 노래를 쓰려면 주일예배 마법사에서 바꾸세요.)</p>
           <div className="confession-now">지금: <b>{current}</b></div>
           <label className="stack">새 고백송 찾기
             <input autoFocus value={query} placeholder="노래 제목으로 검색 (찬양 라이브러리)" onChange={(e) => setQuery(e.target.value)} />
@@ -67,8 +67,8 @@ export function ConfessionSetting({ library, dispatch, onClose, notify }: { libr
             <p className="warn">라이브러리에서 이 노래를 찾지 못했습니다. 가사를 추가하기 전까지는 Back 슬라이드의 고백송이 바뀌지 않습니다.</p>
           )}
           <div className="row gap-s">
-            <button className="primary" disabled={!title.trim() || title.trim() === current} onClick={save}>저장</button>
-            <button onClick={onClose}>취소</button>
+            <span className="muted small grow">라이브러리에 있는 노래를 고르면 자동으로 저장됩니다.</span>
+            <button className="primary" onClick={onClose}>닫기</button>
           </div>
         </div>
       </div>
