@@ -1,10 +1,11 @@
-import { useMemo, useState, type Dispatch } from 'react';
+import { useMemo, useRef, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
 import type { Library, Presentation } from '../../domain/types';
 import { songToPresentation, findSong, type SongDraft, type SongSection } from '../../domain/sunday/songs';
 import { planSectionSlides } from '../../domain/sunday/slidePlanner';
 import { deleteSharedSong, registerSharedSong } from '../../domain/online';
 import { uid } from '../../domain/lyrics';
+import { useAutosave } from '../hooks';
 
 interface Part { id: string; label: string; text: string }
 
@@ -50,8 +51,9 @@ export interface SongReview {
 /**
  * 찬양 편집 · 등록, the way the ppt site's song card works: title, key, 진행 (I-V1-C-…), and the
  * lyrics by part — a line break is the next line, a blank line starts the next slide; each part is
- * split into slides of up to 4 lines (6 lines → 3 + 3). Saves to this computer, or registers the
- * song in the church's shared 찬양 라이브러리 (관리자 password, the same library the ppt site uses).
+ * split into slides of up to 4 lines (6 lines → 3 + 3). Edits save by themselves: a library song
+ * straight into the church's shared 찬양 라이브러리 once the 관리자 password has been used, anything
+ * else on this computer; 등록 registers the song in the shared library (the one the ppt site uses).
  */
 export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnline, review }: {
   library: Library; dispatch: Dispatch<Action>; song: Presentation | null; onClose: () => void; notify: (m: string) => void; reloadOnline: () => void;
@@ -65,6 +67,11 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const [parts, setParts] = useState<Part[]>(() =>
     draft?.sections.length ? draft.sections.map((s) => ({ id: uid('pt'), label: s.label, text: s.lines.join('\n') })) : partsOf(song));
   const [admin, setAdmin] = useState(readAdmin);
+  // The password last accepted by the server — autosave never sends one still being typed.
+  const [trustedAdmin, setTrustedAdmin] = useState(readAdmin);
+  const [saveState, setSaveState] = useState<string | null>(null);
+  const localId = useRef<string | null>(song && !song.online ? song.id : null);
+  const sharedSave = useRef<Promise<void> | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const per = library.sunday.linesPerSlide;
@@ -79,16 +86,38 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const entry = () => ({ title: title.trim(), key: key.trim() || undefined, sections: sections.map((s) => ({ ...s, lines: s.lines.map((l) => l.trimEnd()) })), order: tokens });
 
   /** This computer's copy (online songs become a local song of the same title). */
-  const saveLocal = () => {
-    const e = entry();
-    const p = songToPresentation({ title: e.title, key: e.key, sections: e.sections, progression: tokens.length ? tokens : undefined }, { themeId: 'theme_sunday', linesPerSlide: per, folder: song && !song.online ? song.folder ?? 'Songs' : 'Songs' });
-    const withSource = { ...p, songSource: { sections: e.sections, order: tokens.length ? tokens : undefined } };
-    const local = song && !song.online ? song : library.presentations.find((x) => !x.online && x.title === e.title) ?? null;
-    const { id: _newId, ...patch } = withSource;
-    if (local) dispatch({ type: 'presentation/update', id: local.id, patch: { ...patch, templateKey: undefined } });
+  const writeLocal = (e: ReturnType<typeof entry>) => {
+    const p = songToPresentation({ title: e.title, key: e.key, sections: e.sections, progression: e.order.length ? e.order : undefined }, { themeId: 'theme_sunday', linesPerSlide: per, folder: song && !song.online ? song.folder ?? 'Songs' : 'Songs' });
+    const withSource = { ...p, songSource: { sections: e.sections, order: e.order.length ? e.order : undefined } };
+    const local = localId.current ?? library.presentations.find((x) => !x.online && x.title === e.title)?.id ?? null;
+    const { id: newId, ...patch } = withSource;
+    if (local) dispatch({ type: 'presentation/update', id: local, patch: { ...patch, templateKey: undefined } });
     else dispatch({ type: 'presentation/createMany', presentations: [withSource] });
-    notify(`“${e.title}”을(를) 이 컴퓨터에 저장했습니다 — 슬라이드 ${slideCount}장`);
+    localId.current = local ?? newId;
+  };
+
+  // A library song keeps its title in the shared library (a new title there would be a new song).
+  const shared = !!song?.online && !!trustedAdmin && title.trim() === song.title;
+  const registered = useRef(false);
+  useAutosave(entry(), (e) => {
+    if (registered.current) return;
+    if (shared) {
+      setSaveState('저장 중…');
+      const job = registerSharedSong(e, trustedAdmin)
+        .then(() => setSaveState('✓ 교회 찬양 라이브러리에 자동 저장됨'))
+        .catch((err: Error) => setSaveState(`⚠ 자동 저장 실패: ${err.message}`));
+      sharedSave.current = job;
+    } else {
+      writeLocal(e);
+      setSaveState('✓ 이 컴퓨터에 자동 저장됨');
+    }
+  }, { delay: shared ? 1500 : 700, enabled: !review && valid });
+
+  /** Closing: the last edit is already saved; the shared library is re-read when it changed. */
+  const done = () => {
     onClose();
+    const job = sharedSave.current;
+    if (job) job.then(reloadOnline);
   };
 
   const withAdmin = async (label: string, job: () => Promise<void>) => {
@@ -97,6 +126,8 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     setError(null);
     try {
       await job();
+      registered.current = true;
+      setTrustedAdmin(admin);
       try {
         sessionStorage.setItem(ADMIN_KEY, admin);
       } catch {
@@ -131,10 +162,10 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     });
   };
   const duplicate = !song && !review && title.trim() && findSong(library.presentations, title.trim());
-  const close = review ? review.onCancel : onClose;
+  const close = review ? review.onCancel : done;
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => !review && e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(e) => !review && e.target === e.currentTarget && done()}>
       <div className="modal song-editor" role="dialog" aria-label="찬양 편집">
         <header className="modal-head">
           <h2>🎵 {review ? `콘티 찬양 확인 ${review.index + 1}/${review.total}` : song ? '찬양 편집' : '새 찬양 등록'}</h2>
@@ -193,8 +224,9 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
           ) : (
             <>
               {song?.online && <button className="danger" disabled={!!busy} onClick={remove}>라이브러리에서 삭제</button>}
-              <button disabled={!valid || !!busy} onClick={saveLocal}>이 컴퓨터에만 저장</button>
-              <button className="primary" disabled={!valid || !!busy} onClick={register}>{busy ?? '교회 찬양 라이브러리에 등록'}</button>
+              <span className={saveState?.startsWith('⚠') ? 'warn small' : 'muted small'}>{saveState ?? '편집하면 자동으로 저장됩니다'}</span>
+              <button disabled={!valid || !!busy} onClick={register}>{busy ?? '교회 찬양 라이브러리에 등록'}</button>
+              <button className="primary" onClick={done}>닫기</button>
             </>
           )}
         </footer>

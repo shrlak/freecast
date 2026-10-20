@@ -4,7 +4,7 @@ import { uid } from '../domain/lyrics';
 import { putMedia } from '../domain/media';
 import { patchElement } from '../domain/templates/convert';
 import { CANVAS_H, CANVAS_W, ElementView as SlideElementSlot, SlideCanvas } from './SlideCanvas';
-import { useWidth } from './hooks';
+import { useAutosave, useWidth } from './hooks';
 
 interface Props {
   slide: Slide;
@@ -12,6 +12,7 @@ interface Props {
   background: Background | null;
   media: MediaMeta[];
   addMedia: (m: MediaMeta) => void;
+  /** Called as the slide is edited (autosave). */
   onSave: (elements: SlideElement[], text: string) => void;
   onClose: () => void;
 }
@@ -28,6 +29,7 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
   const fileRef = useRef<HTMLInputElement>(null);
   const k = width / CANVAS_W || 1;
   const selected = els.find((e) => e.id === sel);
+  useAutosave({ els, text }, (v) => onSave(v.els, v.text), { delay: 400 });
   const update = (id: string, patch: Partial<SlideElement>) => setEls((list) => list.map((e) => (e.id === id ? patchElement(e, patch) : e)));
 
   const add = (el: Omit<SlideElement, 'id' | 'x' | 'y' | 'w' | 'h'> & Partial<SlideElement>) => {
@@ -203,8 +205,8 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
         </div>
         <footer className="modal-foot">
           <span className="muted small grow">{els.length} objects</span>
-          <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={() => onSave(els, text)}>Save slide</button>
+          <span className="muted small">자동 저장 (되돌리기: ⌘/Ctrl+Z)</span>
+          <button className="primary" onClick={onClose}>닫기</button>
         </footer>
       </div>
     </div>

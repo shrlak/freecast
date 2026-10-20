@@ -184,7 +184,6 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           onClose={() => setDesigning(false)}
           onSave={(elements, text) => {
             dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch: { elements: elements.length ? elements : undefined, text } });
-            setDesigning(false);
           }} />
       )}
     </div>

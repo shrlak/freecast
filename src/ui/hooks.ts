@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LiveState } from '../domain/types';
 import { mediaUrl } from '../domain/media';
 import { openLiveChannel } from '../domain/sync';
@@ -125,4 +125,33 @@ export function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
     return () => ro.disconnect();
   }, []);
   return [ref, width];
+}
+
+/**
+ * Saves `value` a moment after it stops changing, and right away when the editor closes (unmounts)
+ * with a save still pending — edits never need a 저장 button. The value it starts with is not saved.
+ * Returns `flush`, to save a pending change now.
+ */
+export function useAutosave<T>(value: T, save: (v: T) => void, { delay = 700, enabled = true } = {}): () => void {
+  const key = JSON.stringify(value);
+  const saved = useRef(key);
+  const pending = useRef<{ v: T; key: string } | null>(null);
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const flush = useCallback(() => {
+    const p = pending.current;
+    pending.current = null;
+    if (!p || p.key === saved.current) return;
+    saved.current = p.key;
+    saveRef.current(p.v);
+  }, []);
+  useEffect(() => {
+    if (!enabled || key === saved.current) return;
+    pending.current = { v: value, key };
+    const t = setTimeout(flush, delay);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, enabled, delay, flush]);
+  useEffect(() => flush, [flush]);
+  return flush;
 }

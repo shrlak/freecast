@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Presentation, SongMeta, Theme, Transition, TransitionKind } from '../domain/types';
 import { parseLyrics, serializeLyrics, uid } from '../domain/lyrics';
+import { useAutosave } from './hooks';
 
 interface Props {
   presentation: Presentation | null;
   themes: Theme[];
-  onSave: (p: Presentation) => void;
+  /** Called as the presentation is edited (autosave); `isNew` the first time a new one is saved. */
+  onSave: (p: Presentation, isNew: boolean) => void;
   onClose: () => void;
 }
 
@@ -29,7 +31,10 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
   const preview = useMemo(() => parseLyrics(text, { maxLines }), [text, maxLines]);
   const setM = (k: keyof SongMeta, v: string) => setMeta((m) => ({ ...m, [k]: v || undefined }));
 
-  const save = () => {
+  const id = useRef(presentation?.id ?? uid('p'));
+  const created = useRef(!!presentation);
+
+  const build = (): Presentation => {
     // Keep slide ids and extras (headings, translations, notes, QR) where the slide still lines up.
     const old = presentation?.slides ?? [];
     const slides = preview.map((s, i) => {
@@ -38,9 +43,9 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
       if (o.text === s.text && o.group === s.group) return o;
       return o.group === s.group ? { ...o, text: s.text } : s;
     });
-    onSave({
+    return {
       ...(presentation ?? { themeId: themes[0].id }),
-      id: presentation?.id ?? uid('p'),
+      id: id.current,
       title: title.trim() || 'Untitled',
       folder: folder.trim() || undefined,
       slides,
@@ -48,8 +53,14 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
       transition,
       showCopyright,
       bgEffect: bgEffect.dim || bgEffect.blur ? bgEffect : undefined,
-    });
+    };
   };
+
+  // Every edit saves itself; a new presentation appears once it has a title or text.
+  useAutosave({ title, folder, text, maxLines, meta, transition, showCopyright, bgEffect }, () => {
+    onSave(build(), !created.current);
+    created.current = true;
+  }, { enabled: !!presentation || !!title.trim() || !!text.trim() });
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -113,8 +124,8 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
           </div>
         </div>
         <footer className="modal-foot">
-          <button onClick={onClose}>Cancel</button>
-          <button className="primary" onClick={save}>Save</button>
+          <span className="muted small grow">편집하면 자동으로 저장됩니다 (되돌리기: ⌘/Ctrl+Z)</span>
+          <button className="primary" onClick={onClose}>닫기</button>
         </footer>
       </div>
     </div>
