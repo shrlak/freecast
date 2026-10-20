@@ -2,8 +2,8 @@ import { useMemo, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
 import type { Library } from '../../domain/types';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
-import { findSong, titleKey } from '../../domain/sunday/songs';
-import { songSections } from '../../domain/templates/confession';
+import { titleKey } from '../../domain/sunday/songs';
+import { findConfessionSong, songSections } from '../../domain/templates/confession';
 
 /**
  * This season's 공동체 고백송 (it changes every semester or year). Saving it rewrites the
@@ -24,7 +24,7 @@ export function ConfessionSetting({ library, dispatch, onClose, notify }: { libr
   }, [library.presentations]);
   const q = titleKey(query);
   const matches = q ? songs.filter((p) => titleKey(p.title).includes(q)).slice(0, 40) : [];
-  const chosen = findSong(library.presentations, title);
+  const chosen = findConfessionSong(library.presentations, title);
   const lines = chosen ? songSections(chosen).flat().length : 0;
 
   const save = () => {

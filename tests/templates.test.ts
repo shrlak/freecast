@@ -192,7 +192,7 @@ describe('church Back deck', () => {
 });
 
 describe('공동체 고백송 and template deck sync', async () => {
-  const { applyConfessionSong, findConfessionBlock } = await import('../src/domain/templates/confession');
+  const { applyConfessionSong, findConfessionBlock, findConfessionSong, songSections } = await import('../src/domain/templates/confession');
   const { templateDeckUpdates } = await import('../src/domain/templates/register');
   const bg = (id: string) => ({ kind: 'media', mediaId: `tpl-abc-${id}`, mediaType: 'image', fit: 'cover' }) as const;
   const back: Slide[] = [
@@ -223,6 +223,48 @@ describe('공동체 고백송 and template deck sync', async () => {
     expect(out[1].background).toEqual(back[1].background);
     expect(texts(out.at(-1)!)).toEqual(['Happy Lord’s Day']);
     expect(applyConfessionSong(out, song)).toBe(out);
+  });
+
+  it('prints every part of the song, whatever 진행 a service copy of it plays', () => {
+    // A copy placed in a past service by a 콘티 plays only “Verse 1”, and sits before the online song.
+    const copy: Presentation = {
+      ...song, id: 'p_copy', online: undefined, folder: '1018 주일예배',
+      slides: [{ id: 't', group: 'Title', text: '우리는 주의 움직이는 교회' }, ...song.slides],
+      arrangements: [{ id: 'all', name: 'all', groups: ['Title', 'Verse 1', 'Chorus'] }, { id: 'v1', name: 'V1', groups: ['Title', 'Verse 1'] }],
+      arrangementId: 'v1',
+    };
+    expect(songSections(copy)).toEqual([['A1', 'A2', 'A3', 'A4', 'A5'], ['C1', 'C2']]);
+    expect(findConfessionSong([copy, song], song.title)).toBe(song);
+    const lib = createSeedLibrary();
+    lib.presentations.push(copy, song);
+    const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1', song: 's1' } };
+    const backPatch = templateDeckUpdates(lib, tpl).find((u) => u.id === lib.sunday.backId)!.patch;
+    const lyrics = backPatch.slides!.slice(1, -1).map((s) => s.elements!.find((e) => e.w === 1411)!.text);
+    expect(lyrics).toEqual(['A1\nA2\nA3', 'A4\nA5', 'C1\nC2']);
+  });
+
+  it('rewrites a block that already names the song but holds only part of it', () => {
+    const partial = applyConfessionSong(back, { ...song, slides: song.slides.slice(0, 1) })!;
+    expect(partial).toHaveLength(3);
+    const out = applyConfessionSong(partial, song)!;
+    expect(out.slice(1, -1).map((s) => s.elements![1].text)).toEqual(['A1\nA2\nA3', 'A4\nA5', 'C1\nC2']);
+  });
+
+  it('keeps lyrics and corner title apart when the first line is the song’s name', () => {
+    const named: Presentation = { ...song, slides: [{ id: 'a', group: 'Verse 1', text: '우리는 주의 움직이는 교회\nA2' }, { id: 'c', group: 'Chorus', text: 'C1\nC2' }] };
+    const once = applyConfessionSong(back, named)!;
+    const again = applyConfessionSong(once, named, 1)!;
+    expect(again.slice(1, -1).map((s) => s.elements!.map((e) => e.text))).toEqual([
+      ['우리 모일 때', '우리는 주의 움직이는 교회', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'A2', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'C1', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'C2', '우리는 주의 움직이는 교회'],
+    ]);
+  });
+
+  it('splits parts at the given lines per slide', () => {
+    const out = applyConfessionSong(back, song, 2)!;
+    expect(out.slice(1, -1).map((s) => s.elements![1].text)).toEqual(['A1\nA2', 'A3\nA4', 'A5', 'C1\nC2']);
   });
 
   it('brings the library Front/Back decks in line with the templates and the 고백송', () => {

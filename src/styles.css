@@ -528,6 +528,13 @@ body[data-view='multiview'] { overflow: auto; }
 .ppt-thumb.hidden-slide .ppt-thumb-frame { opacity: .4; }
 .ppt-group { position: absolute; left: 0; bottom: 0; font-size: 9.5px; color: #fff; padding: 0 5px; border-top-right-radius: 3px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ppt-add { margin: 4px 0 0 28px; }
+/* The whole playlist in the slide pane: its sections, then each presentation's title. */
+.ppt-pane-section { margin: 8px -8px 0 -4px; padding: 5px 12px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: #163a62; }
+.ppt-pane-pres { margin: 2px 4px 0 22px; padding: 3px 8px; font-size: 12.5px; font-weight: 700; color: #201f1e; border-bottom: 1px solid #d2d0ce; cursor: pointer; }
+.ppt-pane-pres:hover { color: #14532d; }
+.ppt-pane-pres.on { color: #14532d; border-bottom: 2px solid #4bc789; }
+.ppt-slides > * { flex-shrink: 0; }
+.ppt-slides .ppt-thumb { content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .ppt-center { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #e9e7e5; }
 .ppt-stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; min-height: 0; }
 .ppt-canvas { width: min(100%, calc((100vh - 330px) * 4 / 3)); box-shadow: 0 2px 10px rgba(0,0,0,.25); cursor: text; }

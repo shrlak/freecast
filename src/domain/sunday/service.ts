@@ -6,7 +6,7 @@ import { planPrayerSlides, prayerSlideText, type PrayerTopic } from './prayer';
 import type { Announcement } from './announcements';
 import { mdy, mmdd } from './notice';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
-import { applyConfessionSong } from '../templates/confession';
+import { applyConfessionSong, findConfessionSong } from '../templates/confession';
 import { announcementSlides, backSlides, fillFront, isPlaceholderBack, prayerSlide, scriptureSlides, sermonTitleSlide, songInTemplate, type ScriptureFill } from '../templates/fill';
 
 export interface ServiceInput {
@@ -152,10 +152,10 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
     add(make(`${mmdd(input.date)} Back`, backSlides(tpl), 'theme_classic', black), true);
   } else if (back) {
     const confessionTitle = input.confessionSong || sunday.confessionSong;
-    const confession = confessionTitle ? findSong(lib.presentations, confessionTitle) : undefined;
+    const confession = confessionTitle ? findConfessionSong(lib.presentations, confessionTitle) : undefined;
     if (confessionTitle && !confession) warnings.push(`공동체 고백 “${confessionTitle}” is not in the library — the placeholder slide stays`);
     // The church Back deck prints the 고백송 itself: rewrite that block; FreeCast's own Back has a placeholder slide.
-    const rewritten = confession ? applyConfessionSong(back.slides, confession) : null;
+    const rewritten = confession ? applyConfessionSong(back.slides, confession, sunday.linesPerSlide) : null;
     const slides = rewritten
       ? rewritten.map((s) => ({ ...s, id: uid('s') }))
       : back.slides.flatMap((s) =>

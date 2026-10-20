@@ -1,9 +1,9 @@
-import { Fragment, useEffect, useState, type Dispatch } from 'react';
+import { useEffect, useMemo, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Slide } from '../../domain/types';
-import { groupColor, uid } from '../../domain/lyrics';
+import { uid } from '../../domain/lyrics';
 import { sequence } from '../../domain/arrangement';
-import { SlideCanvas } from '../SlideCanvas';
+import { activePlaylist } from '../../domain/live';
 import { SlideFormat } from './SlideFormat';
 import { CanvasEditor } from './CanvasEditor';
 import { SlideDesigner } from '../SlideDesigner';
@@ -12,6 +12,8 @@ import { LibraryPanel } from '../LibraryPanel';
 import { Ribbon } from './Ribbon';
 import { PresenterView } from './PresenterView';
 import type { Commands } from './commands';
+import { SlidePane, paneSlideId } from './SlidePane';
+import { paneSource, selectedRow, slidePaneRows, type PaneSlide } from './paneRows';
 
 interface Props {
   state: AppState;
@@ -31,7 +33,25 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   const index = p && slide ? p.slides.indexOf(slide) : -1;
   const theme = (p && state.library.themes.find((t) => t.id === p.themeId)) || state.library.themes[0];
   const background = slide?.background ?? p?.background ?? null;
-  const liveSlideId = state.live.slide?.id;
+
+  // The 슬라이드 pane lists the whole playlist (or the presentation picked on its own).
+  const playlist = activePlaylist(state);
+  const source = paneSource(state.library, playlist, state.playlistIndex, state.selectedId);
+  const rows = useMemo(() => slidePaneRows(state.library, source),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.library.presentations, state.library.playlists, state.activePlaylistId, state.playlistIndex, state.selectedId]);
+  const paneSlides = useMemo(() => rows.filter((r): r is PaneSlide => r.kind === 'slide'), [rows]);
+  const [paneKey, setPaneKey] = useState<string | null>(null);
+  const selected = selectedRow(rows, paneKey, p?.id, slide?.id, state.playlistIndex);
+  /** The playlist item the edited presentation is open from (null: shown on its own). */
+  const item = selected?.itemIndex ?? (source && 'playlist' in source
+    ? state.playlistIndex ?? source.playlist.items.findIndex((i) => i.kind !== 'header' && i.presentationId === p?.id)
+    : null);
+  const pick = (r: PaneSlide) => {
+    if (r.itemIndex !== null && r.itemIndex !== state.playlistIndex) dispatch({ type: 'playlist/select', index: r.itemIndex });
+    cmd.setSlideId(r.slide.id);
+    setPaneKey(r.key);
+  };
 
   // Keep the selection valid when switching presentations.
   useEffect(() => {
@@ -39,24 +59,26 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p?.id, p?.slides.length]);
 
-  // Up/Down (and PageUp/PageDown) move through slides while editing, like PowerPoint's slide pane.
+  // Up/Down (and PageUp/PageDown) move through the slide pane's list while editing, like PowerPoint's
+  // slide pane — on into the next presentation of the playlist.
   useEffect(() => {
     if (cmd.view === 'presenter') return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (!p || t.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('.modal-backdrop')) return;
+      if (!paneSlides.length || t.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('.modal-backdrop')) return;
       const step = { ArrowDown: 1, ArrowRight: 1, PageDown: 1, ArrowUp: -1, ArrowLeft: -1, PageUp: -1 }[e.key];
       if (!step) return;
       e.preventDefault();
-      const next = p.slides[Math.min(p.slides.length - 1, Math.max(0, index + step))];
+      const at = selected ? paneSlides.indexOf(selected) : -1;
+      const next = paneSlides[Math.min(paneSlides.length - 1, Math.max(0, at + step))];
       if (next) {
-        cmd.setSlideId(next.id);
-        document.getElementById(`pslide-${next.id}`)?.scrollIntoView({ block: 'nearest' });
+        pick(next);
+        document.getElementById(paneSlideId(next))?.scrollIntoView({ block: 'nearest' });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [p, index, cmd]);
+  });
 
   const updateSlides = (slides: Slide[]) => p && dispatch({ type: 'presentation/update', id: p.id, patch: { slides } });
   const slideMenu = (id: string, action: 'dup' | 'del' | 'up' | 'down' | 'skip' | 'live') => {
@@ -98,28 +120,10 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           {leftTab === 'library' ? (
             <LibraryPanel state={state} dispatch={dispatch} onNew={() => cmd.open('new')} online={cmd.online} onReloadOnline={cmd.reloadOnline} />
           ) : (
-            <div className="ppt-slides">
-              <div className="ppt-pres-title truncate" title={p?.title}>{p ? p.title : '프레젠테이션을 선택하세요'}</div>
-              {/* Every slide in play order (a song follows its 진행, repeats included), grouped by part. */}
-              {p && sequence(p).map(({ slide: s }, i, all) => (
-                <Fragment key={`${s.id}-${i}`}>
-                {(i === 0 || all[i - 1].slide.group !== s.group) && (
-                  <div className="ppt-section" style={{ borderColor: groupColor(s.group) }}>{s.label || s.group}</div>
-                )}
-                <div id={all.findIndex((x) => x.slide.id === s.id) === i ? `pslide-${s.id}` : undefined} className={`ppt-thumb ${s.id === slide?.id ? 'sel' : ''} ${s.disabled ? 'hidden-slide' : ''}`}
-                  onClick={() => cmd.setSlideId(s.id)}
-                  onDoubleClick={() => slideMenu(s.id, 'live')}
-                  onContextMenu={(e) => { e.preventDefault(); cmd.setSlideId(s.id); setMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}>
-                  <span className="ppt-num">{i + 1}{s.id === liveSlideId && <b className="ppt-live-dot" title="Live" />}</span>
-                  <div className="ppt-thumb-frame" style={{ borderColor: s.id === slide?.id ? undefined : 'transparent' }}>
-                    <SlideCanvas slide={s} theme={theme} background={s.background ?? p.background ?? null} bgEffect={p.bgEffect} />
-                    <span className="ppt-group" style={{ background: groupColor(s.group) }}>{s.label || s.group}</span>
-                  </div>
-                </div>
-                </Fragment>
-              ))}
-              {p && <button className="ppt-add" onClick={() => { const n = { id: uid('s'), group: slide?.group ?? 'Slide', text: '' }; updateSlides([...p.slides, n]); cmd.setSlideId(n.id); }}>＋ 새 슬라이드</button>}
-            </div>
+            <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick}
+              heading={source && 'playlist' in source ? source.playlist.name : p?.title ?? ''}
+              onMenu={(x, y, id) => setMenu({ x, y, id })}
+              onAdd={() => { if (!p) return; const n = { id: uid('s'), group: slide?.group ?? 'Slide', text: '' }; updateSlides([...p.slides, n]); cmd.setSlideId(n.id); }} />
           )}
         </aside>
 

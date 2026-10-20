@@ -6,8 +6,9 @@
 // carry that name (in their corner title). The marker gets the new name, and the new song's
 // lyric slides are copies of the block's own first lyric slide, so the design stays exactly.
 import type { Presentation, Slide, SlideElement } from '../types';
-import { sequence } from '../arrangement';
 import { stripChords } from '../lyrics';
+import { splitEvenly, titleKey } from '../sunday/songs';
+import { DEFAULT_LINES_PER_SLIDE } from '../sunday/slidePlanner';
 import { fillSlide } from './convert';
 
 const MARKER = '공동체고백';
@@ -36,10 +37,14 @@ export function findConfessionBlock(slides: Slide[]): ConfessionBlock | null {
   return { marker, lyrics, title };
 }
 
-/** The song's lyrics as sections of lines, in play order (repeats kept, chords and Title slide left out). */
+/**
+ * The song's lyrics as sections of lines: every part, in slide order (chords, hidden slides and the
+ * Title slide left out). The whole song is printed whatever 진행 the copy has selected — a 콘티's
+ * order can name only some of its parts.
+ */
 export function songSections(song: Presentation): string[][] {
   const sections: { group: string; lines: string[] }[] = [];
-  for (const { slide } of sequence(song)) {
+  for (const slide of song.slides) {
     if (slide.group === 'Title' || slide.disabled) continue;
     const lines = stripChords(slide.text).split('\n').map((l) => l.trim()).filter(Boolean);
     if (!lines.length) continue;
@@ -50,43 +55,49 @@ export function songSections(song: Presentation): string[][] {
   return sections.map((s) => s.lines);
 }
 
-/** Split a section into slides of at most `max` lines, as evenly as possible. */
-function chunk(lines: string[], max: number): string[][] {
-  const count = Math.ceil(lines.length / max);
-  const size = Math.ceil(lines.length / count);
-  const out: string[][] = [];
-  for (let i = 0; i < lines.length; i += size) out.push(lines.slice(i, i + size));
-  return out;
+/**
+ * The song to print as the 공동체 고백송: the 찬양 라이브러리's own copy when there is one, else the
+ * copy with the most lyrics — not whichever comes first, which can be a past service's copy.
+ */
+export function findConfessionSong(presentations: Presentation[], title: string): Presentation | undefined {
+  const k = titleKey(title);
+  if (!k) return undefined;
+  const lineCount = (p: Presentation) => songSections(p).flat().length;
+  const all = presentations.filter((p) => titleKey(p.title) === k && lineCount(p) > 0);
+  return all.find((p) => p.online) ?? [...all].sort((a, b) => lineCount(b) - lineCount(a))[0];
 }
 
 const replaceTitle = (text: string, from: string, to: string) => (norm(text) === norm(from) ? to : text.split(from).join(to));
 
 /**
- * The Back deck with its 공동체 고백송 replaced by `song`; null when the deck has no
- * recognisable block or the song has no lyrics. A deck that already prints the song comes back as is.
+ * The Back deck with its 공동체 고백송 replaced by all of `song`, each part split into slides of at
+ * most `maxLines` lines; null when the deck has no recognisable block or the song has no lyrics.
+ * A deck that already prints exactly these lyrics comes back as is.
  */
-export function applyConfessionSong(back: Slide[], song: Presentation): Slide[] | null {
+export function applyConfessionSong(back: Slide[], song: Presentation, maxLines = DEFAULT_LINES_PER_SLIDE): Slide[] | null {
   const block = findConfessionBlock(back);
   if (!block || !block.lyrics.length) return null;
-  if (norm(block.title) === norm(song.title)) return back;
   const sections = songSections(song);
   if (!sections.length) return null;
 
   const design = back[block.lyrics[0]];
   const key = norm(block.title);
-  const titleBox = textEls(design).find((e) => norm(e.text ?? '').includes(key));
-  const lyricBox = textEls(design)
-    .filter((e) => e !== titleBox)
-    .sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  // The lyrics are the largest box; the corner title is another box naming the song (the lyrics
+  // can name it too — a song often opens with its own title).
+  const lyricBox = [...textEls(design)].sort((a, b) => b.w * b.h - a.w * a.h)[0];
   if (!lyricBox) return null;
-  const linesOf = (s: Slide) => {
-    const box: SlideElement | undefined = textEls(s).filter((e) => !norm(e.text ?? '').includes(key)).sort((a, b) => b.w * b.h - a.w * a.h)[0];
-    return (box?.text ?? '').split('\n').filter((l) => l.trim()).length;
+  const titleBox = textEls(design).find((e) => e !== lyricBox && norm(e.text ?? '').includes(key));
+  const chunks = sections.flatMap((lines) => splitEvenly(lines, maxLines));
+  const lyricsOf = (s: Slide) => {
+    const box: SlideElement | undefined = [...textEls(s)].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+    return (box?.text ?? '').split('\n').map((l) => l.trim()).filter(Boolean).join('\n');
   };
-  const max = Math.max(2, ...block.lyrics.map((i) => linesOf(back[i])));
+  const same = norm(block.title) === norm(song.title) && block.lyrics.length === chunks.length
+    && block.lyrics.every((i, n) => lyricsOf(back[i]) === chunks[n].join('\n'));
+  if (same) return back;
 
   const marker = fillSlide(back[block.marker], (t) => replaceTitle(t, block.title, song.title));
-  const lyrics = sections.flatMap((lines) => chunk(lines, max)).map((lines) =>
+  const lyrics = chunks.map((lines) =>
     fillSlide(design, (t, el) => (el.id === lyricBox.id ? lines.join('\n') : el.id === titleBox?.id ? replaceTitle(t, block.title, song.title) : t), { group: '공동체 고백송' }),
   );
   const end = block.lyrics[block.lyrics.length - 1] + 1;

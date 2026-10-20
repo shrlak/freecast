@@ -6,12 +6,11 @@
 // itself changes, or when it is still FreeCast's built-in placeholder.
 import type { Library, Presentation } from '../types';
 import { DEFAULT_CONFESSION_SONG } from '../defaults';
-import { findSong } from '../sunday/songs';
 import { fillSlide } from './convert';
 import { fillFront, refreshFront } from './fill';
 import { parsePrayerTopics } from '../sunday/prayer';
 import { mdy, upcomingSunday } from '../sunday/notice';
-import { applyConfessionSong, songSections } from './confession';
+import { applyConfessionSong, findConfessionSong, songSections } from './confession';
 import type { ServiceTemplates } from './serviceTemplates';
 
 const PLACEHOLDER_SLIDES = { front: 'front_prayer', back: 'back_confession' } as const;
@@ -52,16 +51,17 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
   const back = byId(lib.sunday.backId);
   if (back && tpl.back?.length && tpl.keys.back) {
     const title = lib.sunday.confessionSong.trim() || DEFAULT_CONFESSION_SONG;
-    const song = findSong(lib.presentations, title);
+    const song = findConfessionSong(lib.presentations, title);
+    const lines = lib.sunday.linesPerSlide;
     const lyrics = song ? songSections(song) : [];
-    const backKey = `back:${tpl.keys.back}|${song ? `${song.title}:${hash(JSON.stringify(lyrics))}` : '-'}`;
+    const backKey = `back:${tpl.keys.back}|${song ? `${song.title}:${lines}:${hash(JSON.stringify(lyrics))}` : '-'}`;
     if (back.templateKey !== backKey) {
       if (back.templateKey?.startsWith(`back:${tpl.keys.back}|`)) {
         // Same church file: only the 공동체 고백송 block is rewritten, edits elsewhere stay.
-        out.push({ id: back.id, patch: { templateKey: backKey, slides: (song && applyConfessionSong(back.slides, song)) || back.slides } });
+        out.push({ id: back.id, patch: { templateKey: backKey, slides: (song && applyConfessionSong(back.slides, song, lines)) || back.slides } });
       } else if (isPlaceholder(back, 'back') || fromTemplates(back, 'back')) {
         const slides = tpl.back.map((s) => fillSlide(s, (t) => t));
-        out.push({ id: back.id, patch: { ...base, templateKey: backKey, slides: (song && applyConfessionSong(slides, song)) || slides } });
+        out.push({ id: back.id, patch: { ...base, templateKey: backKey, slides: (song && applyConfessionSong(slides, song, lines)) || slides } });
       }
     }
   }
