@@ -338,7 +338,8 @@ body[data-view='remote'] { overflow: auto; }
 .remote-slides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .remote-slides button { position: relative; padding: 0; overflow: hidden; border: 2px solid transparent; border-radius: 6px; background: #000; display: block; }
 .remote-slide-num { position: absolute; left: 4px; bottom: 4px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,.65); color: #fff; }
-.remote-pin { align-items: center; padding-top: 30vh; }
+.remote-pin { align-items: stretch; padding-top: 20vh; max-width: 320px; text-align: center; }
+.remote-pin input { font-size: 24px; text-align: center; padding: 12px; }
 @media (max-width: 1100px) { .two-col, .screens-body { grid-template-columns: 1fr; } }
 
 /* ================= v3 additions ================= */

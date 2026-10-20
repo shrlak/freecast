@@ -50,7 +50,17 @@ export function startServer({ root, port, host = '127.0.0.1', publicPin = () => 
   // Visitors on the public internet address get the app files and the remote relay only:
   // no AI, cloud, DMX or control endpoints.
   const everything = (req, res) => aiMiddleware(req, res, () => recognitionMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res))))));
-  const server = http.createServer((req, res) => (isPublicHost(req.headers.host) ? serveStatic(req, res) : everything(req, res)));
+  // The console (and its login) is never offered on the internet address: any page there is the remote.
+  const publicPage = (req, res) => {
+    const url = new URL(req.url ?? '/', 'http://local');
+    if (!/\.\w+$/.test(url.pathname) && url.searchParams.get('view') !== 'remote') {
+      const pin = url.searchParams.get('pin');
+      res.writeHead(302, { location: `/?view=remote${pin ? `&pin=${encodeURIComponent(pin)}` : ''}` });
+      return res.end();
+    }
+    serveStatic(req, res);
+  };
+  const server = http.createServer((req, res) => (isPublicHost(req.headers.host) ? publicPage(req, res) : everything(req, res)));
   const wss = attachRelay(server, { publicPin });
   control = controlMiddleware(wss);
   return new Promise((resolve, reject) => {
