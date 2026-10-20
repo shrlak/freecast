@@ -12,12 +12,12 @@ export interface CloudStatus {
   lastSync: number | null;
 }
 
-const PUSH_DELAY = 2500;
+const PUSH_DELAY = 1000;
 const POLL_EVERY = 20_000;
 
 /**
  * Keeps this computer's library in step with the church cloud library while signed in:
- * pull + merge on start and every 20 s, push 2.5 s after any change, media both ways.
+ * pull + merge on start and every 20 s, push 1 s after any change, media both ways.
  */
 export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notify: (m: string) => void) {
   const [status, setStatus] = useState<CloudStatus>(() => ({ session: loadSession(), state: loadSession() ? 'syncing' : 'off', message: null, lastSync: null }));
