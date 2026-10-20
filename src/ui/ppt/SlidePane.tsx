@@ -4,6 +4,7 @@ import type { Presentation, Slide } from '../../domain/types';
 import { groupColor } from '../../domain/lyrics';
 import { SlideCanvas } from '../SlideCanvas';
 import type { PaneRow, PaneSlide } from './paneRows';
+import { resolveBackground } from '../../domain/autoBackground';
 
 interface Props {
   state: AppState;
@@ -53,7 +54,7 @@ export function SlidePane({ state, dispatch, rows, heading, p, item, selected, p
         onContextMenu={(e) => { e.preventDefault(); pick(r); onMenu(e.clientX, e.clientY, s.id); }}>
         <span className="ppt-num">{r.number}{s.id === liveSlideId && <b className="ppt-live-dot" title="Live" />}</span>
         <div className="ppt-thumb-frame" style={{ borderColor: sel ? undefined : 'transparent' }}>
-          <SlideCanvas slide={s} theme={theme} background={s.background ?? pres.background ?? null} bgEffect={pres.bgEffect} />
+          <SlideCanvas slide={s} theme={theme} background={resolveBackground(s, pres)} bgEffect={pres.bgEffect} />
           <span className="ppt-group" style={{ background: groupColor(s.group) }}>{s.label || s.group}</span>
         </div>
       </div>

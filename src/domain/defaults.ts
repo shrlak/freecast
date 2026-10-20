@@ -18,49 +18,32 @@ export const DEFAULT_THEMES: Theme[] = [
   { id: 'theme_info', name: 'Info / 광고', fontFamily: SANS, fontSize: 52, fontWeight: 500, color: '#ffffff', align: 'left', vAlign: 'top', lineHeight: 1.45, padding: 120, shadow: false, uppercase: false, ...base },
 ];
 
+/** The only backgrounds: the church template's white slide with the KCCP logo (the 1018 예배 look), black and white. */
+export const BG_WHITE_LOGO: Background = { kind: 'image', url: 'backgrounds/white-logo.png', fit: 'cover' };
+export const BG_BLACK: Background = { kind: 'color', value: '#000000' };
+export const BG_WHITE: Background = { kind: 'color', value: '#ffffff' };
+
 export const BACKGROUND_PRESETS: { name: string; background: Background }[] = [
-  // The church template's white slide with the KCCP 빛주사랑 logo in the top-right corner.
-  { name: 'KCCP 흰색 + 로고', background: { kind: 'image', url: 'backgrounds/white-logo.png', fit: 'cover' } },
-  { name: 'KCCP Navy', background: { kind: 'gradient', value: 'linear-gradient(160deg,#0d2742 0%,#163a62 60%,#1f4f7f 100%)' } },
-  { name: 'KCCP Green', background: { kind: 'gradient', value: 'linear-gradient(150deg,#163a62 0%,#2e9e66 70%,#4bc789 100%)' } },
-  { name: 'KCCP Light', background: { kind: 'gradient', value: 'linear-gradient(180deg,#ffffff 0%,#ffffff 86%,#fde718 86%,#fde718 93%,#4bc789 93%)' } },
-  { name: 'Black', background: { kind: 'color', value: '#000000' } },
-  { name: 'Midnight', background: { kind: 'gradient', value: 'linear-gradient(135deg,#0f172a,#1e3a8a)' } },
-  { name: 'Royal', background: { kind: 'gradient', value: 'linear-gradient(135deg,#2e1065,#7c3aed)' } },
-  { name: 'Sunset', background: { kind: 'gradient', value: 'linear-gradient(160deg,#7c2d12,#db2777)' } },
-  { name: 'Forest', background: { kind: 'gradient', value: 'linear-gradient(160deg,#052e16,#15803d)' } },
-  { name: 'Slate', background: { kind: 'gradient', value: 'radial-gradient(circle at 30% 30%,#334155,#020617)' } },
-  { name: 'Paper', background: { kind: 'color', value: '#f5f0e6' } },
+  { name: 'KCCP 흰색 + 로고', background: BG_WHITE_LOGO },
+  { name: 'Black', background: BG_BLACK },
+  { name: 'White', background: BG_WHITE },
 ];
 
-export const presetBackground = (name: string): Background => (BACKGROUND_PRESETS.find((p) => p.name === name) ?? BACKGROUND_PRESETS[0]).background;
+export const presetBackground = (name: string): Background => (BACKGROUND_PRESETS.find((p) => p.name === name) ?? BACKGROUND_PRESETS[1]).background;
 
-/** Backgrounds from the church's PPT templates (shrlak/ppt 주일예배 & 수련회). */
-const img = (file: string) => ({ kind: 'image', url: `backgrounds/${file}` }) as const;
+/** Old names for the backgrounds that were removed: the light 주일 look is now the white template slide, everything else is black. */
 export const CHURCH_BACKGROUNDS = {
-  watercolor: img('sunday-watercolor.jpg'),
-  communion: img('communion.jpg'),
-  worship: img('worship.jpg'),
-  cross: img('church-cross.jpg'),
-  bible: img('bible.jpg'),
-  nightSky: img('night-sky.jpg'),
-  prayer: img('prayer.jpg'),
-  sanctuary: img('sanctuary.jpg'),
-  thankYou: { kind: 'image', url: 'backgrounds/thank-you.jpg', fit: 'contain' } as Background,
+  watercolor: BG_WHITE_LOGO,
+  communion: BG_BLACK,
+  worship: BG_BLACK,
+  cross: BG_BLACK,
+  bible: BG_BLACK,
+  nightSky: BG_BLACK,
+  prayer: BG_BLACK,
+  sanctuary: BG_BLACK,
+  thankYou: BG_BLACK,
 } satisfies Record<string, Background>;
 export const CHURCH_LOGO_URL = 'backgrounds/church-logo.jpg';
-
-BACKGROUND_PRESETS.push(
-  { name: '주일 수채화', background: CHURCH_BACKGROUNDS.watercolor },
-  { name: '성찬예식', background: CHURCH_BACKGROUNDS.communion },
-  { name: '찬양', background: CHURCH_BACKGROUNDS.worship },
-  { name: '교회 십자가', background: CHURCH_BACKGROUNDS.cross },
-  { name: '성경', background: CHURCH_BACKGROUNDS.bible },
-  { name: '밤하늘', background: CHURCH_BACKGROUNDS.nightSky },
-  { name: '기도', background: CHURCH_BACKGROUNDS.prayer },
-  { name: '예배당', background: CHURCH_BACKGROUNDS.sanctuary },
-  { name: 'Thank you', background: CHURCH_BACKGROUNDS.thankYou },
-);
 
 // Public-domain texts (John Newton, 1779; Thomas Ken, 1674).
 const AMAZING_GRACE = `[Verse 1]
@@ -156,7 +139,7 @@ export const DEFAULT_SCREENS: Screen[] = [
 
 export function createSeedLibrary(): Library {
   const presentations = [
-    seed('p_welcome', 'Welcome', WELCOME, 'theme_kccp', presetBackground('KCCP Navy')),
+    seed('p_welcome', 'Welcome', WELCOME, 'theme_kccp', presetBackground('Black')),
     seed('p_grace', 'Amazing Grace', AMAZING_GRACE, 'theme_classic'),
     seed('p_doxology', 'Doxology', DOXOLOGY, 'theme_classic'),
     ...sundayTemplates(),
@@ -194,7 +177,7 @@ export function createSeedLibrary(): Library {
       { id: 'msg_free', name: 'Free text', template: '{message}' },
     ],
     macros: [
-      { id: 'macro_pre', name: 'Pre-service', color: '#2563eb', steps: [{ type: 'clearText' }, { type: 'background', background: presetBackground('KCCP Navy') }, { type: 'prop', propId: 'prop_countdown', on: true }, { type: 'timer', timerId: 'timer_service', op: 'start' }] },
+      { id: 'macro_pre', name: 'Pre-service', color: '#2563eb', steps: [{ type: 'clearText' }, { type: 'background', background: presetBackground('Black') }, { type: 'prop', propId: 'prop_countdown', on: true }, { type: 'timer', timerId: 'timer_service', op: 'start' }] },
       { id: 'macro_start', name: 'Start service', color: '#16a34a', steps: [{ type: 'prop', propId: 'prop_countdown', on: false }, { type: 'go', presentationId: 'p_welcome', index: 0 }] },
       { id: 'macro_sermon', name: 'Sermon', color: '#9333ea', steps: [{ type: 'clearText' }, { type: 'timer', timerId: 'timer_sermon', op: 'reset' }, { type: 'timer', timerId: 'timer_sermon', op: 'start' }] },
       { id: 'macro_end', name: 'End / Black', color: '#dc2626', steps: [{ type: 'clearAll' }, { type: 'clearProps' }, { type: 'audio', mediaId: null }] },
@@ -226,7 +209,7 @@ export function createEmptyLive(lib: Library): LiveState {
   return {
     slide: null, title: null, nextText: null, theme: lib.themes[0],
     transition: { kind: 'fade', duration: 300 },
-    background: presetBackground('KCCP Navy'), black: false, message: null,
+    background: presetBackground('Black'), black: false, message: null,
     activeProps: [], props: lib.props, timers: lib.timers, outputTimerId: null,
     screens: lib.screens, themes: lib.themes, copyright: null,
     video: { playing: true, restart: 0, loop: true },

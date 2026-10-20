@@ -1,5 +1,6 @@
 import type { Library, LiveState, Playlist, Presentation, Slide, Theme } from './types';
 import { sequence } from './arrangement';
+import { resolveBackground } from './autoBackground';
 
 export interface Cursor {
   presentationId: string;
@@ -102,7 +103,7 @@ export function goLive<S extends NavState>(s: S, c: Cursor): S {
       nextText: nextSlide ? [nextSlide.title, nextSlide.text].filter(Boolean).join('\n') : null,
       theme: themeFor(s.library, p),
       transition: slide.transition ?? p.transition ?? s.live.transition,
-      background: slide.background ?? p.background ?? s.live.background,
+      background: resolveBackground(slide, p),
       bgEffect: p.bgEffect ?? null,
       black: false,
       copyright: first || !next || next.presentationId !== p.id ? copyrightLine(p) : null,

@@ -14,6 +14,7 @@ import { PresenterView } from './PresenterView';
 import type { Commands } from './commands';
 import { SlidePane, paneSlideId } from './SlidePane';
 import { paneSource, selectedRow, slidePaneRows, type PaneSlide } from './paneRows';
+import { resolveBackground } from '../../domain/autoBackground';
 
 interface Props {
   state: AppState;
@@ -32,7 +33,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   const slide = p?.slides.find((s) => s.id === cmd.slideId) ?? p?.slides[0] ?? null;
   const index = p && slide ? p.slides.indexOf(slide) : -1;
   const theme = (p && state.library.themes.find((t) => t.id === p.themeId)) || state.library.themes[0];
-  const background = slide?.background ?? p?.background ?? null;
+  const background = slide ? resolveBackground(slide, p) : null;
 
   // The 슬라이드 pane lists the whole playlist (or the presentation picked on its own).
   const playlist = activePlaylist(state);
