@@ -4,6 +4,7 @@ import type { Library } from '../../domain/types';
 import { parsePrayerTopics, planPrayerSlides } from '../../domain/sunday/prayer';
 import { mdy, upcomingSunday } from '../../domain/sunday/notice';
 import { useAutosave } from '../hooks';
+import { AutoTextarea } from '../AutoTextarea';
 
 /**
  * This week's 기도제목. Saved in the 주일예배 settings; the library's 주일예배 Front deck
@@ -27,7 +28,7 @@ export function PrayerSetting({ library, dispatch, onClose }: { library: Library
         </header>
         <div className="wizard-body stack">
           <p className="hint">여기 적은 기도제목이 주일예배 Front의 “지금은 기도로 예배를 준비하는 시간입니다” 슬라이드에 들어가고, 두 번째 슬라이드의 날짜는 이번 주일({sunday})로 자동으로 바뀝니다. 번호를 붙이면 제목, 그 아래 줄은 세부 내용이 됩니다.</p>
-          <textarea rows={12} autoFocus value={text} placeholder={'1. 회개와 마음의 정결\n- 지난 한 주간 …\n\n2. 예배를 위한 기도\n- …'} onChange={(e) => setText(e.target.value)} />
+          <AutoTextarea rows={12} autoFocus value={text} placeholder={'1. 회개와 마음의 정결\n- 지난 한 주간 …\n\n2. 예배를 위한 기도\n- …'} onChange={(e) => setText(e.target.value)} />
           <p className="muted small">{topics.length ? `기도제목 ${topics.length}개 → 기도 준비 슬라이드 ${pages}장` : '비워 두면 Front 슬라이드의 “기도제목 1 · 2” 그대로 나옵니다.'}</p>
           <div className="row gap-s">
             <span className="muted small grow">적는 대로 자동 저장되어 Front 슬라이드에 들어갑니다.</span>

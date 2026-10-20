@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { sendFeedback } from '../domain/feedback';
+import { AutoTextarea } from './AutoTextarea';
 
 const NAME_KEY = 'freecast.feedbackName';
 
@@ -34,7 +35,7 @@ export function FeedbackModal({ onClose, notify }: { onClose: () => void; notify
         </header>
         <div className="wizard-body stack">
           <p className="hint">고칠 점이나 있었으면 하는 기능을 적어 주세요. 개발자에게 바로 이메일로 전달되고, 반영된 새 버전은 모든 컴퓨터의 FreeCast에 자동으로 설치됩니다 (앱을 종료할 때).</p>
-          <textarea rows={10} autoFocus value={message} maxLength={5000}
+          <AutoTextarea rows={10} autoFocus value={message} maxLength={5000}
             placeholder={'예) 찬양 가사 슬라이드에서 글자가 조금 더 컸으면 좋겠어요.\n예) 성경 구절을 넣으면 장 번호가 두 번 나와요.'}
             onChange={(e) => setMessage(e.target.value)} />
           <label className="stack gap-xs">

@@ -5,6 +5,7 @@ import { uid } from '../../domain/lyrics';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
 import { TextFormatPanel, type TextFormatValue } from './TextFormatPanel';
 import { changeCase } from '../../domain/textFormat';
+import { AutoTextarea } from '../AutoTextarea';
 
 const KIND: Record<string, string> = { text: '텍스트 상자', image: '그림', shape: '도형', video: '동영상', camera: '카메라' };
 
@@ -62,7 +63,7 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
 
       {el.kind === 'text' && (
         <>
-          <label className="stack">텍스트<textarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
+          <label className="stack">텍스트<AutoTextarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
           <TextFormatPanel
             value={textValue(el)}
             onChange={(patch) => onChange(elementPatch(el, patch))}

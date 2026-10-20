@@ -37,6 +37,7 @@ input, select, textarea {
   background: #0e1118; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0;
 }
 input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea[data-auto] { max-height: 60vh; overflow-y: auto; }
 input[type='color'] { padding: 2px; height: 32px; width: 64px; }
 input[type='range'] { padding: 0; accent-color: var(--accent); }
 code { background: #0e1118; padding: 1px 4px; border-radius: 4px; }
@@ -165,7 +166,7 @@ kbd { margin-left: 6px; font-size: 10px; color: var(--muted); font-family: inher
 .editor-body { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; padding: 16px; min-height: 0; overflow: hidden; }
 .editor-col { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .title-input { font-size: 16px; font-weight: 600; padding: 8px 10px; }
-.lyrics-input { height: 52vh; resize: none; line-height: 1.5; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.lyrics-input { min-height: 52vh; resize: none; line-height: 1.5; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
 .preview-col { overflow: hidden; }
 .preview-list { list-style: none; padding: 0; margin: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
 .preview-list li { background: #0e1118; border-radius: 6px; padding: 6px 10px; }
@@ -539,7 +540,7 @@ body[data-view='multiview'] { overflow: auto; }
 .ppt-stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; min-height: 0; }
 .ppt-canvas { width: min(100%, calc((100vh - 330px) * 4 / 3)); box-shadow: 0 2px 10px rgba(0,0,0,.25); cursor: text; }
 .ppt-empty { text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 12px; align-items: center; }
-.ppt-notes { height: 92px; resize: vertical; border: none !important; border-top: 1px solid #d2d0ce !important; border-radius: 0; padding: 8px 14px; font-family: inherit; font-size: 13px; }
+.ppt-notes { min-height: 92px; resize: vertical; border: none !important; border-top: 1px solid #d2d0ce !important; border-radius: 0; padding: 8px 14px; font-family: inherit; font-size: 13px; }
 .ppt-format { width: 300px; background: #fff; border-left: 1px solid #d2d0ce; display: flex; flex-direction: column; min-height: 0; }
 .ppt-format-title { padding: 10px 12px; font-weight: 600; border-bottom: 1px solid #e1dfdd; }
 .ppt-format .inspector { position: static; width: auto; box-shadow: none; border: none; background: transparent; flex: 1; overflow-y: auto; }

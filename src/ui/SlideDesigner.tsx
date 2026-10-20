@@ -6,6 +6,7 @@ import { patchElement } from '../domain/templates/convert';
 import { NO_GUIDES, snapMove, type SnapGuides } from '../domain/snap';
 import { CANVAS_H, CANVAS_W, ElementView as SlideElementSlot, SlideCanvas } from './SlideCanvas';
 import { useAutosave, useWidth } from './hooks';
+import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
   slide: Slide;
@@ -132,14 +133,14 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
           </div>
           <aside className="designer-side stack">
             <label className="stack">Slide text (theme-styled)
-              <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
+              <AutoTextarea rows={4} value={text} onChange={(e) => setText(e.target.value)} />
             </label>
             {selected ? (
               <div className="stack">
                 <h3>{selected.kind}</h3>
                 {selected.kind === 'text' && (
                   <>
-                    <textarea rows={3} value={selected.text ?? ''} onChange={(e) => update(selected.id, { text: e.target.value })} />
+                    <AutoTextarea rows={3} value={selected.text ?? ''} onChange={(e) => update(selected.id, { text: e.target.value })} />
                     <div className="form-grid">
                       <label>Size<input type="number" value={selected.fontSize ?? 64} onChange={(e) => update(selected.id, { fontSize: Number(e.target.value) })} /></label>
                       <label>Colour<input type="color" value={selected.color ?? '#ffffff'} onChange={(e) => update(selected.id, { color: e.target.value })} /></label>

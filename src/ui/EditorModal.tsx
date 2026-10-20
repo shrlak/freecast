@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { Presentation, SongMeta, Theme, Transition, TransitionKind } from '../domain/types';
 import { parseLyrics, serializeLyrics, uid } from '../domain/lyrics';
 import { useAutosave } from './hooks';
+import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
   presentation: Presentation | null;
@@ -75,7 +76,7 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
               <input className="title-input grow" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
               <input placeholder="Folder" value={folder} onChange={(e) => setFolder(e.target.value)} style={{ width: 140 }} />
             </div>
-            <textarea className="lyrics-input" placeholder={PLACEHOLDER} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
+            <AutoTextarea className="lyrics-input" placeholder={PLACEHOLDER} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
             <p className="hint">
               Blank line = new slide. Section lines like <code>[Verse 1]</code>, <code>Chorus</code> or <code>Bridge:</code> label the slides that follow.
               Wrap a line in <code>**…**</code> to make it bold.

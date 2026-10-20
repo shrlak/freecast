@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Presentation } from '../domain/types';
 import { ai, type AiSlides } from '../domain/ai';
 import { uid } from '../domain/lyrics';
+import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
   onClose: () => void;
@@ -60,7 +61,7 @@ export function AiModal({ onClose, onCreate }: Props) {
         </header>
         <div className="editor-body">
           <div className="editor-col">
-            <textarea className="lyrics-input" style={{ height: '34vh' }} placeholder="Describe the slides you need, or paste text to turn into slides…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+            <AutoTextarea className="lyrics-input" style={{ minHeight: '34vh' }} placeholder="Describe the slides you need, or paste text to turn into slides…" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
             <div className="stack">
               {EXAMPLES.map((ex) => <button key={ex} className="example" onClick={() => setPrompt(ex)}>{ex}</button>)}
             </div>
