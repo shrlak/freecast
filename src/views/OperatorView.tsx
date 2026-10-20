@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createInitialState, reducer, type Action } from '../domain/reducer';
 import { loadLibrary, normalizeLibrary, saveLibrary } from '../domain/persistence';
-import { activePlaylist, findPres } from '../domain/live';
+import { activePlaylist } from '../domain/live';
 import { sequence } from '../domain/arrangement';
-import { stripChords, uid } from '../domain/lyrics';
+import { uid } from '../domain/lyrics';
 import { presentationFromSongFile } from '../domain/io/songFormats';
 import { exportBackup, importBackup } from '../domain/io/backup';
 import { exportPptx } from '../domain/io/pptxExport';
@@ -27,6 +27,7 @@ import type { Macro, SlideAction } from '../domain/types';
 import { AudioPlayer } from '../ui/AudioPanel';
 import { filesToSlides } from '../ui/importFiles';
 import type { RemoteInfo } from './RemoteView';
+import { resolveBackground } from '../domain/autoBackground';
 import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
 import { UpdateBanner } from '../ui/UpdateBanner';
@@ -173,6 +174,10 @@ export function OperatorView() {
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
     if (m.type !== 'command' || !m.command) return;
     let c = m.command as Action & { now?: number };
+    // Slide show from the remote: same as the Start / End buttons on this computer.
+    const show = (m.command as { type: string }).type;
+    if (show === 'show/start') return startShowRef.current(false);
+    if (show === 'show/end') return endShowRef.current();
     if (c.type === 'macro/run') {
       const id = c.id;
       const macro = latestLib.current.macros.find((x) => x.id === id) ?? latestLib.current.macros.find((x) => x.name.toLowerCase() === id.toLowerCase());
@@ -184,21 +189,25 @@ export function OperatorView() {
   });
   useLiveBroadcast(state.live, relay.send);
 
-  // Share the playlist and current slides with remotes.
+  // Share the selected presentation's slides with remotes.
   const selected = state.library.presentations.find((p) => p.id === state.selectedId) ?? null;
 
   const playlist = activePlaylist(state);
   useEffect(() => {
+    const theme = selected ? state.library.themes.find((t) => t.id === selected.themeId) ?? state.library.themes[0] : null;
     const info: RemoteInfo = {
-      playlist: (playlist?.items ?? []).map((i, index) => ({ index, header: i.kind === 'header', title: i.kind === 'header' ? i.title : findPres(state.library, i.presentationId)?.title ?? '?' })),
-      playlistIndex: state.playlistIndex,
-      presentation: selected ? { id: selected.id, title: selected.title, slides: sequence(selected).map(({ slide }, seq) => ({ seq, group: slide.group, text: (slide.title ? `${slide.title}\n` : '') + stripChords(slide.text.replace(/\*\*/g, '')).slice(0, 160) })) } : null,
+      presentation: selected && theme ? {
+        id: selected.id,
+        title: selected.title,
+        theme,
+        bgEffect: selected.bgEffect ?? null,
+        slides: sequence(selected).map(({ slide }, seq) => ({ seq, slide, background: resolveBackground(slide, selected) })),
+      } : null,
       cursorSeq: state.cursor?.presentationId === selected?.id ? state.cursor?.seq ?? null : null,
-      macros: state.library.macros.map(({ id, name, color }) => ({ id, name, color })),
     };
     relay.send({ type: 'info', info });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, playlist, state.playlistIndex, state.cursor, state.library.macros, relay.connected]);
+  }, [selected, state.library.themes, state.cursor, relay.connected]);
 
   useMidi(midiOn, (a) => dispatch(a), state.library.macros);
 
@@ -295,6 +304,8 @@ export function OperatorView() {
   };
   const startShowRef = useRef(startShow);
   startShowRef.current = startShow;
+  const endShowRef = useRef(endShow);
+  endShowRef.current = endShow;
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
   const viewRef = useRef(view);

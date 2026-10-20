@@ -328,19 +328,16 @@ body.transparent, body.transparent #root { background: transparent !important; }
 body[data-view='remote'] { overflow: auto; }
 .remote-root { max-width: 640px; margin: 0 auto; padding: 12px 12px 40px; display: flex; flex-direction: column; gap: 12px; font-size: 15px; }
 .remote-head { display: flex; align-items: center; gap: 8px; }
-.remote-live { background: #000; border-radius: 10px; padding: 18px; min-height: 120px; white-space: pre-line; font-size: 18px; text-align: center; display: grid; place-items: center; border: 2px solid var(--live); }
+.remote-show { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.remote-show button { padding: 14px 8px; font-size: 15px; }
 .remote-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
 .remote-nav button { padding: 20px; font-size: 26px; }
-.remote-clear, .remote-macros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.remote-macros { grid-template-columns: repeat(2, 1fr); }
-.remote-macros button { border-width: 2px; }
+.remote-current { border-radius: 10px; overflow: hidden; border: 2px solid var(--live); background: #000; }
+.remote-empty { aspect-ratio: 4 / 3; display: grid; place-items: center; color: var(--muted); }
 .remote-root h3 { margin: 6px 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-.remote-slides { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.remote-slides button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; white-space: pre-line; text-align: left; font-size: 13px; min-height: 64px; }
-.remote-slides button.live, .remote-playlist button.live { border-color: var(--live); background: #2a1215; }
-.remote-playlist { display: flex; flex-direction: column; gap: 4px; }
-.remote-playlist button { text-align: left; padding: 12px; }
-.remote-header { color: var(--accent-2); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; padding-top: 8px; }
+.remote-slides { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.remote-slides button { position: relative; padding: 0; overflow: hidden; border: 2px solid transparent; border-radius: 6px; background: #000; display: block; }
+.remote-slide-num { position: absolute; left: 4px; bottom: 4px; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: rgba(0,0,0,.65); color: #fff; }
 .remote-pin { align-items: center; padding-top: 30vh; }
 @media (max-width: 1100px) { .two-col, .screens-body { grid-template-columns: 1fr; } }
 

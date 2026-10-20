@@ -13,6 +13,7 @@ export interface DesktopInfo {
   ai: { proxyUrl: string; hasGeminiKey: boolean; hasOpenrouterKey: boolean };
   networkRemote: boolean;
   lanUrls: string[];
+  internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; pin: string };
 }
 
 export interface UpdateState {
@@ -31,6 +32,9 @@ export interface DesktopBridge {
   endShow(): Promise<void>;
   setAiConfig(patch: { proxyUrl?: string; geminiKey?: string; openrouterKey?: string }): Promise<void>;
   setNetworkRemote(on: boolean): Promise<void>;
+  setInternetRemote(on: boolean): Promise<void>;
+  /** Change the PIN (and so lock out phones that had the old one). */
+  newRemotePin(): Promise<void>;
   closeOutputs(): Promise<void>;
   updateState(): Promise<UpdateState | null>;
   checkUpdates(): Promise<UpdateState | null>;

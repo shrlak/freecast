@@ -3,6 +3,7 @@ import type { Screen } from '../domain/types';
 import { desktop, type DesktopInfo } from '../domain/desktop';
 import { openOutput } from './LivePanel';
 import { UpdateCheck } from './UpdateBanner';
+import { qrDataUrl } from '../domain/io/qr';
 
 /** Desktop-app only: which display each screen opens on, the AI key, and network access for phones. */
 export function DesktopSettings({ screens }: { screens: Screen[] }) {
@@ -16,6 +17,13 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
     refresh();
     return desktop?.onDisplays(() => refresh());
   }, []);
+  // The internet address appears a few seconds after switching on, and can change if the connection drops.
+  const waiting = info?.internet.on && info.internet.status !== 'error';
+  useEffect(() => {
+    if (!waiting) return;
+    const t = setInterval(refresh, 2000);
+    return () => clearInterval(t);
+  }, [waiting]);
 
   if (!desktop) return null;
   if (!info) return <p className="hint">Loading desktop settings…</p>;
@@ -76,6 +84,30 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
       </label>
       {info.lanUrls.map((u) => <code key={u} className="small selectable">{u}/?view=remote</code>)}
       {!info.networkRemote && <p className="hint">Off: FreeCast is only reachable from this computer.</p>}
+
+      <h3>Remote from anywhere (any Wi-Fi or mobile data)</h3>
+      <label className="check">
+        <input type="checkbox" checked={info.internet.on} disabled={busy} onChange={async (e) => {
+          setBusy(true);
+          await desktop!.setInternetRemote(e.target.checked);
+          await refresh();
+          setBusy(false);
+        }} />
+        Let a phone or tablet control FreeCast over the internet
+      </label>
+      {info.internet.on && info.internet.status === 'connecting' && <p className="hint">Connecting…</p>}
+      {info.internet.on && info.internet.status === 'error' && <p className="hint">{info.internet.error}</p>}
+      {info.internet.on && info.internet.url && (
+        <div className="stack">
+          <code className="small selectable">{info.internet.url}/?view=remote</code>
+          <div className="row gap-xs">
+            <span>PIN <strong className="selectable">{info.internet.pin}</strong></span>
+            <button onClick={async () => { await desktop!.newRemotePin(); refresh(); }}>New PIN</button>
+          </div>
+          <img src={qrDataUrl(`${info.internet.url}/?view=remote&pin=${info.internet.pin}`)} alt="Remote link" width={160} height={160} />
+          <p className="hint">Scan the code with the phone (it includes the PIN), or open the link and type the PIN. The address changes each time FreeCast starts. Only the remote works this way; keep the PIN to yourself.</p>
+        </div>
+      )}
     </div>
   );
 }

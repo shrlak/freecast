@@ -6,6 +6,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { aiMiddleware } from './ai.mjs';
 import { attachRelay } from './relay.mjs';
+import { isPublicHost } from './tunnel.mjs';
 import { controlMiddleware } from './control.mjs';
 import { dmxMiddleware } from './dmx.mjs';
 import { cloudMiddleware } from './cloud.mjs';
@@ -42,12 +43,15 @@ export function lanAddresses() {
  * Start the server. `host` 127.0.0.1 keeps it private to this computer;
  * 0.0.0.0 lets phones and other computers on the network connect.
  */
-export function startServer({ root, port, host = '127.0.0.1' }) {
+export function startServer({ root, port, host = '127.0.0.1', publicPin = () => '' }) {
   if (!fs.existsSync(path.join(root, 'index.html'))) throw new Error(`App files not found in ${root} — run \`npm run build\` first.`);
   const serveStatic = staticHandler(path.resolve(root));
   let control = (_req, _res, next) => next();
-  const server = http.createServer((req, res) => aiMiddleware(req, res, () => recognitionMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res)))))));
-  const wss = attachRelay(server);
+  // Visitors on the public internet address get the app files and the remote relay only:
+  // no AI, cloud, DMX or control endpoints.
+  const everything = (req, res) => aiMiddleware(req, res, () => recognitionMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res))))));
+  const server = http.createServer((req, res) => (isPublicHost(req.headers.host) ? serveStatic(req, res) : everything(req, res)));
+  const wss = attachRelay(server, { publicPin });
   control = controlMiddleware(wss);
   return new Promise((resolve, reject) => {
     server.once('error', reject);

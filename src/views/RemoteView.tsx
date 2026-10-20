@@ -1,20 +1,33 @@
 import { useEffect, useState } from 'react';
-import type { LiveState } from '../domain/types';
+import type { Background, LiveState, Slide, Theme } from '../domain/types';
+import { SlideCanvas } from '../ui/SlideCanvas';
+import { liveCanvasProps } from '../ui/liveProps';
 import { useRelay } from '../ui/hooks';
-import { stripChords } from '../domain/lyrics';
 
-/** What the operator shares with remotes: the playlist and the slides of what is selected. */
+/** What the operator shares with remotes: the slides of the selected presentation, drawn the way they look on screen. */
 export interface RemoteInfo {
-  playlist: { index: number; title: string; header: boolean }[];
-  playlistIndex: number | null;
-  presentation: { id: string; title: string; slides: { seq: number; group: string; text: string }[] } | null;
+  presentation: {
+    id: string;
+    title: string;
+    theme: Theme;
+    bgEffect: { dim: number; blur: number } | null;
+    slides: { seq: number; slide: Slide; background: Background | null }[];
+  } | null;
   cursorSeq: number | null;
-  macros: { id: string; name: string; color: string }[];
 }
 
-/** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network. */
+/** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network, or the internet address from Settings. */
 export function RemoteView() {
-  const [pin, setPin] = useState(() => localStorage.getItem('freecast.pin') ?? '');
+  const [pin, setPin] = useState(() => {
+    // A scanned QR link carries the PIN: keep it, then take it out of the address bar.
+    const fromLink = new URLSearchParams(location.search).get('pin');
+    if (fromLink) {
+      localStorage.setItem('freecast.pin', fromLink);
+      history.replaceState(null, '', `${location.pathname}?view=remote`);
+      return fromLink;
+    }
+    return localStorage.getItem('freecast.pin') ?? '';
+  });
   const [live, setLive] = useState<LiveState | null>(null);
   const [info, setInfo] = useState<RemoteInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +57,10 @@ export function RemoteView() {
     );
   }
 
+  const pres = info?.presentation ?? null;
+  // Everything after the live slide; before anything is live, the whole presentation.
+  const upcoming = pres ? pres.slides.filter((s) => info!.cursorSeq == null || s.seq > info!.cursorSeq) : [];
+
   return (
     <div className="remote-root">
       <header className="remote-head">
@@ -51,44 +68,27 @@ export function RemoteView() {
         <span className={`dot ${connected ? 'on' : ''}`} />
         <span className="muted small truncate">{live?.title ?? 'Nothing live'}</span>
       </header>
-      <div className="remote-live">{live?.slide ? stripChords([live.slide.title, live.slide.text.replace(/\*\*/g, '')].filter(Boolean).join('\n')) : '—'}</div>
+      <div className="remote-show">
+        <button className="primary" onClick={() => cmd({ type: 'show/start' })}>▶ Start slideshow</button>
+        <button className="danger" onClick={() => cmd({ type: 'show/end' })}>■ End slideshow</button>
+      </div>
       <div className="remote-nav">
         <button onClick={() => cmd({ type: 'live/prev' })}>◀</button>
         <button className="primary" onClick={() => cmd({ type: 'live/next' })}>▶</button>
       </div>
-      <div className="remote-clear">
-        <button onClick={() => cmd({ type: 'live/clearAll' })}>Clear all</button>
-        <button onClick={() => cmd({ type: 'live/clearText' })}>Text</button>
-        <button onClick={() => cmd({ type: 'live/clearBackground' })}>BG</button>
-        <button className={live?.black ? 'active' : ''} onClick={() => cmd({ type: 'live/toggleBlack' })}>Black</button>
+      <div className="remote-current">
+        {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} animate={false} /> : <div className="remote-empty">Nothing live</div>}
       </div>
-      {!!info?.macros.length && (
-        <div className="remote-macros">
-          {info.macros.map((m) => <button key={m.id} style={{ borderColor: m.color }} onClick={() => cmd({ type: 'macro/run', id: m.id })}>{m.name}</button>)}
-        </div>
-      )}
-      {info?.presentation && (
+      {pres && !!upcoming.length && (
         <section>
-          <h3>{info.presentation.title}</h3>
+          <h3>{pres.title} · Up next</h3>
           <div className="remote-slides">
-            {info.presentation.slides.map((s) => (
-              <button key={s.seq} className={s.seq === info.cursorSeq ? 'live' : ''} onClick={() => cmd({ type: 'live/go', presentationId: info.presentation!.id, seq: s.seq })}>
-                <small>{s.group}</small>
-                <span>{s.text}</span>
+            {upcoming.map((s) => (
+              <button key={s.seq} onClick={() => cmd({ type: 'live/go', presentationId: pres.id, seq: s.seq })}>
+                <SlideCanvas slide={s.slide} theme={pres.theme} background={s.background} bgEffect={pres.bgEffect} />
+                <span className="remote-slide-num">{s.seq + 1}</span>
               </button>
             ))}
-          </div>
-        </section>
-      )}
-      {info && (
-        <section>
-          <h3>Playlist</h3>
-          <div className="remote-playlist">
-            {info.playlist.map((p) =>
-              p.header ? <div key={p.index} className="remote-header">{p.title}</div> : (
-                <button key={p.index} className={p.index === info.playlistIndex ? 'live' : ''} onClick={() => cmd({ type: 'playlist/select', index: p.index })}>{p.title}</button>
-              ),
-            )}
           </div>
         </section>
       )}

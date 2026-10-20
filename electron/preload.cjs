@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('freecastDesktop', {
   endShow: () => ipcRenderer.invoke('desktop:endShow'),
   setAiConfig: (patch) => ipcRenderer.invoke('desktop:setAiConfig', patch),
   setNetworkRemote: (on) => ipcRenderer.invoke('desktop:setNetworkRemote', on),
+  setInternetRemote: (on) => ipcRenderer.invoke('desktop:setInternetRemote', on),
+  newRemotePin: () => ipcRenderer.invoke('desktop:newRemotePin'),
   closeOutputs: () => ipcRenderer.invoke('desktop:closeOutputs'),
   updateState: () => ipcRenderer.invoke('desktop:updateState'),
   checkUpdates: () => ipcRenderer.invoke('desktop:checkUpdates'),

@@ -1,12 +1,13 @@
 // WebSocket relay so phones, tablets and other computers on the network can act as
 // remote controls, stage displays or outputs for the operator console.
 import { WebSocketServer } from 'ws';
+import { isPublicHost } from './tunnel.mjs';
 
 const PIN = process.env.FREECAST_REMOTE_PIN || '';
 const COMMANDS = new Set([
   'live/next', 'live/prev', 'live/clearAll', 'live/clearText', 'live/clearBackground', 'live/toggleBlack',
   'live/go', 'playlist/select', 'macro/run', 'timer/op', 'prop/toggle', 'live/message',
-  'live/logo', 'live/stageMessage', 'prop/clearAll', 'announce/stop',
+  'live/logo', 'live/stageMessage', 'prop/clearAll', 'announce/stop', 'show/start', 'show/end',
 ]);
 
 /** Only well-formed commands from the whitelist reach the operator. */
@@ -20,15 +21,25 @@ function validCommand(c) {
   return true;
 }
 
-/** Returns the WebSocket server plus helpers for the HTTP control API. */
-export function attachRelay(httpServer) {
+/**
+ * Returns the WebSocket server plus helpers for the HTTP control API.
+ * Visitors arriving over the public internet address may only be remotes, and always need
+ * `publicPin()`; repeated wrong PINs lock public visitors out for a minute.
+ */
+export function attachRelay(httpServer, { publicPin = () => '' } = {}) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   let lastState = null;
   let lastInfo = null;
+  let failures = [];
 
   httpServer.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/freecast-ws')) return;
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws));
+    const pub = isPublicHost(req.headers.host);
+    if (pub && !publicPin()) return socket.destroy();
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.pub = pub;
+      wss.emit('connection', ws);
+    });
   });
 
   const broadcast = (data, filter) => {
@@ -46,12 +57,22 @@ export function attachRelay(httpServer) {
       }
       if (msg?.type === 'hello') {
         const role = ['host', 'viewer', 'remote'].includes(msg.role) ? msg.role : 'viewer';
-        if (role === 'remote' && PIN && msg.pin !== PIN) {
+        const pin = ws.pub ? publicPin() : PIN;
+        if (ws.pub) {
+          const now = Date.now();
+          failures = failures.filter((t) => now - t < 60_000);
+          if (role !== 'remote' || failures.length >= 5) {
+            ws.send(JSON.stringify({ type: 'error', error: role !== 'remote' ? 'Not allowed' : 'Too many wrong PINs, wait a minute' }));
+            return ws.close();
+          }
+        }
+        if (role === 'remote' && pin && msg.pin !== pin) {
+          if (ws.pub) failures.push(Date.now());
           ws.send(JSON.stringify({ type: 'error', error: 'Wrong PIN' }));
           return ws.close();
         }
         ws.role = role;
-        ws.send(JSON.stringify({ type: 'welcome', pinRequired: Boolean(PIN) }));
+        ws.send(JSON.stringify({ type: 'welcome', pinRequired: Boolean(pin) }));
         if (role !== 'host') {
           if (lastState) ws.send(lastState);
           if (lastInfo && role === 'remote') ws.send(lastInfo);
