@@ -31,6 +31,7 @@ import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
 import { UpdateBanner } from '../ui/UpdateBanner';
 import { useCloudSync } from '../ui/useCloudSync';
+import { purgeMedia } from '../domain/cloud';
 import { finishedServices } from '../domain/sunday/cleanup';
 import { useServiceUploads } from '../ui/ppt/useServiceUploads';
 import { AccountModal } from '../ui/AccountModal';
@@ -106,6 +107,7 @@ export function OperatorView() {
     const clear = () => {
       const done = finishedServices(latestLib.current, new Date());
       if (done.playlistIds.length || done.presentationIds.length) dispatch({ type: 'services/finish', ...done });
+      void purgeMedia(done.mediaIds);
     };
     clear();
     const t = setInterval(clear, 60_000);

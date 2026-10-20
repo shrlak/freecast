@@ -1,6 +1,6 @@
 // Client for the church cloud library (Worker /freecast/* via this app's /api/cloud proxy).
 import type { Library } from './types';
-import { getMedia, putMedia } from './media';
+import { deleteMedia as deleteLocalMedia, getMedia, putMedia } from './media';
 import { normalizeLibrary } from './persistence';
 
 const SESSION_KEY = 'freecast.cloud';
@@ -64,6 +64,7 @@ export const cloudApi = {
   listMedia: (token: string) => call<{ items: { id: string; size: number }[] }>('media', { token }).then((r) => r.data.items),
   uploadMedia: (token: string, id: string, blob: Blob) =>
     call(`media/${encodeURIComponent(id)}`, { method: 'PUT', token, body: blob, headers: { 'content-type': blob.type || 'application/octet-stream' } }),
+  deleteMedia: (token: string, id: string) => call(`media/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
   downloadMedia: (token: string, id: string) => call<Blob>(`media/${encodeURIComponent(id)}`, { token }).then((r) => r.data),
 };
 
@@ -94,4 +95,28 @@ export async function syncMedia(token: string, lib: Library, onProgress: (msg: s
       await putMedia(m.id, await cloudApi.downloadMedia(token, m.id));
     }
   }
+}
+
+const DELETES_KEY = 'freecast.cloud.mediaDeletes';
+const pendingDeletes = (): string[] => {
+  try {
+    return JSON.parse(localStorage.getItem(DELETES_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+};
+
+/** Remove media from this computer and, as soon as signed in, from the server (retried until it works). */
+export async function purgeMedia(ids: string[]) {
+  const queue = [...new Set([...pendingDeletes(), ...ids])];
+  for (const id of ids) await deleteLocalMedia(id).catch(() => undefined);
+  const session = loadSession();
+  const left: string[] = [];
+  for (const id of queue) {
+    if (!session) left.push(id);
+    else await cloudApi.deleteMedia(session.token, id).catch((e: { status?: number }) => { if (e.status !== 404) left.push(id); });
+  }
+  try {
+    localStorage.setItem(DELETES_KEY, JSON.stringify(left));
+  } catch { /* storage unavailable */ }
 }
