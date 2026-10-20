@@ -233,16 +233,20 @@ export function scriptureSlides(tpl: ServiceTemplates, f: ScriptureFill): Slide[
   const RANGE_EN = ranges(f.refs, 'en');
   return [
     fillSlide(tpl.bibleTitle, (t) => fillTokens(t, { RANGE_KO, RANGE_EN })),
-    ...f.chunks.map((c) =>
-      fillSlide(tpl.bibleVerse, (t) => {
-        if (t.includes('{{BODY2}}') && !c.texts2.length) return null;
+    ...f.chunks.map((c) => {
+      // The template prints the Korean verse (under the Korean book name) first and the English one
+      // below, whichever translation was picked first.
+      const swap = c.langs[0] === 'en' && c.langs[1] === 'ko';
+      const [ko, en] = swap ? [c.texts2, c.texts] : [c.texts, c.texts2];
+      return fillSlide(tpl.bibleVerse, (t) => {
+        if (t.includes('{{BODY2}}') && !en.length) return null;
         // Verse texts run on without verse numbers, as the ppt program prints them.
         return fillTokens(t, {
           RANGE_KO, RANGE_EN, TITLE: c.nameKo, ETITLE: c.nameEn, CHAP: String(c.chapter), PARA: c.verses,
-          BODY: c.texts.join(' '), BODY2: c.texts2.join(' '),
+          BODY: ko.join(' '), BODY2: en.join(' '),
         });
-      }, { group: c.label }),
-    ),
+      }, { group: c.label });
+    }),
   ];
 }
 

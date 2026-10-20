@@ -723,6 +723,9 @@ body[data-view='multiview'] { overflow: auto; }
 /* in-place slide editing (CanvasEditor) */
 .ce-root { position: relative; outline: none; }
 .ce-overlay { position: absolute; inset: 0; }
+.ce-guide { position: absolute; pointer-events: none; z-index: 3; }
+.ce-guide-v { top: 0; bottom: 0; border-left: 1px solid #ff3b8d; }
+.ce-guide-h { left: 0; right: 0; border-top: 1px solid #ff3b8d; }
 .ce-box { position: absolute; cursor: move; border: 1px dashed transparent; box-sizing: border-box; }
 .ce-box:hover { border-color: rgba(46,158,102,.7); }
 .ce-box.slide-text { cursor: text; }

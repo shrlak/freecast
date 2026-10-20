@@ -157,10 +157,17 @@ export function patchElement(el: SlideElement, patch: Partial<SlideElement>): Sl
   let next: SlideElement = { ...el, ...patch };
   // Typing a size is a choice: the box must not shrink the text back to fit.
   if (patch.fontSize && patch.autoFit === undefined) next.autoFit = false;
+  const was = el.fontSize ?? el.paragraphs?.find((p) => p.text.trim())?.fontSize;
+  const ratio = patch.fontSize && was ? patch.fontSize / was : 1;
+  // The box follows the text size: a bigger / smaller font grows / shrinks the box around its centre.
+  if (ratio !== 1 && el.kind === 'text' && patch.w === undefined && patch.h === undefined) {
+    next.w = Math.max(20, Math.round(el.w * ratio));
+    next.h = Math.max(20, Math.round(el.h * ratio));
+    if (patch.x === undefined) next.x = Math.round(el.x + (el.w - next.w) / 2);
+    if (patch.y === undefined) next.y = Math.round(el.y + (el.h - next.h) / 2);
+  }
   if (!el.paragraphs) return next;
   if (patch.text !== undefined) next = withElementText(next, patch.text);
-  const was = el.fontSize ?? el.paragraphs.find((p) => p.text.trim())?.fontSize;
-  const ratio = patch.fontSize && was ? patch.fontSize / was : 1;
   const whole = (['color', 'bold', 'italic', 'align'] as const).filter((k) => k in patch);
   if (ratio !== 1 || whole.length) {
     next.paragraphs = next.paragraphs!.map((p) => {
