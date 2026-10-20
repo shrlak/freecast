@@ -172,13 +172,24 @@ describe('주일예배 cleanup after Sunday 5 pm', async () => {
     expect(serviceEnd('Sunday Service', new Date())).toBeNull();
   });
   it('keeps the service until 5 pm', () => {
-    expect(finishedServices(lib(), new Date(2026, 9, 18, 16, 59))).toEqual({ playlistIds: [], presentationIds: [] });
+    expect(finishedServices(lib(), new Date(2026, 9, 18, 16, 59))).toEqual({ playlistIds: [], presentationIds: [], mediaIds: [] });
   });
   it('removes the finished service and its decks, but not decks another service still uses', () => {
-    expect(finishedServices(lib(), new Date(2026, 9, 18, 17))).toEqual({ playlistIds: ['old'], presentationIds: ['song'] });
+    expect(finishedServices(lib(), new Date(2026, 9, 18, 17))).toEqual({ playlistIds: ['old'], presentationIds: ['song'], mediaIds: [] });
   });
   it('moves on to next Sunday once this one has ended', () => {
     expect(upcomingSunday(new Date(2026, 9, 18, 16, 59)).getDate()).toBe(18);
     expect(upcomingSunday(new Date(2026, 9, 18, 17, 0)).getDate()).toBe(25);
+  });
+  it('also removes slide media only the finished service uses', () => {
+    const l = lib();
+    const withMedia = (id: string, mediaId: string) => ({ ...pres(id, '1018 주일예배'), slides: [{ id: `${id}s`, group: 'x', text: '', background: { kind: 'media', mediaId } }] });
+    const media = (id: string) => ({ id, name: id, type: 'image' as const });
+    const full = {
+      ...l,
+      media: [media('m_only'), media('m_shared')],
+      presentations: [...l.presentations.filter((p) => p.id !== 'song'), withMedia('song', 'm_only'), withMedia('shared', 'm_shared'), { ...pres('other', '1025 주일예배'), slides: [{ id: 'o', group: 'x', text: '', background: { kind: 'media', mediaId: 'm_shared' } }] }],
+    };
+    expect(finishedServices(full as never, new Date(2026, 9, 18, 17)).mediaIds).toEqual(['m_only']);
   });
 });

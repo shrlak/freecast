@@ -28,7 +28,7 @@ export type Action =
   | { type: 'presentation/createMany'; presentations: Presentation[]; playlist?: Playlist }
   | { type: 'presentation/update'; id: string; patch: Partial<Omit<Presentation, 'id'>> }
   | { type: 'presentation/delete'; id: string }
-  | { type: 'services/finish'; playlistIds: string[]; presentationIds: string[] }
+  | { type: 'services/finish'; playlistIds: string[]; presentationIds: string[]; mediaIds: string[] }
   | { type: 'slide/update'; presentationId: string; slideId: string; patch: Partial<Omit<Slide, 'id'>> }
   | { type: 'arrangement/upsert'; presentationId: string; arrangement: Arrangement }
   | { type: 'arrangement/delete'; presentationId: string; id: string }
@@ -235,7 +235,7 @@ function core(s: AppState, a: Action): AppState {
       let playlists = lib.playlists.filter((p) => !drop.has(p.id)).map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || !gone.has(i.presentationId)) }));
       if (!playlists.length) playlists = [{ id: uid('pl'), name: '재생목록', items: [] }];
       return {
-        ...setLib(s, { presentations: lib.presentations.filter((p) => !gone.has(p.id)), playlists }),
+        ...setLib(s, { presentations: lib.presentations.filter((p) => !gone.has(p.id)), playlists, media: lib.media.filter((m) => !a.mediaIds.includes(m.id)) }),
         activePlaylistId: playlists.some((p) => p.id === s.activePlaylistId) ? s.activePlaylistId : playlists[0].id,
         selectedId: s.selectedId && gone.has(s.selectedId) ? null : s.selectedId,
         playlistIndex: null,

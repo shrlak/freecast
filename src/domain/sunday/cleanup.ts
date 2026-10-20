@@ -23,6 +23,8 @@ export function serviceEnd(name: string, now: Date): Date | null {
 export interface ServiceCleanup {
   playlistIds: string[];
   presentationIds: string[];
+  /** Slide images/videos only the removed decks use. */
+  mediaIds: string[];
 }
 
 /**
@@ -42,5 +44,11 @@ export function finishedServices(lib: Library, now: Date): ServiceCleanup {
   const presentationIds = lib.presentations
     .filter((p) => !p.online && p.folder && folders.has(p.folder) && !usedElsewhere.has(p.id))
     .map((p) => p.id);
-  return { playlistIds: done.map((pl) => pl.id), presentationIds };
+  // Media only the removed decks use (anything else — other decks, themes, props — still needs it).
+  const gone = new Set(presentationIds);
+  const mentions = (text: string, id: string) => text.includes(`"${id}"`);
+  const removedText = JSON.stringify(lib.presentations.filter((p) => gone.has(p.id)));
+  const keptText = JSON.stringify({ ...lib, media: [], playlists: [], presentations: lib.presentations.filter((p) => !gone.has(p.id)) });
+  const mediaIds = lib.media.filter((m) => mentions(removedText, m.id) && !mentions(keptText, m.id)).map((m) => m.id);
+  return { playlistIds: done.map((pl) => pl.id), presentationIds, mediaIds };
 }
