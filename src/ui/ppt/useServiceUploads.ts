@@ -16,6 +16,7 @@ import { templateDeckUpdates } from '../../domain/templates/register';
 import { announcementSlides, refreshFront, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
 import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
+import { withSharedSongs } from '../../domain/online';
 import { parsePrayerTopics } from '../../domain/sunday/prayer';
 import { parseAnnouncements } from '../../domain/sunday/announcements';
 import { applyConfessionSong, pickConfessionSong } from '../../domain/templates/confession';
@@ -430,7 +431,8 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
           const back = deckOf(SECTION.back);
           if (!back) continue;
           const { sunday } = lib.current;
-          const { song, missing } = pickConfessionSong(lib.current.presentations, [d.confession, sunday.confessionSong, DEFAULT_CONFESSION_SONG]);
+          const presentations = await withSharedSongs(lib.current.presentations, [d.confession, sunday.confessionSong, DEFAULT_CONFESSION_SONG], sunday.linesPerSlide);
+          const { song, missing } = pickConfessionSong(presentations, [d.confession, sunday.confessionSong, DEFAULT_CONFESSION_SONG]);
           if (missing) warnings.push(`공동체 고백 “${missing}” is not in the library${song ? ` — “${song.title}” is used instead` : ''}`);
           const rewritten = song ? applyConfessionSong(back.slides, song, sunday.linesPerSlide) : null;
           if (!rewritten) continue;
