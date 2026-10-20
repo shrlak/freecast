@@ -1,8 +1,8 @@
 // 자동 배경: a slide with no background of its own gets one from its section and its text —
 // black for 기도 · 성경 · 설교 · Front · End, the church's white slide with the logo for 찬양 가사,
-// 광고 and the 공동체 고백송. A deck background the operator picked (colour, picture, video) is kept.
+// 광고 and the 공동체 고백송, deep blue for a song's title slide. A deck background the operator picked (colour, picture, video) is kept.
 import type { Background, Presentation, Slide } from './types';
-import { BG_BLACK, BG_WHITE_LOGO } from './defaults';
+import { BG_BLACK, BG_SONG_TITLE, BG_WHITE_LOGO } from './defaults';
 
 const WHITE_LOGO_URL = 'backgrounds/white-logo.png';
 const DARK_SECTION = /기도|prayer|성경|scripture|bible|설교|sermon|front|end|thank|축도|benediction|blank|title|성찬|communion/i;
@@ -14,6 +14,7 @@ const slideText = (s: Slide) => [s.title, s.text, ...(s.elements ?? []).map((e) 
 /** The background a slide gets by itself: its section decides, then what the text says. */
 export function autoBackground(slide: Slide, pres?: Pick<Presentation, 'title' | 'folder'> | null): Background {
   const section = `${slide.group} ${pres?.title ?? ''}`;
+  if (slide.group === 'Title' && (pres?.folder === 'Songs' || pres?.folder === '☁ 찬양 라이브러리')) return BG_SONG_TITLE;
   if (slide.group === 'Title' || DARK_SECTION.test(slide.group)) return BG_BLACK;
   if (LIGHT_SECTION.test(slide.group)) return BG_WHITE_LOGO;
   const text = slideText(slide);

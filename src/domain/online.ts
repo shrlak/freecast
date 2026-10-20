@@ -77,7 +77,8 @@ export async function fetchOnlineSongs(linesPerSlide: number): Promise<Presentat
     if (seen.has(id)) continue;
     seen.add(id);
     const draft: SongDraft = { title: s.title, key: s.key || undefined, sections: s.sections, progression: s.order?.length ? s.order : undefined };
-    out.push({ ...songToPresentation(draft, opts), id, online: true, background, songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } });
+    const stamp = s.updatedAt ? Date.parse(s.updatedAt) : NaN;
+    out.push({ ...songToPresentation(draft, opts), id, online: true, background, ...(Number.isFinite(stamp) ? { updatedAt: stamp } : {}), songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } });
   }
   try {
     for (const s of await getJson<RetreatSong[]>('retreat-songs.json')) {

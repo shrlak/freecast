@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { Presentation } from '../../domain/types';
 import { deleteSharedSong } from '../../domain/online';
-import { ADMIN_KEY, readAdmin } from './SongEditor';
+import { dedupeSongs, isLibrarySong } from '../../domain/sunday/dedupe';
+import type { Action } from '../../domain/reducer';
+import { readAdmin, rememberAdmin } from './SongEditor';
 
 /** The shared 찬양 라이브러리: search, tick songs and delete them (관리자 password, as in the song editor). */
-export function SongLibraryModal({ songs, onEdit, reloadOnline, notify, onClose }: {
-  songs: Presentation[]; onEdit: (id: string) => void; reloadOnline: () => void; notify: (m: string) => void; onClose: () => void;
+export function SongLibraryModal({ songs, dispatch, onEdit, reloadOnline, notify, onClose }: {
+  songs: Presentation[]; dispatch: (a: Action) => void; onEdit: (id: string) => void; reloadOnline: () => void; notify: (m: string) => void; onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -14,12 +16,21 @@ export function SongLibraryModal({ songs, onEdit, reloadOnline, notify, onClose 
   const [error, setError] = useState<string | null>(null);
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return songs.filter((s) => s.online && (!q || s.title.toLowerCase().includes(q))).sort((a, b) => a.title.localeCompare(b.title, 'ko'));
+    return songs.filter((s) => isLibrarySong(s) && (!q || s.title.toLowerCase().includes(q))).sort((a, b) => a.title.localeCompare(b.title, 'ko'));
   }, [songs, query]);
   const toggle = (id: string) => setPicked((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
+  /** Same title → one song: the newest stays, the rest are removed. */
+  const merge = () => {
+    const extra = dedupeSongs(songs).replaced.size;
+    if (!extra) return notify('제목이 같은 중복 찬양이 없습니다');
+    dispatch({ type: 'songs/dedupe' });
+    notify(`제목이 같은 찬양 ${extra}곡을 정리했습니다 — 가장 최근 것만 남겼습니다`);
+  };
+
   const remove = async () => {
-    const titles = songs.filter((s) => picked.has(s.id)).map((s) => s.title);
+    const chosen = songs.filter((s) => picked.has(s.id));
+    const titles = chosen.map((s) => s.title);
     if (!titles.length) return;
     if (!admin) return setError('관리자 비밀번호를 입력하세요.');
     if (!confirm(`교회 찬양 라이브러리에서 ${titles.length}곡을 삭제할까요? 모든 컴퓨터와 주일예배 생성기에서 사라집니다.\n\n${titles.slice(0, 10).join('\n')}${titles.length > 10 ? '\n…' : ''}`)) return;
@@ -28,15 +39,17 @@ export function SongLibraryModal({ songs, onEdit, reloadOnline, notify, onClose 
     try {
       for (const t of titles) {
         setBusy(`삭제 중 ${done + 1}/${titles.length}: ${t}`);
-        await deleteSharedSong(t, admin);
+        // A song only edited on this computer was never in the shared library; that is not a failure.
+        await deleteSharedSong(t, admin).catch((e) => { if (chosen[done]?.online) throw e; });
         done++;
       }
-      try { sessionStorage.setItem(ADMIN_KEY, admin); } catch { /* private window */ }
+      rememberAdmin(admin);
     } catch (e) {
       setError(`${done}곡 삭제 후 중단: ${(e as Error).message}`);
     }
     setBusy(null);
     setPicked(new Set());
+    for (const s of chosen.slice(0, done)) if (!s.online) dispatch({ type: 'presentation/delete', id: s.id });
     if (done) {
       notify(`${done}곡을 교회 찬양 라이브러리에서 삭제했습니다`);
       reloadOnline();
@@ -47,7 +60,7 @@ export function SongLibraryModal({ songs, onEdit, reloadOnline, notify, onClose 
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-label="찬양 라이브러리">
         <header className="modal-head">
-          <h2>☁ 찬양 라이브러리 · {songs.filter((s) => s.online).length}곡</h2>
+          <h2>☁ 찬양 라이브러리 · {songs.filter(isLibrarySong).length}곡</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="wizard-body stack">
@@ -69,6 +82,7 @@ export function SongLibraryModal({ songs, onEdit, reloadOnline, notify, onClose 
         </div>
         <footer className="modal-foot">
           <span className="muted small grow">{picked.size}곡 선택</span>
+          <button onClick={merge} title="제목이 같은 찬양을 하나로 합치고 가장 최근 것만 남깁니다">중복 찬양 정리</button>
           <button onClick={() => setPicked(new Set(list.map((s) => s.id)))}>보이는 곡 모두 선택</button>
           <button disabled={!picked.size} onClick={() => setPicked(new Set())}>선택 해제</button>
           <button className="danger" disabled={!picked.size || !!busy} onClick={remove}>선택한 곡 삭제</button>
