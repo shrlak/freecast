@@ -22,6 +22,8 @@ export interface Theme {
   subScale?: number;
   /** Shrink text that would overflow the slide (default on). */
   autoFit?: boolean;
+  /** Keep each line on one line and shrink instead of wrapping (lyrics; default on for the template lyrics theme). */
+  noWrap?: boolean;
   /** Text effects. */
   strokeColor?: string;
   strokeWidth?: number;

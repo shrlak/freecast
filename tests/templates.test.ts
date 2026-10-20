@@ -214,10 +214,10 @@ describe('공동체 고백송 and template deck sync', async () => {
     const out = applyConfessionSong(back, song)!;
     const texts = (s: Slide) => s.elements!.map((e) => e.text);
     expect(texts(out[0])).toEqual(['공동체 고백송\n“우리는 주의 움직이는 교회”']);
-    // Verse 1 (5 lines, max 4 per slide) → 3 + 2, then Chorus
+    // Slide for slide as the song is laid out (its blank-line breaks kept), then Chorus
     expect(out.slice(1, -1).map((s) => texts(s))).toEqual([
-      ['우리 모일 때', 'A1\nA2\nA3', '우리는 주의 움직이는 교회'],
-      ['우리 모일 때', 'A4\nA5', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'A1\nA2', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'A3\nA4\nA5', '우리는 주의 움직이는 교회'],
       ['우리 모일 때', 'C1\nC2', '우리는 주의 움직이는 교회'],
     ]);
     expect(out[1].background).toEqual(back[1].background);
@@ -240,14 +240,14 @@ describe('공동체 고백송 and template deck sync', async () => {
     const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1', song: 's1' } };
     const backPatch = templateDeckUpdates(lib, tpl).find((u) => u.id === lib.sunday.backId)!.patch;
     const lyrics = backPatch.slides!.slice(1, -1).map((s) => s.elements!.find((e) => e.w === 1411)!.text);
-    expect(lyrics).toEqual(['A1\nA2\nA3', 'A4\nA5', 'C1\nC2']);
+    expect(lyrics).toEqual(['A1\nA2', 'A3\nA4\nA5', 'C1\nC2']);
   });
 
   it('rewrites a block that already names the song but holds only part of it', () => {
     const partial = applyConfessionSong(back, { ...song, slides: song.slides.slice(0, 1) })!;
     expect(partial).toHaveLength(3);
     const out = applyConfessionSong(partial, song)!;
-    expect(out.slice(1, -1).map((s) => s.elements![1].text)).toEqual(['A1\nA2\nA3', 'A4\nA5', 'C1\nC2']);
+    expect(out.slice(1, -1).map((s) => s.elements![1].text)).toEqual(['A1\nA2', 'A3\nA4\nA5', 'C1\nC2']);
   });
 
   it('keeps lyrics and corner title apart when the first line is the song’s name', () => {
@@ -260,6 +260,12 @@ describe('공동체 고백송 and template deck sync', async () => {
       ['우리 모일 때', 'C1', '우리는 주의 움직이는 교회'],
       ['우리 모일 때', 'C2', '우리는 주의 움직이는 교회'],
     ]);
+  });
+
+  it('keeps the song’s blank-line slide breaks', () => {
+    // 찬양 가사 with a blank line inside a part: two slides of 4, never one slide of 8.
+    const broken: Presentation = { ...song, slides: [{ id: 'a', group: 'Chorus 1', text: 'C1\nC2\nC3\nC4' }, { id: 'b', group: 'Chorus 1', text: 'C5\nC6\nC7\nC8' }] };
+    expect(applyConfessionSong(back, broken, 8)!.slice(1, -1).map((s) => s.elements![1].text)).toEqual(['C1\nC2\nC3\nC4', 'C5\nC6\nC7\nC8']);
   });
 
   it('splits parts at the given lines per slide', () => {

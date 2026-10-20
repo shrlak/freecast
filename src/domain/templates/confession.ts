@@ -67,11 +67,20 @@ export function findConfessionSong(presentations: Presentation[], title: string)
   return all.find((p) => p.online) ?? [...all].sort((a, b) => lineCount(b) - lineCount(a))[0];
 }
 
+/** The song's lyric slides as written (blank-line breaks kept), any slide over `maxLines` split evenly. */
+export function songChunks(song: Presentation, maxLines: number): string[][] {
+  return song.slides
+    .filter((slide) => slide.group !== 'Title' && !slide.disabled)
+    .map((slide) => stripChords(slide.text).split('\n').map((l) => l.trim()).filter(Boolean))
+    .filter((lines) => lines.length)
+    .flatMap((lines) => splitEvenly(lines, maxLines));
+}
+
 const replaceTitle = (text: string, from: string, to: string) => (norm(text) === norm(from) ? to : text.split(from).join(to));
 
 /**
- * The Back deck with its 공동체 고백송 replaced by all of `song`, each part split into slides of at
- * most `maxLines` lines; null when the deck has no recognisable block or the song has no lyrics.
+ * The Back deck with its 공동체 고백송 replaced by all of `song`, slide for slide as the song is laid
+ * out (its blank-line breaks kept), any slide over `maxLines` lines split evenly; null when the deck has no recognisable block or the song has no lyrics.
  * A deck that already prints exactly these lyrics comes back as is.
  */
 export function applyConfessionSong(back: Slide[], song: Presentation, maxLines = DEFAULT_LINES_PER_SLIDE): Slide[] | null {
@@ -87,7 +96,7 @@ export function applyConfessionSong(back: Slide[], song: Presentation, maxLines 
   const lyricBox = [...textEls(design)].sort((a, b) => b.w * b.h - a.w * a.h)[0];
   if (!lyricBox) return null;
   const titleBox = textEls(design).find((e) => e !== lyricBox && norm(e.text ?? '').includes(key));
-  const chunks = sections.flatMap((lines) => splitEvenly(lines, maxLines));
+  const chunks = songChunks(song, maxLines);
   const lyricsOf = (s: Slide) => {
     const box: SlideElement | undefined = [...textEls(s)].sort((a, b) => b.w * b.h - a.w * a.h)[0];
     return (box?.text ?? '').split('\n').map((l) => l.trim()).filter(Boolean).join('\n');

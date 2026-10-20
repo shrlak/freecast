@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import type { Background, Prop, Screen, Slide, SlideElement, Theme, Timer, Transition } from '../domain/types';
 import { stripChords } from '../domain/lyrics';
 import { CHURCH_LOGO_URL } from '../domain/defaults';
+import { TEMPLATE_LYRICS_THEME } from '../domain/templates/fill';
 import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
 import { useMediaUrl, useNow, useWidth } from './hooks';
@@ -211,16 +212,29 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const hasQr = !!slide.qr?.length;
   const inner = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
-  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}`;
-  useLayoutEffect(() => setScale(1), [content]);
+  // Lyric lines never wrap (a long line would leave one word alone on the next line): the text shrinks instead.
+  // A line too long to fit even at 60% size (a whole verse typed as one line) wraps as before.
+  const [tooLong, setTooLong] = useState(false);
+  const lyricLines = theme.noWrap ?? theme.id === TEMPLATE_LYRICS_THEME;
+  const noWrap = lyricLines && !tooLong;
+  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}|${lyricLines}`;
+  useLayoutEffect(() => {
+    setScale(1);
+    setTooLong(false);
+  }, [content]);
   useLayoutEffect(() => {
     const el = inner.current;
     if (!el || theme.autoFit === false) return;
     const availH = CANVAS_H - theme.padding * 2;
     const availW = CANVAS_W - theme.padding * 2 - (hasQr ? 300 : 0);
     const k = Math.min(availH / el.scrollHeight, availW / el.scrollWidth);
+    if (noWrap && scale * k < 0.6 && availW / el.scrollWidth < 0.99) {
+      setScale(1);
+      setTooLong(true);
+      return;
+    }
     if (k < 0.99 && scale > 0.25) setScale((v) => Math.max(0.25, v * k * 0.98));
-  }, [scale, content, hasQr, theme.autoFit, theme.padding]);
+  }, [scale, content, hasQr, theme.autoFit, theme.padding, noWrap]);
   const t = scale === 1 ? theme : { ...theme, fontSize: theme.fontSize * scale };
   return (
     <>
@@ -228,7 +242,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
         className="layer text-layer"
         style={{ padding: theme.padding, paddingRight: hasQr ? theme.padding + 300 : theme.padding, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
       >
-        <div ref={inner} style={textStyle(t)}>
+        <div ref={inner} style={{ ...textStyle(t), whiteSpace: noWrap ? 'pre' : undefined }}>
           {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}
           {slide.text && <Lines text={slide.text} />}
           {slide.subtext && (
