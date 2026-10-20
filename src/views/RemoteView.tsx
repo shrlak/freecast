@@ -42,17 +42,19 @@ export function RemoteView() {
   const cmd = (command: Record<string, unknown>) => send({ type: 'command', command });
 
   if (error) {
+    const submit = (v: string) => {
+      localStorage.setItem('freecast.pin', v);
+      setError(null);
+      setPin(v);
+    };
     return (
       <div className="remote-root remote-pin">
-        <p>{error}</p>
-        <input inputMode="numeric" placeholder="PIN" defaultValue={pin} onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            const v = (e.target as HTMLInputElement).value;
-            localStorage.setItem('freecast.pin', v);
-            setError(null);
-            setPin(v);
-          }
+        <h3>FreeCast Remote</h3>
+        <p>{pin ? `${error}. Enter the PIN shown in FreeCast on the computer.` : 'Enter the PIN shown in FreeCast on the computer.'}</p>
+        <input id="remote-pin" inputMode="numeric" autoFocus placeholder="PIN" defaultValue={pin} onKeyDown={(e) => {
+          if (e.key === 'Enter') submit((e.target as HTMLInputElement).value.trim());
         }} />
+        <button className="primary" onClick={() => submit((document.getElementById('remote-pin') as HTMLInputElement).value.trim())}>Connect</button>
       </div>
     );
   }
