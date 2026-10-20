@@ -7,7 +7,7 @@ const PIN = process.env.FREECAST_REMOTE_PIN || '';
 const COMMANDS = new Set([
   'live/next', 'live/prev', 'live/clearAll', 'live/clearText', 'live/clearBackground', 'live/toggleBlack',
   'live/go', 'playlist/select', 'macro/run', 'timer/op', 'prop/toggle', 'live/message',
-  'live/logo', 'live/stageMessage', 'prop/clearAll', 'announce/stop',
+  'live/logo', 'live/stageMessage', 'prop/clearAll', 'announce/stop', 'show/start', 'show/end',
 ]);
 
 /** Only well-formed commands from the whitelist reach the operator. */
