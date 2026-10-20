@@ -157,7 +157,7 @@ export function SundayWizard({ state, dispatch, onClose, notify }: Props) {
           {busy && <div className="card busy">⏳ {busy}</div>}
           {step === 0 && (
             <SundaySongs songs={d.songs} setSongs={(songs) => set({ songs })} notice={d.notice} setNotice={(notice) => set({ notice })}
-              library={state.library.presentations} linesPerSlide={sunday.linesPerSlide}
+              library={state.library.presentations} linesPerSlide={sunday.linesPerSlide} confessionSong={d.confession || sunday.confessionSong}
               setLinesPerSlide={(n) => dispatch({ type: 'sunday/settings', patch: { linesPerSlide: n } })} onCover={onCover} notify={notify} />
           )}
           {step === 1 && (

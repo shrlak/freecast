@@ -9,6 +9,7 @@ import { attachRelay } from './relay.mjs';
 import { controlMiddleware } from './control.mjs';
 import { dmxMiddleware } from './dmx.mjs';
 import { cloudMiddleware } from './cloud.mjs';
+import { recognitionMiddleware } from './recognition.mjs';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
@@ -45,7 +46,7 @@ export function startServer({ root, port, host = '127.0.0.1' }) {
   if (!fs.existsSync(path.join(root, 'index.html'))) throw new Error(`App files not found in ${root} — run \`npm run build\` first.`);
   const serveStatic = staticHandler(path.resolve(root));
   let control = (_req, _res, next) => next();
-  const server = http.createServer((req, res) => aiMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res))))));
+  const server = http.createServer((req, res) => aiMiddleware(req, res, () => recognitionMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res)))))));
   const wss = attachRelay(server);
   control = controlMiddleware(wss);
   return new Promise((resolve, reject) => {

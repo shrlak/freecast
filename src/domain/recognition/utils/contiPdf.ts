@@ -1,0 +1,225 @@
+// Browser-side wrapper around pdf.js for loading a 찬양 콘티 PDF:
+// per-page text extraction, page classification, and page-image rendering.
+import * as pdfjs from 'pdfjs-dist';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import type { ContiInfo, ParsedConti } from './types';
+import { parseCoverText } from './contiText';
+import { nameUntitledRowsFromLayout, parseSermonInfoText } from './contiTitles';
+import { classifyPages, matchSongsToPages, readPrayerPage } from './contiPages';
+import type { PositionedPage, PositionedText } from './chordSheet';
+import { isChordSheetConti } from './chordSlides';
+
+pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+
+const BASE: string = (import.meta.env && import.meta.env.BASE_URL) || '/';
+
+/**
+ * One pdf.js worker for every PDF the page opens.
+ *
+ * Starting a worker means fetching and compiling pdf.js's worker script, which
+ * is most of what opening a conti costs before a single page can be read. Left
+ * to itself pdf.js starts a fresh one for every document; a shared one pays
+ * that once, and warmPdfWorker() lets a page pay it before the conti is even
+ * dropped. A document that is destroyed leaves a worker it did not start
+ * running, so the next PDF finds it ready.
+ */
+let sharedWorker: pdfjs.PDFWorker | null = null;
+
+export function warmPdfWorker(): pdfjs.PDFWorker {
+  if (!sharedWorker || sharedWorker.destroyed) sharedWorker = new pdfjs.PDFWorker();
+  return sharedWorker;
+}
+
+export function loadPdfTask(data: ArrayBuffer): pdfjs.PDFDocumentLoadingTask {
+  return pdfjs.getDocument({
+    data: new Uint8Array(data.slice(0)),
+    cMapUrl: BASE + 'cmaps/',
+    cMapPacked: true,
+    standardFontDataUrl: BASE + 'standard_fonts/',
+    worker: warmPdfWorker(),
+  });
+}
+
+export interface ContiDocument {
+  parsed: ParsedConti;
+  /**
+   * Render a page (1-based) to a data URL, scaled to maxWidth CSS px.
+   * `format: 'png'` renders losslessly — scores are black-on-white line art,
+   * so PNG both compresses well and avoids the JPEG ringing around small
+   * lyric type that hurts AI recognition. JPEG stays the default for
+   * on-screen previews.
+   */
+  renderPage(pageNumber: number, maxWidth?: number, format?: 'jpeg' | 'png'): Promise<string>;
+  destroy(): void;
+}
+
+interface TextItemLike {
+  str: string;
+  hasEOL?: boolean;
+  transform?: number[];
+  width?: number;
+}
+
+async function extractPageText(page: pdfjs.PDFPageProxy): Promise<{ text: string; positioned: PositionedPage }> {
+  const content = await page.getTextContent();
+  const viewport = page.getViewport({ scale: 1 });
+  const positioned: PositionedPage = { width: viewport.width, height: viewport.height, items: [] };
+  let text = '';
+  let lastY: number | null = null;
+  let lastEndX: number | null = null;
+  for (const raw of content.items) {
+    const item = raw as TextItemLike;
+    if (typeof item.str !== 'string') continue;
+    const tf = item.transform;
+    const x = tf ? tf[4] : null;
+    const y = tf ? tf[5] : null;
+    const fontSize = tf ? Math.abs(tf[0]) || Math.abs(tf[3]) || 10 : 10;
+    if (x !== null && y !== null && item.str.trim()) {
+      const piece: PositionedText = { str: item.str, x, y, width: item.width ?? 0, size: tf ? Math.hypot(tf[2], tf[3]) || fontSize : fontSize };
+      positioned.items.push(piece);
+    }
+    if (text.length > 0 && !text.endsWith('\n')) {
+      if (lastY !== null && y !== null && Math.abs(y - lastY) > 2) {
+        text += '\n';
+      } else if (
+        // Items are often per-glyph with explicit space items in between;
+        // only a real horizontal gap means a missing word break.
+        lastEndX !== null &&
+        x !== null &&
+        x - lastEndX > 0.3 * fontSize &&
+        !/\s$/.test(text)
+      ) {
+        text += ' ';
+      }
+    }
+    text += item.str;
+    if (item.hasEOL) text += '\n';
+    if (y !== null) lastY = y;
+    lastEndX = x !== null ? x + (item.width ?? 0) : null;
+  }
+  return { text, positioned };
+}
+
+/** Every way pdf.js paints a picture onto a page. */
+const PICTURE_OPS = new Set([
+  pdfjs.OPS.paintImageXObject,
+  pdfjs.OPS.paintImageXObjectRepeat,
+  pdfjs.OPS.paintInlineImageXObject,
+  pdfjs.OPS.paintInlineImageXObjectGroup,
+  pdfjs.OPS.paintImageMaskXObject,
+  pdfjs.OPS.paintImageMaskXObjectGroup,
+  pdfjs.OPS.paintImageMaskXObjectRepeat,
+  pdfjs.OPS.paintSolidColorImageMask,
+]);
+
+/**
+ * True when the page is typed text and nothing else. A 기도 page is; a 악보
+ * is a picture (a scan, a photo, a flattened SongSelect sheet), even one
+ * whose text layer only holds a handwritten `Prayer topic`. Asked only of the
+ * few pages whose text already reads as a 기도 page, since listing a page's
+ * drawing operations means reading its pictures too.
+ */
+async function drawsNoPicture(doc: pdfjs.PDFDocumentProxy, pageNumber: number): Promise<boolean> {
+  try {
+    const page = await doc.getPage(pageNumber);
+    const operators = await page.getOperatorList();
+    return !operators.fnArray.some((op) => PICTURE_OPS.has(op));
+  } catch {
+    return false;
+  }
+}
+
+export async function loadConti(data: ArrayBuffer): Promise<ContiDocument> {
+  // pdf.js transfers the buffer to its worker, so hand it a private copy.
+  const loadingTask = loadPdfTask(data);
+  const doc = await loadingTask.promise;
+
+  // Every page is asked for at once rather than one after another: the pdf.js
+  // worker then goes straight from one page to the next instead of waiting on
+  // a round trip each time, and nothing — the song cards and their 악보
+  // previews included — can start until the last page is read.
+  const extracted = await Promise.all(
+    Array.from({ length: doc.numPages }, (_, index) =>
+      doc.getPage(index + 1).then((page) =>
+        extractPageText(page).catch(() => ({
+          text: '',
+          positioned: { width: 0, height: 0, items: [] } as PositionedPage,
+        })),
+      ),
+    ),
+  );
+  const pageTexts = extracted.map((page) => page.text);
+  const positionedPages = extracted.map((page) => page.positioned);
+
+  // A page saying only `기도` (or `Prayer Topic 2: …`) is where the night
+  // prays, not a song.
+  const prayerCandidates = pageTexts.flatMap((text, index) => (readPrayerPage(text) ? [index + 1] : []));
+  const typedOnly = await Promise.all(prayerCandidates.map((page) => drawsNoPicture(doc, page)));
+  const prayerPageSet = new Set(prayerCandidates.filter((_, index) => typedOnly[index]));
+  const { coverPages, infoPages, prayerPages, musicPages } = classifyPages(pageTexts, (page) =>
+    prayerPageSet.has(page),
+  );
+  // The cover is read as ONE document however many pages it spans: a song
+  // table on the first page and its commentary bullets on the next belong
+  // to the same list, and parsing them separately loses the pairing.
+  const coverText = coverPages.map((page) => pageTexts[page - 1]).join('\n');
+  const info: ContiInfo = (coverPages.length > 0 ? parseCoverText(coverText) : null) ?? { songs: [] };
+  // A song-table title the text order lost (drawn last, in another font) is
+  // still in its row on the page.
+  nameUntitledRowsFromLayout(
+    info,
+    coverPages.map((page) => positionedPages[page - 1]),
+  );
+
+  // The sermon title and 본문 are written together on the cover, so that is
+  // where they are taken from first.
+  const fromCover = parseSermonInfoText(coverText);
+  info.sermonTitle ??= fromCover.sermonTitle;
+  info.scripture ??= fromCover.scripture;
+  // Failing that, a conti may put them on a typed page of their own. Only
+  // pages that carry no score are read: a sheet-music text layer can open a
+  // lyric line with 말씀, and reading that as the 본문 puts a lyric into the
+  // Bible step. Image-only pages are handled by vision models during the
+  // title/classification pass.
+  for (const page of infoPages) {
+    if (info.sermonTitle && info.scripture) break;
+    const detected = parseSermonInfoText(pageTexts[page - 1]);
+    info.sermonTitle ??= detected.sermonTitle;
+    info.scripture ??= detected.scripture;
+  }
+  matchSongsToPages(info, pageTexts, musicPages);
+  if (prayerPages.length > 0) {
+    info.prayers = prayerPages.map((page) => {
+      const topics = readPrayerPage(pageTexts[page - 1])?.topics;
+      return topics ? { page, topics } : { page };
+    });
+  }
+
+  const parsed: ParsedConti = { info, numPages: doc.numPages, pageTexts, musicPages };
+  // A chord-sheet PDF carries its lyrics as text; where each piece of it
+  // sits is what puts the lines back together (see chordSheet.ts). One that
+  // also holds scanned 악보 is an ordinary conti with a sheet or two in it.
+  if (isChordSheetConti(pageTexts, musicPages)) parsed.chordSheetPages = positionedPages;
+
+  return {
+    parsed,
+    async renderPage(pageNumber: number, maxWidth = 900, format: 'jpeg' | 'png' = 'jpeg'): Promise<string> {
+      const page = await doc.getPage(pageNumber);
+      const base = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: maxWidth / base.width });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('캔버스를 만들 수 없습니다.');
+      // pdf.js 6 takes the canvas itself; a white ground keeps transparent scans readable.
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+      return format === 'png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.85);
+    },
+    destroy() {
+      void loadingTask.destroy();
+    },
+  };
+}

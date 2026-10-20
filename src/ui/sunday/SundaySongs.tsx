@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { Presentation } from '../../domain/types';
 import { findSong, parseLyricsMarkdown, type SongDraft, type SongSection } from '../../domain/sunday/songs';
 import { parseNotice, type ParsedNotice } from '../../domain/sunday/notice';
-import { renderPdf, blobToBase64 } from '../../domain/io/pdf';
+import { readConti as readContiPdf } from '../../domain/recognition/conti';
 import { ai } from '../../domain/ai';
 
 export function sectionsToText(sections: SongSection[]): string {
@@ -38,6 +38,8 @@ interface Props {
   setNotice: (s: string) => void;
   library: Presentation[];
   linesPerSlide: number;
+  /** This week's 공동체 고백송, set apart from the 찬양 when reading a 콘티. */
+  confessionSong?: string;
   setLinesPerSlide: (n: number) => void;
   onCover: (info: CoverInfo) => void;
   notify: (msg: string) => void;
@@ -48,7 +50,7 @@ function linkLibrary(song: SongDraft, library: Presentation[]): SongDraft {
   return match && !song.sections.length ? { ...song, presentationId: match.id } : song;
 }
 
-export function SundaySongs({ songs, setSongs, notice, setNotice, library, linesPerSlide, setLinesPerSlide, onCover, notify }: Props) {
+export function SundaySongs({ songs, setSongs, notice, setNotice, library, linesPerSlide, confessionSong, setLinesPerSlide, onCover, notify }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const pdfRef = useRef<HTMLInputElement>(null);
   const mdRef = useRef<HTMLInputElement>(null);
@@ -94,18 +96,15 @@ export function SundaySongs({ songs, setSongs, notice, setNotice, library, lines
 
   const readConti = async (file: File | undefined) => {
     if (!file) return;
-    setBusy('Rendering 콘티 pages…');
+    setBusy('콘티 읽는 중…');
     try {
-      const pages = await renderPdf(file, { scale: 1.6, maxPages: 30, quality: 0.8 });
-      setBusy(`AI is reading ${pages.length} pages (this can take a minute)…`);
-      const payload = await Promise.all(pages.map(async (p) => ({ page: p.page, data: await blobToBase64(p.blob), text: p.text })));
-      const r = await ai.conti(payload, songs.map((s) => s.title));
-      setSongs(r.songs.map((s) => ({
-        title: s.title, key: s.key || undefined, sections: s.sections, progression: s.progression?.length ? s.progression : undefined, pages: s.pages,
-      })));
-      const [y, m, d] = r.date.split('-').map(Number);
-      onCover({ date: m ? { year: y, month: m, day: d } : undefined, scripture: r.scripture, sermonTitle: r.sermonTitle, preacher: r.preacher, confession: r.confession });
-      notify(`콘티 read: ${r.songs.length} songs.`);
+      // The ppt site's recognition (domain/recognition): library first, the AI models for the rest.
+      const notes: string[] = [];
+      const r = await readContiPdf(file, { presentations: library, linesPerSlide, confessionSong: confessionSong ?? '', notify: (m) => notes.push(m), progress: setBusy });
+      setSongs(r.songs.map((s) => s.draft));
+      onCover({ date: r.date, scripture: r.scripture, sermonTitle: r.sermonTitle });
+      const unread = r.songs.filter((s) => s.needsReview).length;
+      notify(`콘티 read: ${r.songs.length} songs${unread ? ` (${unread} to check against the 악보)` : ''}.${notes.length ? ` ${notes.join(' ')}` : ''}`);
     } catch (e) {
       notify((e as Error).message);
     } finally {

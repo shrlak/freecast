@@ -37,6 +37,7 @@ import { AiUsage } from '../ui/AiUsage';
 import { FeedbackModal } from '../ui/FeedbackModal';
 import { PrayerSetting } from '../ui/sunday/PrayerSetting';
 import { SongEditor } from '../ui/sunday/SongEditor';
+import { reviewNote } from '../ui/ppt/contiReview';
 import { PptLayout } from '../ui/ppt/PptLayout';
 import { openOutput } from '../ui/LivePanel';
 import type { Commands, Layout, Modal, PptViewMode } from '../ui/ppt/commands';
@@ -429,6 +430,15 @@ export function OperatorView() {
       {(modal === 'song' || modal === 'songNew') && (
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />
       )}
+      {service.review && (() => {
+        const r = service.review;
+        const song = r.reading.songs[r.index];
+        return (
+          <SongEditor key={song.id} library={state.library} dispatch={dispatch} song={null} notify={notify} reloadOnline={loadOnline} onClose={service.cancelReview}
+            review={{ draft: song.draft, index: r.index, total: r.reading.songs.length, note: reviewNote(song, r), warn: song.needsReview, pageImages: song.pageImages,
+              onAccept: service.answerReview, onSkip: () => service.answerReview(null), onCancel: () => confirm('콘티 확인을 그만둘까요? 아직 예배에 넣지 않은 곡은 버려집니다.') && service.cancelReview() }} />
+        );
+      })()}
       {modal === 'prayer' && <PrayerSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
       {modal === 'aiUsage' && <AiUsage onClose={() => setModal(null)} />}
       {modal === 'feedback' && <FeedbackModal notify={notify} onClose={() => setModal(null)} />}

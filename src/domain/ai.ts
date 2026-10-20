@@ -1,4 +1,3 @@
-import type { SongDraft } from './sunday/songs';
 import type { PrayerTopic } from './sunday/prayer';
 import type { Announcement } from './sunday/announcements';
 
@@ -8,9 +7,6 @@ export interface AiServiceInfo {
   sermonTitle: string;
   preacher: string;
   confession: string;
-}
-export interface AiConti extends AiServiceInfo {
-  songs: (Omit<SongDraft, 'key'> & { key: string })[];
 }
 export interface AiNotice extends AiServiceInfo {
   songs: { title: string; key: string }[];
@@ -70,7 +66,6 @@ export const ai = {
   },
   retreat: (pages: { page: number; data: string; text: string }[]) => post<AiRetreat>('retreat', { pages }),
   status: () => fetch('/api/ai/status').then((r) => (r.ok ? r.json() as Promise<{ model: string; configured: boolean }> : null)).catch(() => null),
-  conti: (pages: { page: number; data: string; text: string }[], knownTitles: string[]) => post<AiConti>('conti', { pages, knownTitles }),
   notice: (text: string) => post<AiNotice>('notice', { text }),
   translate: (title: string, slides: { id: string; text: string }[], target = 'English') =>
     post<{ lines: { id: string; text: string }[] }>('translate', { title, slides, target }),

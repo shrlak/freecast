@@ -1,7 +1,7 @@
 import { useMemo, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
 import type { Library, Presentation } from '../../domain/types';
-import { songToPresentation, findSong, type SongSection } from '../../domain/sunday/songs';
+import { songToPresentation, findSong, type SongDraft, type SongSection } from '../../domain/sunday/songs';
 import { planSectionSlides } from '../../domain/sunday/slidePlanner';
 import { deleteSharedSong, registerSharedSong } from '../../domain/online';
 import { uid } from '../../domain/lyrics';
@@ -32,19 +32,38 @@ function partsOf(song: Presentation | null): Part[] {
 
 const orderOf = (song: Presentation | null) => song?.songSource?.order ?? song?.meta?.order ?? [];
 
+/** One song read off a 콘티, shown for the operator to check before it goes into this week's 예배. */
+export interface SongReview {
+  draft: SongDraft;
+  index: number;
+  total: number;
+  /** What to tell the operator about this reading (where it came from, what to look at). */
+  note: string;
+  warn: boolean;
+  /** The song's 악보 page(s), to compare against. */
+  pageImages: string[];
+  onAccept: (draft: SongDraft) => void;
+  onSkip: () => void;
+  onCancel: () => void;
+}
+
 /**
  * 찬양 편집 · 등록, the way the ppt site's song card works: title, key, 진행 (I-V1-C-…), and the
  * lyrics by part — a line break is the next line, a blank line starts the next slide; each part is
  * split into slides of up to 4 lines (6 lines → 3 + 3). Saves to this computer, or registers the
  * song in the church's shared 찬양 라이브러리 (관리자 password, the same library the ppt site uses).
  */
-export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnline }: {
+export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnline, review }: {
   library: Library; dispatch: Dispatch<Action>; song: Presentation | null; onClose: () => void; notify: (m: string) => void; reloadOnline: () => void;
+  /** Checking a song read off a 콘티: 확인 puts it into this week's 예배 (see useServiceUploads). */
+  review?: SongReview;
 }) {
-  const [title, setTitle] = useState(song?.title ?? '');
-  const [key, setKey] = useState(song?.meta?.key ?? '');
-  const [order, setOrder] = useState(orderOf(song).join('-'));
-  const [parts, setParts] = useState<Part[]>(() => partsOf(song));
+  const draft = review?.draft;
+  const [title, setTitle] = useState(draft?.title ?? song?.title ?? '');
+  const [key, setKey] = useState(draft ? draft.key ?? '' : song?.meta?.key ?? '');
+  const [order, setOrder] = useState((draft ? draft.progression ?? [] : orderOf(song)).join('-'));
+  const [parts, setParts] = useState<Part[]>(() =>
+    draft?.sections.length ? draft.sections.map((s) => ({ id: uid('pt'), label: s.label, text: s.lines.join('\n') })) : partsOf(song));
   const [admin, setAdmin] = useState(readAdmin);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +109,14 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     }
     setBusy(null);
     reloadOnline();
-    onClose();
+    if (review) accept();
+    else onClose();
+  };
+
+  /** The song as checked, into this week's 예배. */
+  const accept = () => {
+    const e = entry();
+    review?.onAccept({ ...review.draft, title: e.title, key: e.key, sections: e.sections, progression: tokens.length ? tokens : undefined });
   };
 
   const register = () => withAdmin('등록 중…', async () => {
@@ -104,15 +130,17 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
       notify(`“${song.title}”을(를) 교회 찬양 라이브러리에서 삭제했습니다`);
     });
   };
-  const duplicate = !song && title.trim() && findSong(library.presentations, title.trim());
+  const duplicate = !song && !review && title.trim() && findSong(library.presentations, title.trim());
+  const close = review ? review.onCancel : onClose;
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(e) => !review && e.target === e.currentTarget && onClose()}>
       <div className="modal song-editor" role="dialog" aria-label="찬양 편집">
         <header className="modal-head">
-          <h2>🎵 {song ? '찬양 편집' : '새 찬양 등록'}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
+          <h2>🎵 {review ? `콘티 찬양 확인 ${review.index + 1}/${review.total}` : song ? '찬양 편집' : '새 찬양 등록'}</h2>
+          <button className="icon-btn" onClick={close} aria-label="Close">✕</button>
         </header>
+        {review && <p className={review.warn ? 'warn song-review-note' : 'hint song-review-note'}>{review.note}</p>}
         <div className="song-editor-body">
           <div className="stack song-editor-form">
             <div className="row gap-s">
@@ -139,6 +167,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
             <button onClick={() => setParts((l) => [...l, { id: uid('pt'), label: ['V1', 'C', 'V2', 'B', 'PC', 'T'][l.length] ?? `P${l.length + 1}`, text: '' }])}>＋ 파트 추가</button>
           </div>
           <div className="song-editor-preview">
+            {review?.pageImages.map((src, i) => <img key={i} className="song-review-page" src={src} alt={`악보 ${i + 1}`} />)}
             <div className="muted small">미리보기 · 제목 슬라이드 + 가사 슬라이드 {slideCount}장</div>
             <div className="song-preview-slide title">{title || '제목'}</div>
             {plan.flatMap((part) => part.slides.map((lines, k) => (
@@ -155,9 +184,19 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
             <input type="password" value={admin} onChange={(e) => setAdmin(e.target.value)} autoComplete="off" style={{ width: 150 }} />
           </label>
           <span className="grow" />
-          {song?.online && <button className="danger" disabled={!!busy} onClick={remove}>라이브러리에서 삭제</button>}
-          <button disabled={!valid || !!busy} onClick={saveLocal}>이 컴퓨터에만 저장</button>
-          <button className="primary" disabled={!valid || !!busy} onClick={register}>{busy ?? '교회 찬양 라이브러리에 등록'}</button>
+          {review ? (
+            <>
+              <button disabled={!!busy} onClick={review.onSkip} title="이 곡은 예배에 넣지 않습니다">빼기</button>
+              <button disabled={!valid || !!busy} onClick={register} title="라이브러리에 등록하고 예배에 넣습니다">{busy ?? '라이브러리에 등록 + 확인'}</button>
+              <button className="primary" disabled={!valid || !!busy} onClick={accept}>{review.index + 1 < review.total ? '확인 · 다음 곡' : '확인 · 예배에 넣기'}</button>
+            </>
+          ) : (
+            <>
+              {song?.online && <button className="danger" disabled={!!busy} onClick={remove}>라이브러리에서 삭제</button>}
+              <button disabled={!valid || !!busy} onClick={saveLocal}>이 컴퓨터에만 저장</button>
+              <button className="primary" disabled={!valid || !!busy} onClick={register}>{busy ?? '교회 찬양 라이브러리에 등록'}</button>
+            </>
+          )}
         </footer>
       </div>
     </div>

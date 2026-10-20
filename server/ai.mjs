@@ -6,17 +6,6 @@ import { aiConfig, askJson, attempts, setAiConfigProvider } from './aiProviders.
 export { setAiConfigProvider };
 const MAX_BODY = 40 * 1024 * 1024;
 
-const Section = z.object({
-  label: z.string().describe('Part code or name exactly as printed: I, V1, V2, PC, C, B, T, E, or a word'),
-  lines: z.array(z.string()).describe('Lyric lines of this part in order, one sung line per entry, no chords'),
-});
-const Song = z.object({
-  title: z.string(),
-  key: z.string().describe('Musical key like G, Bb, F#m; empty string if unknown'),
-  progression: z.array(z.string()).describe('Play order as part codes, e.g. ["I","V1","C","V2","C","B","C"]; empty if not printed'),
-  sections: z.array(Section),
-  pages: z.array(z.number()).describe('1-based page numbers this song was read from'),
-});
 const ServiceInfo = z.object({
   date: z.string().describe('Service date as YYYY-MM-DD if printed, else empty'),
   scripture: z.string().describe('Sermon passage as printed, e.g. 로마서 5장 1-11절; empty if none'),
@@ -24,7 +13,6 @@ const ServiceInfo = z.object({
   preacher: z.string(),
   confession: z.string().describe('공동체 고백 song title if named, else empty'),
 });
-const ContiResult = ServiceInfo.extend({ songs: z.array(Song) });
 const NoticeResult = ServiceInfo.extend({
   songs: z.array(z.object({ title: z.string(), key: z.string() })),
   prayerTopics: z.array(z.object({ title: z.string(), points: z.array(z.string()) })),
@@ -61,27 +49,6 @@ function httpError(status, message) {
 const str = (v, max = 200000) => (typeof v === 'string' && v.length <= max ? v : null);
 
 const handlers = {
-  /** Read a 콘티 PDF (pages as JPEG) into songs with lyrics, keys and progressions, plus cover info. */
-  async conti(body) {
-    const pages = Array.isArray(body.pages) ? body.pages.slice(0, 40) : null;
-    if (!pages?.length) throw httpError(400, 'pages[] required');
-    const known = Array.isArray(body.knownTitles) ? body.knownTitles.filter((t) => typeof t === 'string').slice(0, 30) : [];
-    const content = [];
-    for (const p of pages) {
-      const data = str(p?.data, 8_000_000);
-      if (!data || !Number.isInteger(p.page)) throw httpError(400, 'each page needs {page, data}');
-      content.push({ type: 'text', text: `Page ${p.page}${p.text ? ` (embedded text: ${String(p.text).slice(0, 2000)})` : ''}` });
-      content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data } });
-    }
-    content.push({
-      type: 'text',
-      text: `This is a Korean church worship 콘티 (set list + sheet music).${known.length ? ` The set list from the notice is: ${known.join(' / ')} — use these titles and this order.` : ''}
-Read the cover pages for date, scripture (본문), sermon title and preacher. For every song's sheet music, read the title, key, the part progression if printed (often at the top or on the cover, like I-V1-C-V2-C-B-C), and the lyrics of each part.
-Rules: copy lyrics exactly as printed on these pages (they are the church's own sheets); merge a song that continues across pages; list each part once even if repeated; drop chord symbols, part markers and repeat signs from lyric lines; if the set list has Plan A and Plan B, only include Plan A.`,
-    });
-    return ask(ContiResult, 'You read scanned worship sheet music and service covers for a church presentation app. Answer only with the requested JSON.', content);
-  },
-
   /** Read a pasted KakaoTalk notice (and optionally prayer topics / announcements) into structured data. */
   async notice(body) {
     const text = str(body.text, 50000);

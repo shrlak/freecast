@@ -1,0 +1,167 @@
+// Put each song on the conti its own 악보 page.
+//
+// The cover lists the songs in the order they are sung, but a scanned score
+// page has no text layer to match a title against — so matchSongsToPages can
+// only hand the pages out in PDF order. That is right until it isn't: a score
+// printed over two pages, or pages scanned in another order, shifts every song
+// after it onto its neighbour's page. Once the models have read the title off
+// each page, the pages can be paired back with the songs they belong to, and
+// the cards keep the conti's order with the right score behind each one.
+import { normalizeTitle } from '../storage/library';
+
+/** How alike two titles must read to be the same song (0–1). */
+export const SAME_TITLE_THRESHOLD = 0.6;
+
+/** A placeholder the conti gave a page nobody has named yet. */
+export function isPlaceholderTitle(title: string | undefined): boolean {
+  const trimmed = title?.trim() ?? '';
+  return !trimmed || /^새 찬양/.test(trimmed);
+}
+
+function pairs(text: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (let i = 0; i < text.length - 1; i += 1) {
+    const pair = text.slice(i, i + 2);
+    counts.set(pair, (counts.get(pair) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Single-character edits between two strings (Levenshtein distance). */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length];
+}
+
+/**
+ * Two ways of typing one title: the commentary under the table writing
+ * `주 신실하신 놀라워` for the row's `주 신실하심 놀라워`. Only a slip of a
+ * letter or two counts — `그 사랑` and `그 사랑 얼마나` are different songs,
+ * and a two-letter title is too short to tell a slip from another word.
+ */
+export function isTitleSlip(a: string, b: string): boolean {
+  const left = normalizeTitle(a);
+  const right = normalizeTitle(b);
+  const shorter = Math.min(left.length, right.length);
+  if (shorter < 4) return false;
+  return editDistance(left, right) <= (shorter >= 9 ? 2 : 1);
+}
+
+/**
+ * How alike two song titles read, ignoring spacing, case and punctuation.
+ * One title containing the other ("시선" / "내게로부터 눈을 들어 (시선)")
+ * counts as a strong match; otherwise character-pair overlap decides, which
+ * forgives the odd misread syllable.
+ */
+export function titleSimilarity(a: string | undefined, b: string | undefined): number {
+  const left = normalizeTitle(a ?? '');
+  const right = normalizeTitle(b ?? '');
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+  if (Math.min(left.length, right.length) >= 2 && (left.includes(right) || right.includes(left))) return 0.9;
+  const l = pairs(left);
+  const r = pairs(right);
+  let shared = 0;
+  for (const [pair, count] of l) shared += Math.min(count, r.get(pair) ?? 0);
+  const total = Math.max(1, left.length - 1 + right.length - 1);
+  return (2 * shared) / total;
+}
+
+/**
+ * Which page each song should take, given the titles read off the pages.
+ *
+ * `songTitles[i]` is the title the conti printed for the song currently on
+ * page slot `i` (a placeholder for a page the cover never named), and
+ * `pageTitles[i]` is the title the models read off that page. `pageTitles`
+ * may run past the songs: the extra slots are spare pages no song holds (a
+ * score the conti's order does not list), which a song takes only when its
+ * title is there. Returns `slots` where song `i` should take page slot
+ * `slots[i]` — no slot is shared, and with no spares none is dropped.
+ *
+ * A song already on a page that reads as its title stays there. The rest are
+ * paired best match first; a song nothing matches (or a placeholder) keeps
+ * its own page, or takes whatever pages are left, its own range first — but
+ * not a page printing another listed song's title while any other is left. When
+ * the titles say nothing, the answer is the identity and the conti's pairing
+ * stands.
+ *
+ * `englishTitles[i]` is the English title the conti printed beside song
+ * `i`'s Korean one: a 악보 that prints only the English title (`You Are
+ * Good` for 좋으신 하나님) is that song's page too.
+ */
+export function alignPagesToConti(
+  songTitles: string[],
+  pageTitles: (string | undefined)[],
+  englishTitles: (string | undefined)[] = [],
+): number[] {
+  const count = songTitles.length;
+  const slotCount = Math.max(count, pageTitles.length);
+  const slots: (number | undefined)[] = new Array(count).fill(undefined);
+  const taken = new Set<number>();
+  const named = (i: number) => !isPlaceholderTitle(songTitles[i]);
+  const similarity = (song: number, slot: number) =>
+    Math.max(titleSimilarity(songTitles[song], pageTitles[slot]), titleSimilarity(englishTitles[song], pageTitles[slot]));
+
+  for (let i = 0; i < count; i += 1) {
+    if (named(i) && similarity(i, i) >= SAME_TITLE_THRESHOLD) {
+      slots[i] = i;
+      taken.add(i);
+    }
+  }
+
+  const candidates: { score: number; song: number; slot: number }[] = [];
+  for (let song = 0; song < count; song += 1) {
+    if (slots[song] !== undefined || !named(song)) continue;
+    for (let slot = 0; slot < slotCount; slot += 1) {
+      if (taken.has(slot)) continue;
+      const score = similarity(song, slot);
+      if (score >= SAME_TITLE_THRESHOLD) candidates.push({ score, song, slot });
+    }
+  }
+  candidates.sort((a, b) => b.score - a.score || a.slot - b.slot);
+  for (const { song, slot } of candidates) {
+    if (slots[song] !== undefined || taken.has(slot)) continue;
+    slots[song] = slot;
+    taken.add(slot);
+  }
+
+  // A page printing a listed song's title is that song's — its second page,
+  // or the song in its other language — so a song whose own title was not
+  // found takes it only when no other page is left.
+  const anotherSongs = (slot: number) =>
+    songTitles.some((_, song) => named(song) && similarity(song, slot) >= SAME_TITLE_THRESHOLD);
+
+  // Unmatched songs keep their own page when it is still free, so a pairing
+  // the titles cannot improve on is left exactly as the conti made it.
+  for (let song = 0; song < count; song += 1) {
+    if (slots[song] === undefined && !taken.has(song) && !anotherSongs(song)) {
+      slots[song] = song;
+      taken.add(song);
+    }
+  }
+  const free = [...Array(slotCount).keys()].filter((slot) => !taken.has(slot));
+  const open = free.filter((slot) => !anotherSongs(slot));
+  const claimed = free.filter((slot) => anotherSongs(slot));
+  return slots.map((slot) => slot ?? ((open.shift() ?? claimed.shift()) as number));
+}
+
+/**
+ * The title to look a song's lyrics up by on the web. The conti's printed
+ * title is text out of the PDF, not a reading of pixels, so it wins; the
+ * title read off the 악보 only stands in for a page the cover never named.
+ */
+export function lyricsLookupTitle(printed: string | undefined, recognized: string | undefined): string {
+  if (!isPlaceholderTitle(printed)) return (printed as string).trim();
+  return recognized?.trim() || printed?.trim() || '';
+}

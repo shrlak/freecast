@@ -1,0 +1,190 @@
+// Shared data model for the praise lyrics slide generator.
+// All modules (parser, planner, pptx builder, UI) code against these types.
+import type { PositionedPage } from './chordSheet';
+
+/** One labeled part of a song: V1/V2 (verse), PC (pre-chorus), C (chorus), B (bridge), etc. */
+export interface Section {
+  /** Normalized label, e.g. "V1", "PC", "C", "C2", "B", "O" */
+  label: string;
+  /** Lyric lines as they should appear on slides (one array item = one slide line) */
+  lines: string[];
+}
+
+/**
+ * How much a recognized song can be trusted.
+ *
+ * 'draft'    — a model, the web, or both produced it; nobody has confirmed it.
+ * 'verified' — the user saved it to the library without changing anything.
+ * 'edited'   — the user corrected it and then saved it.
+ *
+ * Only the last two are ground truth: they are the only states that may skip
+ * recognition on a later conti, seed prompt examples, or score a model.
+ */
+export type VerificationState = 'draft' | 'verified' | 'edited';
+
+/** How a song is looked up: a title, plus the artist when the score printed one. */
+export interface SongIdentity {
+  title: string;
+  artist?: string;
+}
+
+/** Where a song's current reading came from, kept so a later correction can be
+ * diffed against the machine's own answer. */
+export interface RecognitionProvenance {
+  /** Stable hash of the rendered score page this reading came from. */
+  pageHash?: string;
+  /** What recognition produced before the user touched it. */
+  baseline?: { title?: string; artist?: string; key?: string; sections: Section[]; order: string[] };
+  source?: 'library' | 'models' | 'web' | 'manual';
+  webSourceUrl?: string;
+  /** Consensus confidence (0–1) of the reading that was applied. */
+  confidence?: number;
+  /** Version of the correction model that touched this reading, when one did. */
+  correctionModelVersion?: string;
+}
+
+/** The scalar subset of provenance that is safe to persist with a library entry. */
+export interface StoredProvenance {
+  pageHash?: string;
+  source?: 'library' | 'models' | 'web' | 'manual';
+  webSourceUrl?: string;
+  confidence?: number;
+  correctionModelVersion?: string;
+}
+
+/** A song being edited for this week's slide deck. */
+export interface Song {
+  id: string;
+  title: string;
+  /** Artist/사역팀 as printed on the score. Absent unless the page showed one. */
+  artist?: string;
+  /** Musical key from the conti cover page, e.g. "E", "F" */
+  key?: string;
+  /** Description text from the conti cover page */
+  description?: string;
+  sections: Section[];
+  /**
+   * Playback order of section labels. "I" (interlude/intro/간주) renders the
+   * song title slide again. Example: ["I","V1","V2","PC","C","I","C","C"]
+   */
+  order: string[];
+  /**
+   * The 진행 순서 came from the conti itself (e.g. `I-V1-C-V2-C-B-C` written
+   * next to the song on the cover). This week's arrangement is the conti's to
+   * decide, so recognition and the library fill in the words but never
+   * replace this order.
+   */
+  orderFromConti?: boolean;
+  /** Max lyric lines per generated slide (template default: 4) */
+  linesPerSlide: number;
+  /** 1-based page number of this song's score in the uploaded conti PDF */
+  pageIndex?: number;
+  /**
+   * Further pages of the same song in the conti, read along with `pageIndex`:
+   * the rest of a score printed over several pages, or — on a 찬양집회 conti —
+   * the song's 악보 in its other language (see scorePages.ts).
+   */
+  extraPages?: number[];
+  /**
+   * 설교 후 찬양: sung after the sermon rather than in the opening praise
+   * set, so its slides are placed right after the post-sermon 기도 slide
+   * instead of at the front of the deck. Set from the 콘티 (the song listed
+   * after the 공동체 고백송) and toggled per song in the 찬양 step.
+   */
+  postSermon?: boolean;
+  /** Trust level of the current reading; absent means an untouched scaffold. */
+  verification?: VerificationState;
+  /** Bumped every time the user saves this song to the library. */
+  version?: number;
+  provenance?: RecognitionProvenance;
+}
+
+/** A song entry parsed off the conti cover page (title + key + description). */
+export interface ContiSongEntry {
+  title: string;
+  /**
+   * The English title the cover prints beside the Korean one ("God is the
+   * Strength of my Heart 하늘 위에 주님밖에"); `title` is then the Korean.
+   */
+  englishTitle?: string;
+  key?: string;
+  description?: string;
+  /** 진행 순서 written on the cover for this song, e.g. ["I","V1","C","B","C"]. */
+  order?: string[];
+  /** 1-based PDF page this song's score was matched to (if found) */
+  pageIndex?: number;
+}
+
+/** A 기도 page the conti puts between its songs (`기도`, `Prayer Topic 2: …`). */
+export interface ContiPrayer {
+  /** 1-based PDF page; the 기도 follows the song whose 악보 comes just before it. */
+  page: number;
+  /** The topics typed under the heading, one per line, when there are any. */
+  topics?: string;
+}
+
+/** Worship-service info parsed from the conti cover page. */
+export interface ContiInfo {
+  /** Service date as written, e.g. "7/11/26" */
+  date?: string;
+  /** Sermon title, e.g. 하나님과 화평을 누리자 */
+  sermonTitle?: string;
+  /** Scripture reference (본문), e.g. 로마서 5장 1-11절 */
+  scripture?: string;
+  songs: ContiSongEntry[];
+  /** The conti's 기도 pages, in page order. */
+  prayers?: ContiPrayer[];
+}
+
+/** Result of parsing an uploaded conti PDF. */
+export interface ParsedConti {
+  info: ContiInfo;
+  numPages: number;
+  /** Extracted text per page (index 0 = page 1); empty string if no text layer */
+  pageTexts: string[];
+  /** 1-based indices of pages classified as sheet-music pages */
+  musicPages: number[];
+  /**
+   * Every page's text with its position, kept only when the PDF is a chord
+   * sheet (CCLI SongSelect / ChordPro), whose lyrics are read from the text
+   * layer instead of recognized from the score.
+   */
+  chordSheetPages?: PositionedPage[];
+}
+
+/**
+ * A saved song in the reusable library (bundled + localStorage + shared proxy).
+ *
+ * The provenance fields are optional on the interface so pre-feature entries
+ * and hand-written fixtures still typecheck; `sanitizeLibraryEntry` fills them
+ * in, and everything that decides whether an entry may be reused reads the
+ * sanitized form.
+ */
+export interface LibraryEntry {
+  title: string;
+  /** Artist/사역팀, when the score or the user supplied one. */
+  artist?: string;
+  key?: string;
+  sections: Section[];
+  order: string[];
+  verification?: VerificationState;
+  version?: number;
+  updatedAt?: string;
+  provenance?: StoredProvenance;
+}
+
+/** A library entry that has been through `sanitizeLibraryEntry`. */
+export type SanitizedLibraryEntry = LibraryEntry & {
+  verification: VerificationState;
+  version: number;
+};
+
+/** One planned output slide. */
+export interface SlidePlan {
+  /** "title" = big centered song-title slide; "lyrics" = lyric lines + corner label */
+  kind: 'title' | 'lyrics';
+  /** Song title (main text on title slides, corner label on lyrics slides) */
+  title: string;
+  /** Lyric lines; only for kind === "lyrics" */
+  lines?: string[];
+}

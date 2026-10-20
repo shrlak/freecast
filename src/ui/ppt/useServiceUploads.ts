@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
 import type { Library, Presentation, Slide, Theme } from '../../domain/types';
-import { renderPdf, blobToBase64 } from '../../domain/io/pdf';
-import { ai } from '../../domain/ai';
+import { readConti } from '../../domain/recognition/conti';
 import { putMedia } from '../../domain/media';
 import { presentationFromSongFile } from '../../domain/io/songFormats';
 import { findSong, songToPresentation, withProgression, type SongDraft } from '../../domain/sunday/songs';
 import { CHURCH_BACKGROUNDS } from '../../domain/defaults';
 import { mmdd, serviceDate, upcomingSunday } from '../../domain/sunday/notice';
+import { acceptedDrafts, type ContiReview } from './contiReview';
 import { parseRefs } from '../../domain/bible/refs';
 import { loadScriptureChunks } from '../../domain/bible/slides';
 import { uid } from '../../domain/lyrics';
@@ -33,6 +33,11 @@ export interface ServiceUploads {
   /** Open (or create) this week's 주일예배 playlist. */
   open: () => Promise<void>;
   conti: (file: File) => Promise<void>;
+  /** A 콘티 read and waiting for the operator to check its songs, one at a time. */
+  review: ContiReview | null;
+  /** The checked song (null = leave it out); after the last one the songs go into the 예배. */
+  answerReview: (draft: SongDraft | null) => void;
+  cancelReview: () => void;
   lyrics: (files: File[]) => Promise<void>;
   sermon: (files: File[]) => Promise<void>;
   /** Files dropped on the window: 콘티 PDF → 찬양, lyric files → 찬양, PPTX/PDF/images → 설교. */
@@ -51,6 +56,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, notify: (m: string) => void): ServiceUploads {
   const [templates, setTemplates] = useState<ServiceUploads['templates']>('loading');
   const [busy, setBusy] = useState<string | null>(null);
+  const [review, setReview] = useState<ContiReview | null>(null);
   const lib = useRef(library);
   lib.current = library;
   const tpl = useRef<ServiceTemplates | null>(null);
@@ -141,7 +147,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     const existing = findSong(lib.current.presentations, draft.title);
     const progression = draft.progression?.length ? draft.progression : undefined;
     let base: Presentation;
-    if (existing && (!draft.sections.length || existing.online)) base = progression ? withProgression(existing, progression) : existing;
+    if (existing && !draft.sections.length) base = progression ? withProgression(existing, progression) : existing;
     else base = songToPresentation({ ...draft, progression }, { themeId: 'theme_sunday', linesPerSlide: lib.current.sunday.linesPerSlide, folder });
     if (t) return { pres: songInTemplate(base, t, folder, lib.current.sunday.linesPerSlide), isNew: true };
     if (base === existing) return { pres: existing, isNew: false };
@@ -173,21 +179,38 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     await place(id, SECTION.bible, [p.id], true);
   };
 
+  /**
+   * Read a 콘티 the way the ppt site does (domain/recognition): cover, songs and 진행, the 찬양
+   * 라이브러리 first, the AI models through the church Worker for the rest. The songs then wait for
+   * the operator to check each one (review) before they go into the 예배.
+   */
   const conti = (file: File) => run('콘티 읽는 중…', async () => {
-    const pages = await renderPdf(file, { scale: 1.6, maxPages: 30, quality: 0.8 });
-    setBusy(`AI가 콘티 ${pages.length}쪽을 읽는 중… (1분 정도 걸릴 수 있어요)`);
-    const payload = await Promise.all(pages.map(async (p) => ({ page: p.page, data: await blobToBase64(p.blob), text: p.text })));
-    const r = await ai.conti(payload, []);
-    if (!r.songs.length) throw new Error('콘티에서 찬양을 찾지 못했습니다.');
-    const [y, m, d] = r.date.split('-').map(Number);
-    const date = serviceDate(m ? { year: y, month: m, day: d } : undefined, new Date());
+    const notes: string[] = [];
+    const { sunday } = lib.current;
+    const reading = await readConti(file, {
+      presentations: lib.current.presentations,
+      linesPerSlide: sunday.linesPerSlide,
+      confessionSong: sunday.confessionSong,
+      notify: (m) => notes.push(m),
+      progress: setBusy,
+    });
+    if (!reading.songs.length) throw new Error(['콘티에서 찬양을 찾지 못했습니다.', ...notes].join(' '));
+    setReview({ reading, index: 0, answers: [], notes });
+    return `콘티 ${reading.songs.length}곡을 읽었습니다 — 한 곡씩 확인해 주세요`;
+  });
+
+  /** The checked songs into this week's 예배: 찬양 (and 설교 후 찬양), then the sermon info. */
+  const placeSongs = (done: ContiReview) => run('찬양 넣는 중…', async () => {
+    const { reading } = done;
+    const songs = acceptedDrafts(done);
+    const date = serviceDate(reading.date, new Date());
     const id = await ensure(date);
     const t = await templatesNow();
     const folder = liveFolder(date);
     const cleared = new Set<SectionTitle>();
-    for (const [i, song] of r.songs.entries()) {
-      setBusy(`찬양 넣는 중 ${i + 1}/${r.songs.length}: ${song.title}`);
-      const { pres, isNew } = songFor({ ...song, key: song.key || undefined }, folder, t);
+    for (const [i, song] of songs.entries()) {
+      setBusy(`찬양 넣는 중 ${i + 1}/${songs.length}: ${song.title}`);
+      const { pres, isNew } = songFor(song, folder, t);
       if (isNew) await add(pres);
       const section = song.postSermon ? SECTION.after : SECTION.songs;
       await place(id, section, [pres.id], !cleared.has(section));
@@ -195,9 +218,19 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
       cleared.add(section);
     }
     for (const section of [SECTION.songs, SECTION.after]) if (!cleared.has(section)) await place(id, section, [], true);
-    await serviceInfo(id, r, t);
-    return `${mmdd(date)} 콘티: ${r.songs.length}곡을 예배에 넣었습니다`;
+    await serviceInfo(id, { scripture: reading.scripture, sermonTitle: reading.sermonTitle, preacher: '' }, t);
+    return `${mmdd(date)} 콘티: ${songs.length}곡을 예배에 넣었습니다`;
   });
+
+  const answerReview = (draft: SongDraft | null) => {
+    if (!review) return;
+    const answers = [...review.answers];
+    answers[review.index] = draft;
+    const next = { ...review, answers, index: review.index + 1 };
+    if (next.index < review.reading.songs.length) return setReview(next);
+    setReview(null);
+    void placeSongs(next);
+  };
 
   const lyrics = (files: File[]) => run('가사 넣는 중…', async () => {
     const id = await ensure();
@@ -270,5 +303,5 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     await show(id, pl && sectionPresentations(pl, SECTION.front)[0]);
   });
 
-  return { templates, busy, open, conti, lyrics, sermon, drop };
+  return { templates, busy, open, conti, review, answerReview, cancelReview: () => setReview(null), lyrics, sermon, drop };
 }
