@@ -323,7 +323,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🎵" label="새 찬양" title="찬양 등록 — 제목·진행·파트별 가사 (주일예배 생성기와 같은 방식)" onClick={() => cmd.open('songNew')} />
               <Big icon="✎" label="찬양 편집" title="선택한 찬양의 가사·진행 편집, 교회 찬양 라이브러리에 등록" disabled={!p || !isSong(p)} onClick={() => cmd.open('song')} />
               <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
-              <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="Reload the online song library" onClick={cmd.reloadOnline} />
+              <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="찬양 라이브러리 보기 · 편집 · 삭제" onClick={() => cmd.open('songLibrary')} />
               <Big icon="✨" label="AI" onClick={() => cmd.open('ai')} />
               <Big icon="📊" label="AI 사용량" title="오늘 AI를 얼마나 썼는지 (모델별 무료 한도)" onClick={() => cmd.open('aiUsage')} />
             </Group>

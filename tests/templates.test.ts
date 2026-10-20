@@ -206,6 +206,15 @@ describe('공동체 고백송 and template deck sync', async () => {
     slides: [{ id: 'a', group: 'Verse 1', text: 'A1\nA2' }, { id: 'b', group: 'Verse 1', text: 'A3\nA4\nA5' }, { id: 'c', group: 'Chorus', text: 'C1\nC2' }],
   };
 
+  it('prints this season’s 고백송 in a new service’s Back, not the template’s own song', () => {
+    const lib = createSeedLibrary();
+    lib.presentations.push(song);
+    lib.sunday.confessionSong = song.title;
+    const live = createLiveService(lib, { ...TPL, back }, new Date(2026, 9, 18));
+    const backPres = live.presentations.find((p) => p.title === '1018 Back')!;
+    expect(backPres.slides[0].elements![0].text).toBe('공동체 고백송\n“우리는 주의 움직이는 교회”');
+  });
+
   it('finds the block by its marker and the song name', () => {
     expect(findConfessionBlock(back)).toEqual({ marker: 0, lyrics: [1, 2], title: 'Celebrate the Light' });
   });

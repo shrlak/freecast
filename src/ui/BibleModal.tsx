@@ -15,15 +15,19 @@ interface Props {
   initialRefs?: string;
   onClose: () => void;
   onCreate: (p: Presentation, goLive: boolean) => void;
+  /** Puts the verses straight into the selected 주일예배 playlist (church template design); resolves to its name. */
+  service?: (info: { refs: string; sermonTitle: string; preacher: string; translations: string[]; versesPerSlide: number }) => Promise<string>;
 }
 
 /** Scripture slides: type references ("요3:16 롬8:28-30" or "John 3:16"), pick up to two translations. */
-export function BibleModal({ initialRefs = '', onClose, onCreate }: Props) {
+export function BibleModal({ initialRefs = '', onClose, onCreate, service }: Props) {
   const [input, setInput] = useState(initialRefs);
   const translations = TRANSLATIONS;
   const [chosen, setChosen] = useState<string[]>(['nkrv']);
   const [perSlide, setPerSlide] = useState(2);
   const [sermonTitle, setSermonTitle] = useState('');
+  const [preacher, setPreacher] = useState('');
+  const [placed, setPlaced] = useState<string | null>(null);
   const [slides, setSlides] = useState<Slide[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -58,6 +62,20 @@ export function BibleModal({ initialRefs = '', onClose, onCreate }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [input, chosen.join(), perSlide, sermonTitle]);
 
+  // With a 주일예배 open, every edit goes straight into its 성경 말씀 section (and the 설교 title slide).
+  useEffect(() => {
+    if (!service || !refs.length || !picked.length) return;
+    let alive = true;
+    setPlaced('예배에 넣는 중…');
+    const t = setTimeout(() => {
+      service({ refs: input, sermonTitle, preacher, translations: chosen, versesPerSlide: perSlide })
+        .then((name) => alive && setPlaced(`✓ “${name}” 재생목록에 반영됨`))
+        .catch((e: Error) => alive && setPlaced(`⚠ 예배에 넣지 못했습니다: ${e.message}`));
+    }, 800);
+    return () => { alive = false; clearTimeout(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [input, chosen.join(), perSlide, sermonTitle, preacher]);
+
   const toggle = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id].slice(-2)));
 
   const create = (live: boolean) => {
@@ -84,6 +102,9 @@ export function BibleModal({ initialRefs = '', onClose, onCreate }: Props) {
             <label className="stack">Sermon title (optional — adds a title slide)
               <input value={sermonTitle} onChange={(e) => setSermonTitle(e.target.value)} />
             </label>
+            {service && <label className="stack">설교자 (설교 첫 슬라이드)
+              <input value={preacher} onChange={(e) => setPreacher(e.target.value)} />
+            </label>}
             <div className="stack">
               <span>Translations (up to 2 — the second shows underneath)</span>
               <div className="row gap-xs wrap">
@@ -100,6 +121,7 @@ export function BibleModal({ initialRefs = '', onClose, onCreate }: Props) {
                 {[1, 2, 3, 4, 5].map((n) => <option key={n}>{n}</option>)}
               </select>
             </label>
+            {service && placed && <div className={placed.startsWith('⚠') ? 'warn' : 'hint'}>{placed}</div>}
             {error && <div className="warn">{error}</div>}
             <form className="stack" onSubmit={(e) => { e.preventDefault(); runSearch(); }}>
               <span>🔎 Search the Bible by words (in the first selected translation)</span>

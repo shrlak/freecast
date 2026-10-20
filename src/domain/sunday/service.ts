@@ -1,12 +1,12 @@
 import type { Library, Playlist, PlaylistItem, Presentation, Slide } from '../types';
 import { uid } from '../lyrics';
-import { CHURCH_BACKGROUNDS, PRAYER_PREP_TITLE } from '../defaults';
+import { CHURCH_BACKGROUNDS, DEFAULT_CONFESSION_SONG, PRAYER_PREP_TITLE } from '../defaults';
 import { findSong, songToPresentation, withProgression, type SongDraft } from './songs';
 import { planPrayerSlides, prayerSlideText, type PrayerTopic } from './prayer';
 import type { Announcement } from './announcements';
 import { mdy, mmdd } from './notice';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
-import { applyConfessionSong, findConfessionSong } from '../templates/confession';
+import { applyConfessionSong, pickConfessionSong } from '../templates/confession';
 import { announcementSlides, backSlides, fillFront, isPlaceholderBack, prayerSlide, scriptureSlides, sermonTitleSlide, songInTemplate, type ScriptureFill } from '../templates/fill';
 
 export interface ServiceInput {
@@ -146,23 +146,23 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
   }
 
   const back = byId(sunday.backId);
-  if (tpl?.back?.length && (!back || isPlaceholderBack(back))) {
-    // The church's current closing deck already prints this season's 공동체 고백송.
-    header('Back / End');
-    add(make(`${mmdd(input.date)} Back`, backSlides(tpl), 'theme_classic', black), true);
-  } else if (back) {
-    const confessionTitle = input.confessionSong || sunday.confessionSong;
-    const confession = confessionTitle ? findConfessionSong(lib.presentations, confessionTitle) : undefined;
-    if (confessionTitle && !confession) warnings.push(`공동체 고백 “${confessionTitle}” is not in the library — the placeholder slide stays`);
-    // The church Back deck prints the 고백송 itself: rewrite that block; FreeCast's own Back has a placeholder slide.
-    const rewritten = confession ? applyConfessionSong(back.slides, confession, sunday.linesPerSlide) : null;
+  const fromTemplate = !!tpl?.back?.length && (!back || isPlaceholderBack(back));
+  if (fromTemplate || back) {
+    // This week's 고백송 (wizard) wins, then the setting, then the default; the church Back deck prints
+    // the song itself, so its block is rewritten — in the template's fresh copy as well as in the library's deck.
+    const { song: confession, missing } = pickConfessionSong(lib.presentations, [input.confessionSong, sunday.confessionSong, DEFAULT_CONFESSION_SONG]);
+    if (missing) warnings.push(`공동체 고백 “${missing}” is not in the library — ${confession ? `“${confession.title}” is used instead` : 'the Back slides keep their song'}`);
+    const source = fromTemplate ? backSlides(tpl!) : back!.slides;
+    const rewritten = confession ? applyConfessionSong(source, confession, sunday.linesPerSlide) : null;
     const slides = rewritten
       ? rewritten.map((s) => ({ ...s, id: uid('s') }))
-      : back.slides.flatMap((s) =>
-          s.group === '공동체 고백' && confession ? confession.slides.map((c) => ({ ...c, id: uid('s'), group: `공동체 고백 · ${c.group}` })) : [{ ...s, id: uid('s') }],
-        );
+      : fromTemplate
+        ? source
+        : source.flatMap((s) =>
+            s.group === '공동체 고백' && confession ? confession.slides.map((c) => ({ ...c, id: uid('s'), group: `공동체 고백 · ${c.group}` })) : [{ ...s, id: uid('s') }],
+          );
     header('Back / End');
-    add({ ...back, id: uid('p'), title: `${mmdd(input.date)} Back`, folder, slides }, true);
+    add(fromTemplate ? make(`${mmdd(input.date)} Back`, slides, 'theme_classic', black) : { ...back!, id: uid('p'), title: `${mmdd(input.date)} Back`, folder, slides, templateKey: undefined }, true);
   }
   if (input.extraSlides.length) {
     header('추가 자료');

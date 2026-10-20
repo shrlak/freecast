@@ -8,7 +8,15 @@ import { uid } from '../lyrics';
 import { mdy, mmdd } from './notice';
 import { parsePrayerTopics } from './prayer';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
+import { DEFAULT_CONFESSION_SONG } from '../defaults';
+import { applyConfessionSong, pickConfessionSong } from '../templates/confession';
 import { backSlides, fillFront, isPlaceholderBack, prayerSlide, sermonTitleSlide } from '../templates/fill';
+
+/** Back slides with this season's 공동체 고백송 (the setting, else the default) printed in them. */
+export function confessionBack(lib: Library, slides: Presentation['slides'], pick?: string): Presentation['slides'] {
+  const { song } = pickConfessionSong(lib.presentations, [pick, lib.sunday.confessionSong, DEFAULT_CONFESSION_SONG]);
+  return (song && applyConfessionSong(slides, song, lib.sunday.linesPerSlide)?.map((s) => ({ ...s, id: uid('s') }))) || slides;
+}
 
 export const SECTION = {
   front: 'Front',
@@ -51,7 +59,7 @@ export function createLiveService(lib: Library, tpl: ServiceTemplates | null, da
   const prayer = tpl ? add(make(`${tag} 기도`, [prayerSlide(tpl)])) : byId(lib.sunday.prayerId);
   const sermon = add(make(`${tag} 설교`, tpl ? [sermonTitleSlide(tpl, { refs: [] })] : []));
   const libBack = byId(lib.sunday.backId);
-  const back = tpl?.back?.length && (!libBack || isPlaceholderBack(libBack)) ? add(make(`${tag} Back`, backSlides(tpl))) : libBack;
+  const back = tpl?.back?.length && (!libBack || isPlaceholderBack(libBack)) ? add(make(`${tag} Back`, confessionBack(lib, backSlides(tpl)))) : libBack;
 
   const items: PlaylistItem[] = [header(SECTION.front)];
   if (front) items.push(item(front.id));
