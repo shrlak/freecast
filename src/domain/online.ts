@@ -60,7 +60,8 @@ type SongOpts = { themeId: string; linesPerSlide: number; folder: string };
 
 function onlineSong(s: LibrarySong, opts: SongOpts, background: Presentation['background']): Presentation {
   const draft: SongDraft = { title: s.title, key: s.key || undefined, sections: s.sections, progression: s.order?.length ? s.order : undefined };
-  return { ...songToPresentation(draft, opts), id: onlineId(s.title), online: true, background, songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } };
+  const stamp = s.updatedAt ? Date.parse(s.updatedAt) : NaN;
+  return { ...songToPresentation(draft, opts), id: onlineId(s.title), online: true, background, ...(Number.isFinite(stamp) ? { updatedAt: stamp } : {}), songSource: { sections: s.sections, order: s.order?.length ? s.order : undefined } };
 }
 
 /**

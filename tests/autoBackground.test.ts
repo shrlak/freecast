@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { autoBackground, resolveBackground } from '../src/domain/autoBackground';
-import { BACKGROUND_PRESETS, BG_BLACK, BG_WHITE_LOGO } from '../src/domain/defaults';
+import { BACKGROUND_PRESETS, BG_BLACK, BG_SONG_TITLE, BG_WHITE_LOGO } from '../src/domain/defaults';
 import type { Slide } from '../src/domain/types';
 
 const slide = (group: string, text = '', extra: Partial<Slide> = {}): Slide => ({ id: group, group, text, ...extra });
 
 describe('backgrounds', () => {
-  it('offers only the template white + logo, black and white', () => {
-    expect(BACKGROUND_PRESETS.map((p) => p.name)).toEqual(['KCCP 흰색 + 로고', 'Black', 'White']);
+  it('offers the template white + logo, black, white and the song title background', () => {
+    expect(BACKGROUND_PRESETS.map((p) => p.name)).toEqual(['KCCP 흰색 + 로고', 'Black', 'White', '찬양 제목']);
+  });
+
+  it('gives a song’s title slide its own background, and other title slides stay black', () => {
+    expect(autoBackground(slide('Title', '주님의 사랑'), { title: '주님의 사랑', folder: 'Songs' })).toBe(BG_SONG_TITLE);
+    expect(autoBackground(slide('Title', '주님의 사랑'), { title: '주님의 사랑', folder: '☁ 찬양 라이브러리' })).toBe(BG_SONG_TITLE);
+    expect(autoBackground(slide('Title', '설교'), { title: '설교', folder: '0719 주일예배' })).toBe(BG_BLACK);
+    expect(autoBackground(slide('Title'))).toBe(BG_BLACK);
   });
 
   it('decides from the section and the text', () => {

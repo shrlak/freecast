@@ -433,7 +433,7 @@ export function OperatorView() {
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />
       )}
       {modal === 'songLibrary' && (
-        <SongLibraryModal songs={state.library.presentations} reloadOnline={loadOnline} notify={notify} onClose={() => setModal(null)}
+        <SongLibraryModal songs={state.library.presentations} dispatch={dispatch} reloadOnline={loadOnline} notify={notify} onClose={() => setModal(null)}
           onEdit={(id) => { dispatch({ type: 'select', id }); setModal('song'); }} />
       )}
       {service.review && (() => {

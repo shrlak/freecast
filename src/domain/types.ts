@@ -215,6 +215,8 @@ export interface Presentation {
   loop?: boolean;
   /** Comes from the online library: loaded each session, never saved on this computer. */
   online?: boolean;
+  /** When a library song was last saved (ms); the newest copy of a song title is the one kept. */
+  updatedAt?: number;
   /** Dim / blur applied to the background while this presentation is live. */
   bgEffect?: BackgroundEffect;
   /** Recorded slide timings, optionally synced to an audio track. */
