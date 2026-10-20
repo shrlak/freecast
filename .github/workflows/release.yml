@@ -13,7 +13,24 @@ permissions:
   contents: write
 
 jobs:
+  # A manual run is on a branch, not a tag, and GitHub refuses a release without one
+  # ("Published releases must have a valid tag"): make v<version> first, if it is not there yet.
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the version tag
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$v" >/dev/null 2>&1; then
+            echo "$v already exists"
+          else
+            git tag "$v"
+            git push origin "$v"
+          fi
+
   build:
+    needs: tag
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
