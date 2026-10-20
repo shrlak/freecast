@@ -183,14 +183,16 @@ export function restyleSong(song: Presentation, tpl: ServiceTemplates, maxLines:
     themeId: TEMPLATE_LYRICS_THEME,
     background: tpl.songLyrics.background,
     slides: [{ ...fillSlide(tpl.songTitle, () => title), group: 'Title' }, ...lyrics],
-    // Like the church's PPT each part plays once (arrangements stay available, switched off);
-    // the title slide opens every arrangement too.
+    // The song plays its 진행 (repeats included), opening on the title slide.
     arrangements: song.arrangements?.map((a) => ({ ...a, groups: ['Title', ...a.groups.filter((g) => g !== 'Title')] })),
-    arrangementId: undefined,
+    arrangementId: song.arrangementId ?? song.arrangements?.[0]?.id,
     lyricsLayout: { linesPerSlide: maxLines },
-    templateKey: `song:${tpl.keys.song}|${maxLines}`,
+    templateKey: songKey(tpl, maxLines),
   };
 }
+
+/** Marks a song restyled to this template at this many lines (v2: plays its 진행). */
+const songKey = (tpl: ServiceTemplates, maxLines: number) => `song:${tpl.keys.song}|${maxLines}|seq`;
 
 /** A copy of a song in the template's design for this week's service (new id, the service's folder). */
 export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder: string, maxLines = 4): Presentation {
@@ -207,7 +209,7 @@ export function isSong(p: Presentation): boolean {
 
 /** Songs that are not yet in the current template design (with this many lines per slide), restyled. */
 export function songStyleUpdates(presentations: Presentation[], tpl: ServiceTemplates, maxLines: number): Presentation[] {
-  const key = `song:${tpl.keys.song}|${maxLines}`;
+  const key = songKey(tpl, maxLines);
   return presentations.filter((p) => p.templateKey !== key && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
 }
 

@@ -9,7 +9,7 @@ import { useWidth } from '../hooks';
 export const SLIDE_TEXT = '__slide-text';
 
 type Box = { x: number; y: number; w: number; h: number };
-interface Drag { id: string; mode: 'move' | 'resize'; startX: number; startY: number; orig: Box }
+interface Drag { id: string; mode: 'move' | 'resize'; startX: number; startY: number; orig: Box; moved: boolean }
 
 interface Props {
   slide: Slide;
@@ -93,12 +93,11 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     if (editing === id) return;
     e.stopPropagation();
     if (editing) stopEditing();
-    if (selectedId === id && mode === 'move' && e.detail >= 2) return startEditing(id);
     onSelect(id);
     (e.currentTarget.closest('.ce-root') as HTMLElement | null)?.focus();
     const el = elements.find((x) => x.id === id);
     if (!el) return;
-    drag.current = { id, mode, startX: e.clientX, startY: e.clientY, orig: { x: el.x, y: el.y, w: el.w, h: el.h } };
+    drag.current = { id, mode, startX: e.clientX, startY: e.clientY, orig: { x: el.x, y: el.y, w: el.w, h: el.h }, moved: false };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: RPointerEvent) => {
@@ -106,7 +105,8 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     if (!d) return;
     const dx = (e.clientX - d.startX) / k;
     const dy = (e.clientY - d.startY) / k;
-    if (Math.abs(dx) + Math.abs(dy) < 2 && !preview) return;
+    if (Math.abs(dx) + Math.abs(dy) < 3 && !d.moved) return;
+    d.moved = true;
     const box = d.mode === 'move'
       ? { ...d.orig, x: Math.round(d.orig.x + dx), y: Math.round(d.orig.y + dy) }
       : { ...d.orig, w: Math.max(20, Math.round(d.orig.w + dx)), h: Math.max(20, Math.round(d.orig.h + dy)) };
@@ -117,6 +117,8 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     drag.current = null;
     if (d && preview?.id === d.id) updateElement(d.id, preview.box);
     setPreview(null);
+    // A click on text (no drag) puts the cursor in it, as in PowerPoint.
+    if (d && !d.moved && d.mode === 'move' && elements.find((e) => e.id === d.id)?.kind === 'text') startEditing(d.id);
   };
 
   const onKeyDown = (e: RKeyboardEvent) => {
@@ -160,13 +162,19 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
       <div className="ce-overlay">
         {hasSlideText && (
           <div className={`ce-box slide-text ${selectedId === SLIDE_TEXT ? 'on' : ''}`} style={at(textBox)}
-            title="클릭: 선택 · 두 번 클릭: 바로 입력"
-            onPointerDown={(e) => { e.stopPropagation(); if (editing && editing !== SLIDE_TEXT) stopEditing(); if (selectedId === SLIDE_TEXT && e.detail >= 2) startEditing(SLIDE_TEXT); else onSelect(SLIDE_TEXT); }}
+            title="클릭하면 바로 입력"
+            onPointerDown={(e) => {
+              // preventDefault: the browser would otherwise move focus to the canvas and close the typing box.
+              e.preventDefault();
+              e.stopPropagation();
+              if (editing && editing !== SLIDE_TEXT) stopEditing();
+              if (editing !== SLIDE_TEXT) startEditing(SLIDE_TEXT);
+            }}
             onDoubleClick={() => startEditing(SLIDE_TEXT)} />
         )}
         {elements.map((el) => (
           <div key={el.id} className={`ce-box ${el.kind} ${selectedId === el.id ? 'on' : ''}`} style={at(boxOf(el))}
-            title={el.kind === 'text' ? '클릭: 선택 · 드래그: 이동 · 두 번 클릭: 바로 입력' : '클릭: 선택 · 드래그: 이동 · 모서리: 크기'}
+            title={el.kind === 'text' ? '클릭: 바로 입력 · 드래그: 이동' : '클릭: 선택 · 드래그: 이동 · 모서리: 크기'}
             onPointerDown={(e) => onPointerDown(e, el.id, 'move')} onDoubleClick={() => startEditing(el.id)}>
             {selectedId === el.id && !editing && <span className="ce-handle" onPointerDown={(e) => onPointerDown(e, el.id, 'resize')} />}
           </div>

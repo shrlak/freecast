@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch } from 'react';
+import { Fragment, useEffect, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Slide } from '../../domain/types';
 import { groupColor, uid } from '../../domain/lyrics';
@@ -100,8 +100,13 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           ) : (
             <div className="ppt-slides">
               <div className="ppt-pres-title truncate" title={p?.title}>{p ? p.title : '프레젠테이션을 선택하세요'}</div>
-              {p?.slides.map((s, i) => (
-                <div key={s.id} id={`pslide-${s.id}`} className={`ppt-thumb ${s.id === slide?.id ? 'sel' : ''} ${s.disabled ? 'hidden-slide' : ''}`}
+              {/* Every slide in play order (a song follows its 진행, repeats included), grouped by part. */}
+              {p && sequence(p).map(({ slide: s }, i, all) => (
+                <Fragment key={`${s.id}-${i}`}>
+                {(i === 0 || all[i - 1].slide.group !== s.group) && (
+                  <div className="ppt-section" style={{ borderColor: groupColor(s.group) }}>{s.label || s.group}</div>
+                )}
+                <div id={all.findIndex((x) => x.slide.id === s.id) === i ? `pslide-${s.id}` : undefined} className={`ppt-thumb ${s.id === slide?.id ? 'sel' : ''} ${s.disabled ? 'hidden-slide' : ''}`}
                   onClick={() => cmd.setSlideId(s.id)}
                   onDoubleClick={() => slideMenu(s.id, 'live')}
                   onContextMenu={(e) => { e.preventDefault(); cmd.setSlideId(s.id); setMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}>
@@ -111,6 +116,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
                     <span className="ppt-group" style={{ background: groupColor(s.group) }}>{s.label || s.group}</span>
                   </div>
                 </div>
+                </Fragment>
               ))}
               {p && <button className="ppt-add" onClick={() => { const n = { id: uid('s'), group: slide?.group ?? 'Slide', text: '' }; updateSlides([...p.slides, n]); cmd.setSlideId(n.id); }}>＋ 새 슬라이드</button>}
             </div>

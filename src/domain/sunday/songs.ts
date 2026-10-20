@@ -98,8 +98,9 @@ export function songToPresentation(song: SongDraft, opts: { themeId: string; lin
         used.set(g, n + 1);
       }
     }
-    // Not switched on: like the church's PPT, each part plays once and repeats are jumped to live.
+    // The slides are each part once; the 진행 plays them in order with the repeats.
     p.arrangements = [{ id: uid('arr'), name: song.progression!.join('-'), groups: resolved }];
+    p.arrangementId = p.arrangements[0].id;
   }
   return p;
 }

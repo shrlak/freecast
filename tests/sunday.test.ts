@@ -87,16 +87,15 @@ describe('songs', () => {
     expect(song.title).toBe('테스트 곡');
     const p = songToPresentation({ ...song, progression: ['V', 'C', 'C'] }, { themeId: 't', linesPerSlide: 2 });
     expect(p.slides.map((s) => s.group)).toEqual(['Verse', 'Verse', 'Chorus']);
-    // Like the church's PPT each part plays once; the 진행 is kept as an arrangement to switch on.
-    expect(sequence(p).map((x) => x.slide.group)).toEqual(['Verse', 'Verse', 'Chorus']);
+    // The slides are each part once; the 진행 plays them in order, repeats included.
     expect(p.meta?.order).toEqual(['V', 'C', 'C']);
-    expect(sequence({ ...p, arrangementId: p.arrangements![0].id }).map((x) => x.slide.group)).toEqual(['Verse', 'Verse', 'Chorus', 'Chorus']);
+    expect(sequence(p).map((x) => x.slide.group)).toEqual(['Verse', 'Verse', 'Chorus', 'Chorus']);
   });
 
   it('numbers repeated parts and maps bare codes to them in order', () => {
     const p = songToPresentation({ title: 's', sections: [{ label: 'V', lines: ['a'] }, { label: 'C', lines: ['b'] }, { label: 'V', lines: ['c'] }], progression: ['V', 'C', 'V', 'C'] }, { themeId: 't', linesPerSlide: 2 });
-    expect(sequence(p).map((x) => x.slide.text)).toEqual(['a', 'b', 'c']);
-    expect(sequence({ ...p, arrangementId: p.arrangements![0].id }).map((x) => x.slide.text)).toEqual(['a', 'b', 'c', 'b']);
+    expect(p.slides.map((x) => x.text)).toEqual(['a', 'b', 'c']);
+    expect(sequence(p).map((x) => x.slide.text)).toEqual(['a', 'b', 'c', 'b']);
   });
 
   it('matches titles loosely', () => {

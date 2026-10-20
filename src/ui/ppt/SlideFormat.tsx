@@ -95,15 +95,8 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
         />
       ) : (
-        <p className="hint">슬라이드에서 글자 · 로고 · 그림 · 도형을 클릭하면 여기서 바로 바꿀 수 있습니다. 글자는 두 번 클릭하면 슬라이드 위에서 바로 입력됩니다.</p>
+        <p className="hint">슬라이드의 글자를 클릭하면 바로 입력할 수 있고, 로고 · 그림 · 도형을 클릭하면 여기서 설정을 바꿀 수 있습니다. 끌면 옮겨지고, 모서리를 끌면 크기가 바뀝니다.</p>
       )}
-      <Section title="텍스트">
-        <label>제목 (굵은 머리글)<input value={slide.title ?? ''} onChange={(e) => upd({ title: e.target.value || undefined })} /></label>
-        <label>본문<textarea rows={5} value={slide.text} onChange={(e) => upd({ text: e.target.value })} /></label>
-        <label>둘째 줄 (번역 등)<textarea rows={2} value={slide.subtext ?? ''} onChange={(e) => upd({ subtext: e.target.value || undefined })} /></label>
-        <button onClick={onDesign}>✏️ 개체 편집 (텍스트 상자 · 그림 · 도형)</button>
-      </Section>
-
       <Section title="글꼴">
         <div className="fmt-row">
           <select className="grow" value={FONT_OPTIONS.find((f) => f.family === t.fontFamily)?.family ?? ''} onChange={(e) => setStyle({ fontFamily: e.target.value || undefined })}>
