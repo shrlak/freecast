@@ -208,7 +208,7 @@ describe('공동체 고백송 and template deck sync', async () => {
     { ...slide('Back', [text('hl', 'Happy Lord’s Day')]), background: bg('3') },
   ];
   const song: Presentation = {
-    id: 'online:x', title: '우리는 주의 움직이는 교회', themeId: 't', online: true,
+    id: 'online:x', title: '샘플 고백송', themeId: 't', online: true,
     slides: [{ id: 'a', group: 'Verse 1', text: 'A1\nA2' }, { id: 'b', group: 'Verse 1', text: 'A3\nA4\nA5' }, { id: 'c', group: 'Chorus', text: 'C1\nC2' }],
   };
 
@@ -218,7 +218,7 @@ describe('공동체 고백송 and template deck sync', async () => {
     lib.sunday.confessionSong = song.title;
     const live = createLiveService(lib, { ...TPL, back }, new Date(2026, 9, 18));
     const backPres = live.presentations.find((p) => p.title === '1018 Back')!;
-    expect(backPres.slides[0].elements![0].text).toBe('공동체 고백송\n“우리는 주의 움직이는 교회”');
+    expect(backPres.slides[0].elements![0].text).toBe('공동체 고백송\n“샘플 고백송”');
   });
 
   it('finds the block by its marker and the song name', () => {
@@ -228,12 +228,12 @@ describe('공동체 고백송 and template deck sync', async () => {
   it('replaces the song name and lyrics, keeping the design and the rest of the deck', () => {
     const out = applyConfessionSong(back, song)!;
     const texts = (s: Slide) => s.elements!.map((e) => e.text);
-    expect(texts(out[0])).toEqual(['공동체 고백송\n“우리는 주의 움직이는 교회”']);
+    expect(texts(out[0])).toEqual(['공동체 고백송\n“샘플 고백송”']);
     // Slide for slide as the song is laid out (its blank-line breaks kept), then Chorus
     expect(out.slice(1, -1).map((s) => texts(s))).toEqual([
-      ['우리 모일 때', 'A1\nA2', '우리는 주의 움직이는 교회'],
-      ['우리 모일 때', 'A3\nA4\nA5', '우리는 주의 움직이는 교회'],
-      ['우리 모일 때', 'C1\nC2', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', 'A1\nA2', '샘플 고백송'],
+      ['우리 모일 때', 'A3\nA4\nA5', '샘플 고백송'],
+      ['우리 모일 때', 'C1\nC2', '샘플 고백송'],
     ]);
     expect(out[1].background).toEqual(back[1].background);
     expect(texts(out.at(-1)!)).toEqual(['Happy Lord’s Day']);
@@ -244,7 +244,7 @@ describe('공동체 고백송 and template deck sync', async () => {
     // A copy placed in a past service by a 콘티 plays only “Verse 1”, and sits before the online song.
     const copy: Presentation = {
       ...song, id: 'p_copy', online: undefined, folder: '1018 주일예배',
-      slides: [{ id: 't', group: 'Title', text: '우리는 주의 움직이는 교회' }, ...song.slides],
+      slides: [{ id: 't', group: 'Title', text: '샘플 고백송' }, ...song.slides],
       arrangements: [{ id: 'all', name: 'all', groups: ['Title', 'Verse 1', 'Chorus'] }, { id: 'v1', name: 'V1', groups: ['Title', 'Verse 1'] }],
       arrangementId: 'v1',
     };
@@ -252,6 +252,7 @@ describe('공동체 고백송 and template deck sync', async () => {
     expect(findConfessionSong([copy, song], song.title)).toBe(song);
     const lib = createSeedLibrary();
     lib.presentations.push(copy, song);
+    lib.sunday.confessionSong = song.title;
     const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1', song: 's1' } };
     const backPatch = templateDeckUpdates(lib, tpl).find((u) => u.id === lib.sunday.backId)!.patch;
     const lyrics = backPatch.slides!.slice(1, -1).map((s) => s.elements!.find((e) => e.w === 1411)!.text);
@@ -266,14 +267,14 @@ describe('공동체 고백송 and template deck sync', async () => {
   });
 
   it('keeps lyrics and corner title apart when the first line is the song’s name', () => {
-    const named: Presentation = { ...song, slides: [{ id: 'a', group: 'Verse 1', text: '우리는 주의 움직이는 교회\nA2' }, { id: 'c', group: 'Chorus', text: 'C1\nC2' }] };
+    const named: Presentation = { ...song, slides: [{ id: 'a', group: 'Verse 1', text: '샘플 고백송\nA2' }, { id: 'c', group: 'Chorus', text: 'C1\nC2' }] };
     const once = applyConfessionSong(back, named)!;
     const again = applyConfessionSong(once, named, 1)!;
     expect(again.slice(1, -1).map((s) => s.elements!.map((e) => e.text))).toEqual([
-      ['우리 모일 때', '우리는 주의 움직이는 교회', '우리는 주의 움직이는 교회'],
-      ['우리 모일 때', 'A2', '우리는 주의 움직이는 교회'],
-      ['우리 모일 때', 'C1', '우리는 주의 움직이는 교회'],
-      ['우리 모일 때', 'C2', '우리는 주의 움직이는 교회'],
+      ['우리 모일 때', '샘플 고백송', '샘플 고백송'],
+      ['우리 모일 때', 'A2', '샘플 고백송'],
+      ['우리 모일 때', 'C1', '샘플 고백송'],
+      ['우리 모일 때', 'C2', '샘플 고백송'],
     ]);
   });
 
@@ -291,11 +292,12 @@ describe('공동체 고백송 and template deck sync', async () => {
   it('brings the library Front/Back decks in line with the templates and the 고백송', () => {
     const lib = createSeedLibrary();
     lib.presentations.push(song);
+    lib.sunday.confessionSong = song.title;
     const tpl = { ...TPL, back, keys: { front: 'f1', back: 'b1', song: 's1' } };
     const updates = templateDeckUpdates(lib, tpl);
     expect(updates.map((u) => u.id)).toEqual([lib.sunday.frontId, lib.sunday.backId]);
     const backPatch = updates[1].patch;
-    expect(backPatch.slides![0].elements![0].text).toContain('우리는 주의 움직이는 교회');
+    expect(backPatch.slides![0].elements![0].text).toContain('샘플 고백송');
     // Applied once, nothing more to do — until the template changes.
     const synced = { ...lib, presentations: lib.presentations.map((p) => updates.find((u) => u.id === p.id) ? { ...p, ...updates.find((u) => u.id === p.id)!.patch } : p) };
     expect(templateDeckUpdates(synced, tpl)).toEqual([]);
@@ -465,5 +467,19 @@ describe('every song in the church template design', async () => {
     expect(first).toHaveLength(1);
     expect(songStyleUpdates(first, TPL, 4)).toEqual([]);
     expect(songStyleUpdates(first, TPL, 2)).toHaveLength(1); // a new lines-per-slide setting restyles again
+  });
+});
+
+describe('the fixed 우리는 주의 움직이는 교회 lyric slides', async () => {
+  const { songChunks } = await import('../src/domain/templates/confession');
+  it('always prints the five hand-set slides, whatever the library copy looks like', () => {
+    const copy: Presentation = {
+      id: 'p', title: '우리는 주의 움직이는 교회', themeId: 't',
+      slides: [{ id: 'a', group: 'Verse 1', text: '우리는 주의 움직이는 교회\n\n이곳은 주님을 위한 자리' }],
+    };
+    const chunks = songChunks(copy, 2);
+    expect(chunks).toHaveLength(5);
+    expect(chunks[0]).toEqual(['우리는 주의 움직이는 교회', '이곳은 주님을 위한 자리', '내가 기도하는 모든 땅 위에서', '하나님 예배 받을 그날을 고대하네']);
+    expect(chunks[4].at(-1)).toBe('그는 위대하신 왕');
   });
 });

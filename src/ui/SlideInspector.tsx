@@ -1,6 +1,7 @@
 import type { Background, Library, MediaMeta, Slide, SlideAction, TransitionKind } from '../domain/types';
 import { parseChannels } from '../domain/effects';
 import { obs } from '../domain/obs';
+import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
   slide: Slide;
@@ -80,8 +81,8 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
       </div>
       <button className="primary" onClick={onDesign}>✎ Open slide editor ({slide.elements?.length ?? 0} objects)</button>
       <label>Heading<input value={slide.title ?? ''} onChange={(e) => onChange({ title: e.target.value || undefined })} /></label>
-      <label>Text <span className="muted small">— chords inline like [G]Amazing [C]grace (stage only)</span><textarea rows={4} value={slide.text} onChange={(e) => onChange({ text: e.target.value })} /></label>
-      <label>Second line (translation)<textarea rows={3} value={slide.subtext ?? ''} onChange={(e) => onChange({ subtext: e.target.value || undefined })} /></label>
+      <label>Text <span className="muted small">— chords inline like [G]Amazing [C]grace (stage only)</span><AutoTextarea rows={4} value={slide.text} onChange={(e) => onChange({ text: e.target.value })} /></label>
+      <label>Second line (translation)<AutoTextarea rows={3} value={slide.subtext ?? ''} onChange={(e) => onChange({ subtext: e.target.value || undefined })} /></label>
         </>
       )}
       <label>Corner caption<input value={slide.caption ?? ''} placeholder="한글 제목 | English Title" onChange={(e) => onChange({ caption: e.target.value || undefined })} /></label>
@@ -135,8 +136,8 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
           </optgroup>
         </select>
       </div>
-      <label>Stage notes<textarea rows={3} value={slide.notes ?? ''} onChange={(e) => onChange({ notes: e.target.value || undefined })} /></label>
-      <label>QR links (one per line)<textarea rows={2} value={(slide.qr ?? []).join('\n')} onChange={(e) => {
+      <label>Stage notes<AutoTextarea rows={3} value={slide.notes ?? ''} onChange={(e) => onChange({ notes: e.target.value || undefined })} /></label>
+      <label>QR links (one per line)<AutoTextarea rows={2} value={(slide.qr ?? []).join('\n')} onChange={(e) => {
         const qr = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean);
         onChange({ qr: qr.length ? qr : undefined });
       }} /></label>

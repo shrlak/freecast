@@ -4,6 +4,7 @@ import { findSong, parseLyricsMarkdown, type SongDraft, type SongSection } from 
 import { parseNotice, type ParsedNotice } from '../../domain/sunday/notice';
 import { readConti as readContiPdf } from '../../domain/recognition/conti';
 import { ai } from '../../domain/ai';
+import { AutoTextarea } from '../AutoTextarea';
 
 export function sectionsToText(sections: SongSection[]): string {
   return sections.map((s) => `[${s.label}]\n${s.lines.join('\n')}`).join('\n\n');
@@ -131,7 +132,7 @@ export function SundaySongs({ songs, setSongs, notice, setNotice, library, lines
         </div>
         <div className="card stack">
           <h3>카톡 공지 (optional)</h3>
-          <textarea rows={6} placeholder={'🎶찬양곡:\n1️⃣ 주님의 은혜 넘치네 (G)\n2️⃣ …\n📖 본문: 로마서 5장 1-11절\n🤝공동체 고백: …'} value={notice} onChange={(e) => setNotice(e.target.value)} />
+          <AutoTextarea rows={6} placeholder={'🎶찬양곡:\n1️⃣ 주님의 은혜 넘치네 (G)\n2️⃣ …\n📖 본문: 로마서 5장 1-11절\n🤝공동체 고백: …'} value={notice} onChange={(e) => setNotice(e.target.value)} />
           <div className="row gap-xs">
             <button disabled={!notice.trim()} onClick={applyNotice}>공지대로 순서·이름 확정</button>
             <button disabled={!notice.trim() || !!busy} onClick={aiNotice}>✨ AI로 읽기</button>
@@ -173,7 +174,7 @@ export function SundaySongs({ songs, setSongs, notice, setNotice, library, lines
             ) : (
               <>
                 {match && <button className="small link" onClick={() => update(i, { presentationId: match.id })}>📚 “{match.title}” is in the library — use those lyrics</button>}
-                <textarea rows={Math.min(14, Math.max(4, song.sections.reduce((n, s) => n + s.lines.length + 2, 0)))} spellCheck={false}
+                <AutoTextarea rows={Math.min(14, Math.max(4, song.sections.reduce((n, s) => n + s.lines.length + 2, 0)))} spellCheck={false}
                   placeholder={'[V1]\n가사 첫 줄\n가사 둘째 줄\n\n[C]\n후렴…'}
                   defaultValue={sectionsToText(song.sections)}
                   key={`${i}-${song.title}-${song.sections.length}`}

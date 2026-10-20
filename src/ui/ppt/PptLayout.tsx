@@ -15,6 +15,7 @@ import type { Commands } from './commands';
 import { SlidePane, paneSlideId } from './SlidePane';
 import { paneSource, selectedRow, slidePaneRows, type PaneSlide } from './paneRows';
 import { resolveBackground } from '../../domain/autoBackground';
+import { AutoTextarea } from '../AutoTextarea';
 
 interface Props {
   state: AppState;
@@ -153,7 +154,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
               )}
             </div>
             {p && slide && (
-              <textarea className="ppt-notes" placeholder="슬라이드 노트를 추가하려면 클릭하세요 (무대 화면에 표시)"
+              <AutoTextarea className="ppt-notes" placeholder="슬라이드 노트를 추가하려면 클릭하세요 (무대 화면에 표시)"
                 value={slide.notes ?? ''} onChange={(e) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch: { notes: e.target.value || undefined } })} />
             )}
           </main>

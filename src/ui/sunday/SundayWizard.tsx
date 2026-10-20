@@ -17,6 +17,7 @@ import { qrDataUrl } from '../../domain/io/qr';
 import { loadTranslations } from '../BibleModal';
 import { filesToSlides } from '../importFiles';
 import { SundaySongs, type CoverInfo } from './SundaySongs';
+import { AutoTextarea } from '../AutoTextarea';
 
 interface Props {
   state: AppState;
@@ -232,7 +233,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
           )}
           {step === 3 && (
             <div className="two-col">
-              <textarea rows={16} placeholder={'1. 회개와 마음의 정결\n- 지난 한 주간 …\n- …\n\n2. 예배를 위한 기도\n- …'} value={d.prayer} onChange={(e) => set({ prayer: e.target.value })} />
+              <AutoTextarea rows={16} placeholder={'1. 회개와 마음의 정결\n- 지난 한 주간 …\n- …\n\n2. 예배를 위한 기도\n- …'} value={d.prayer} onChange={(e) => set({ prayer: e.target.value })} />
               <div className="stack">
                 <strong>기도제목 {topics.length}개 → 기도 준비 슬라이드 {prayerPlan.length || 1}장</strong>
                 {prayerPlan.map((g, i) => <div key={i} className="card small">{i + 1}장: {g.map((t) => t.title).join(' · ')}</div>)}
@@ -242,7 +243,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
           )}
           {step === 4 && (
             <div className="two-col">
-              <textarea rows={16} placeholder={'1. <새가족 환영>\n오늘 처음 오신 분들을 환영합니다!\n\n2. <여름수련회 안내>\n- 장소: …\n- 신청: https://forms.gle/…'} value={d.announcements} onChange={(e) => set({ announcements: e.target.value })} />
+              <AutoTextarea rows={16} placeholder={'1. <새가족 환영>\n오늘 처음 오신 분들을 환영합니다!\n\n2. <여름수련회 안내>\n- 장소: …\n- 신청: https://forms.gle/…'} value={d.announcements} onChange={(e) => set({ announcements: e.target.value })} />
               <div className="stack">
                 <strong>광고 {ann.length}개</strong>
                 {ann.map((a, i) => (

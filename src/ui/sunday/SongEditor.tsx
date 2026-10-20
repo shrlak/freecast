@@ -6,6 +6,7 @@ import { planSectionSlides } from '../../domain/sunday/slidePlanner';
 import { deleteSharedSong, registerSharedSong } from '../../domain/online';
 import { uid } from '../../domain/lyrics';
 import { useAutosave } from '../hooks';
+import { AutoTextarea } from '../AutoTextarea';
 
 interface Part { id: string; label: string; text: string }
 
@@ -205,7 +206,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
                   <button className="mini-btn" disabled={i === parts.length - 1} onClick={() => setParts((l) => { const n = [...l]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; return n; })}>▼</button>
                   <button className="mini-btn" onClick={() => setParts((l) => l.filter((x) => x.id !== p.id))}>✕</button>
                 </div>
-                <textarea rows={Math.max(3, p.text.split('\n').length + 1)} value={p.text} onChange={(e) => setPart(p.id, { text: e.target.value })} placeholder="가사 (빈 줄 = 다음 슬라이드)" />
+                <AutoTextarea rows={Math.max(3, p.text.split('\n').length + 1)} value={p.text} onChange={(e) => setPart(p.id, { text: e.target.value })} placeholder="가사 (빈 줄 = 다음 슬라이드)" />
               </div>
             ))}
             <button onClick={() => setParts((l) => [...l, { id: uid('pt'), label: ['V1', 'C', 'V2', 'B', 'PC', 'T'][l.length] ?? `P${l.length + 1}`, text: '' }])}>＋ 파트 추가</button>

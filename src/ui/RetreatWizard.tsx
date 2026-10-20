@@ -14,6 +14,7 @@ import { putMedia } from '../domain/media';
 import { uid } from '../domain/lyrics';
 import { ai } from '../domain/ai';
 import { loadTranslations } from './BibleModal';
+import { AutoTextarea } from './AutoTextarea';
 
 interface Props {
   state: AppState;
@@ -175,7 +176,7 @@ export function RetreatWizard({ state, dispatch, onClose, notify }: Props) {
                   <span className="ok small">📚 Library: {linked.title} <button className="mini-btn" onClick={() => upd({ presentationId: undefined })}>edit here</button></span>
                 ) : (
                   <>
-                    <textarea rows={4} placeholder="가사 (빈 줄 = 다음 슬라이드)" value={song.text} onChange={(e) => upd({ text: e.target.value })} />
+                    <AutoTextarea rows={4} placeholder="가사 (빈 줄 = 다음 슬라이드)" value={song.text} onChange={(e) => upd({ text: e.target.value })} />
                     <span className="muted small">{lyricSlides(song.text, d.linesPerSlide).length} slides</span>
                   </>
                 )}
@@ -201,7 +202,7 @@ export function RetreatWizard({ state, dispatch, onClose, notify }: Props) {
       {b.kind === 'announcements' && (
         <>
           <input value={b.heading} onChange={(e) => setBlock(m, b.id, { heading: e.target.value })} />
-          <textarea rows={5} placeholder={'1. <제목>\n내용…\n- 신청: https://…'} value={b.text} onChange={(e) => setBlock(m, b.id, { text: e.target.value })} />
+          <AutoTextarea rows={5} placeholder={'1. <제목>\n내용…\n- 신청: https://…'} value={b.text} onChange={(e) => setBlock(m, b.id, { text: e.target.value })} />
         </>
       )}
     </div>
