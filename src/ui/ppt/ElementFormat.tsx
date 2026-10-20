@@ -3,13 +3,27 @@ import type { MediaFit, SlideElement } from '../../domain/types';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
-import { TextFormatPanel } from './TextFormatPanel';
+import { TextFormatPanel, type TextFormatValue } from './TextFormatPanel';
 import { changeCase } from '../../domain/textFormat';
 
 const KIND: Record<string, string> = { text: '텍스트 상자', image: '그림', shape: '도형', video: '동영상', camera: '카메라' };
 
 /** The size a text box shows (its first real line's size when lines are styled one by one). */
-const sizeOf = (el: SlideElement) => el.paragraphs?.find((p) => p.text.trim())?.fontSize ?? el.fontSize ?? 64;
+export const sizeOf = (el: SlideElement) => el.paragraphs?.find((p) => p.text.trim())?.fontSize ?? el.fontSize ?? 64;
+
+/** What the format panel shows for a text box. */
+export const textValue = (el: SlideElement): TextFormatValue => ({
+  fontFamily: el.fontFamily, fontSize: sizeOf(el), bold: !!el.bold, italic: !!el.italic, underline: !!el.underline, strike: !!el.strike,
+  shadow: !!el.shadow, letterSpacing: el.letterSpacing ?? 0, color: (el.paragraphs?.find((p) => p.text.trim())?.color ?? el.color ?? '#ffffff').slice(0, 7),
+  highlight: el.highlight, align: el.align ?? 'center', vAlign: el.vAlign ?? 'middle', lineHeight: el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25),
+  list: el.list, indent: el.indent ?? 0, columns: el.columns ?? 1, vertical: !!el.vertical, autoFit: !!el.autoFit,
+});
+
+/** A panel edit as a change to the element; a size becomes a scale of the box's own size (`from` = the size the panel showed). */
+export const elementPatch = (el: SlideElement, { fontSize, ...rest }: Partial<TextFormatValue>, from = sizeOf(el)): Partial<SlideElement> =>
+  ({ ...rest, ...(fontSize === undefined ? {} : { fontSize: fontSize * (el.fontSize ?? sizeOf(el)) / from }) });
+
+export const CLEAR_TEXT_FORMAT: Partial<SlideElement> = { bold: false, italic: false, underline: undefined, strike: undefined, shadow: false, letterSpacing: undefined, highlight: undefined, list: undefined, indent: undefined, columns: undefined, vertical: undefined, lineHeight: undefined };
 
 /**
  * Settings of the object selected on the slide, in the right-hand panel: its text, font, size,
@@ -50,15 +64,10 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
         <>
           <label className="stack">텍스트<textarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
           <TextFormatPanel
-            value={{
-              fontFamily: el.fontFamily, fontSize: sizeOf(el), bold: !!el.bold, italic: !!el.italic, underline: !!el.underline, strike: !!el.strike,
-              shadow: !!el.shadow, letterSpacing: el.letterSpacing ?? 0, color: (el.paragraphs?.find((p) => p.text.trim())?.color ?? el.color ?? '#ffffff').slice(0, 7),
-              highlight: el.highlight, align: el.align ?? 'center', vAlign: el.vAlign ?? 'middle', lineHeight: el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25),
-              list: el.list, indent: el.indent ?? 0, columns: el.columns ?? 1, vertical: !!el.vertical, autoFit: !!el.autoFit,
-            }}
-            onChange={({ fontSize, ...rest }) => onChange({ ...rest, ...(fontSize === undefined ? {} : { fontSize: fontSize * (el.fontSize ?? sizeOf(el)) / sizeOf(el) }) })}
+            value={textValue(el)}
+            onChange={(patch) => onChange(elementPatch(el, patch))}
             onChangeCase={(kind) => onChange({ text: changeCase(el.text ?? '', kind) })}
-            onClear={() => onChange({ bold: false, italic: false, underline: undefined, strike: undefined, shadow: false, letterSpacing: undefined, highlight: undefined, list: undefined, indent: undefined, columns: undefined, vertical: undefined, lineHeight: undefined })}
+            onClear={() => onChange(CLEAR_TEXT_FORMAT)}
           />
         </>
       )}

@@ -27,31 +27,23 @@ export function parsePrayerTopics(text: string): PrayerTopic[] {
   return topics;
 }
 
-/** Rough line count of a topic on a slide (title + wrapped points). */
-function weight(t: PrayerTopic, charsPerLine = 38): number {
-  const wrap = (s: string) => Math.max(1, Math.ceil(s.length / charsPerLine));
-  return wrap(t.title) + t.points.reduce((n, p) => n + wrap(p), 0);
-}
-
 /**
- * Split topics across slides: at most 3 per slide, spread evenly (4 → 2+2, 5 → 3+2),
- * adding slides while any slide would run past `maxLines`.
+ * Split topics across slides: at most 3 per slide, spread evenly (3 → 3, 4 → 2+2, 5 → 3+2).
+ * Three topics always share one slide, however long their points are.
  */
-export function planPrayerSlides(topics: PrayerTopic[], maxLines = 12): PrayerTopic[][] {
+export function planPrayerSlides(topics: PrayerTopic[]): PrayerTopic[][] {
   if (!topics.length) return [];
-  for (let count = Math.ceil(topics.length / 3); count <= topics.length; count++) {
-    const base = Math.floor(topics.length / count);
-    const extra = topics.length % count;
-    const slides: PrayerTopic[][] = [];
-    let i = 0;
-    for (let k = 0; k < count; k++) {
-      const size = base + (k < extra ? 1 : 0);
-      slides.push(topics.slice(i, i + size));
-      i += size;
-    }
-    if (slides.every((s) => s.reduce((n, t) => n + weight(t), 0) <= maxLines) || count === topics.length) return slides;
+  const count = Math.ceil(topics.length / 3);
+  const base = Math.floor(topics.length / count);
+  const extra = topics.length % count;
+  const slides: PrayerTopic[][] = [];
+  let i = 0;
+  for (let k = 0; k < count; k++) {
+    const size = base + (k < extra ? 1 : 0);
+    slides.push(topics.slice(i, i + size));
+    i += size;
   }
-  return [topics];
+  return slides;
 }
 
 /** Slide body: "**1. Title**" lines (rendered bold) followed by "● point" lines. */

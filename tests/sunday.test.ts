@@ -54,6 +54,11 @@ describe('prayer topics', () => {
     expect(topics[0].points).toEqual(['지난 한 주간을 돌아보며', '정결한 마음으로']);
   });
 
+  it('keeps three topics on one slide even when their points are long', () => {
+    const long = Array.from({ length: 3 }, (_, i) => ({ title: `t${i}`, points: ['가'.repeat(60), '나'.repeat(60), '다'.repeat(60)] }));
+    expect(planPrayerSlides(long).map((s) => s.length)).toEqual([3]);
+  });
+
   it('splits evenly with at most three per slide', () => {
     expect(planPrayerSlides(topics).map((s) => s.length)).toEqual([2, 2]);
     const five = Array.from({ length: 5 }, (_, i) => ({ title: `t${i}`, points: [] }));

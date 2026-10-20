@@ -155,9 +155,12 @@ export function fillTokens(text: string, values: Record<string, string | undefin
  */
 export function patchElement(el: SlideElement, patch: Partial<SlideElement>): SlideElement {
   let next: SlideElement = { ...el, ...patch };
+  // Typing a size is a choice: the box must not shrink the text back to fit.
+  if (patch.fontSize && patch.autoFit === undefined) next.autoFit = false;
   if (!el.paragraphs) return next;
   if (patch.text !== undefined) next = withElementText(next, patch.text);
-  const ratio = patch.fontSize && el.fontSize ? patch.fontSize / el.fontSize : 1;
+  const was = el.fontSize ?? el.paragraphs.find((p) => p.text.trim())?.fontSize;
+  const ratio = patch.fontSize && was ? patch.fontSize / was : 1;
   const whole = (['color', 'bold', 'italic', 'align'] as const).filter((k) => k in patch);
   if (ratio !== 1 || whole.length) {
     next.paragraphs = next.paragraphs!.map((p) => {

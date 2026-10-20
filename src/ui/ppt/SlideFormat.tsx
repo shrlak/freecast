@@ -8,7 +8,7 @@ import { assetUrl, slideTheme } from '../SlideCanvas';
 import { useMediaUrl } from '../hooks';
 import { SlideInspector } from '../SlideInspector';
 import { patchElement } from '../../domain/templates/convert';
-import { ElementFormat } from './ElementFormat';
+import { CLEAR_TEXT_FORMAT, ElementFormat, elementPatch, sizeOf, textValue } from './ElementFormat';
 import { TextFormatPanel } from './TextFormatPanel';
 import { changeCase } from '../../domain/textFormat';
 
@@ -80,6 +80,13 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
 
   const selected = slide.elements?.find((e) => e.id === selectedId);
   const elements = slide.elements ?? [];
+  // A slide whose words sit in text boxes (the church's template slides) has no slide text for
+  // the 글꼴 · 단락 settings to act on, so they format its text boxes instead.
+  const textEls = elements.filter((e) => e.kind === 'text');
+  const boxMode = !selected && !slide.text.trim() && !slide.title && !slide.subtext && textEls.length > 0;
+  const ref = textEls[0];
+  const patchBoxes = (fn: (e: typeof elements[number]) => Partial<typeof elements[number]>) =>
+    upd({ elements: elements.map((e) => (e.kind === 'text' ? patchElement(e, fn(e)) : e)) });
   return (
     <div className="slide-format">
       {applied && <div className="fmt-flash">✓ {applied}</div>}
@@ -97,15 +104,15 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
       ) : null}
       <Section title="글꼴 · 단락">
         <TextFormatPanel
-          value={{
+          value={boxMode ? textValue(ref) : {
             fontFamily: t.fontFamily, fontSize: t.fontSize, bold: t.fontWeight >= 700, italic: !!t.italic, underline: !!t.underline,
             strike: !!t.strike, shadow: t.shadow, letterSpacing: t.letterSpacing ?? 0, color: t.color, highlight: t.highlight,
             align: t.align, vAlign: t.vAlign, lineHeight: t.lineHeight, list: t.list, indent: t.indent ?? 0, columns: t.columns ?? 1,
             vertical: !!t.vertical, autoFit: t.autoFit !== false,
           }}
-          onChange={({ bold, ...rest }) => setStyle({ ...rest, ...(bold === undefined ? {} : { fontWeight: bold ? 700 : 400 }) })}
-          onChangeCase={(kind) => upd({ text: changeCase(slide.text, kind), ...(slide.title ? { title: changeCase(slide.title, kind) } : {}), ...(slide.subtext ? { subtext: changeCase(slide.subtext, kind) } : {}) })}
-          onClear={() => upd({ style: undefined })}
+          onChange={boxMode ? (patch) => patchBoxes((e) => elementPatch(e, patch, sizeOf(ref))) : ({ bold, ...rest }) => setStyle({ ...rest, ...(bold === undefined ? {} : { fontWeight: bold ? 700 : 400 }) })}
+          onChangeCase={boxMode ? (kind) => patchBoxes((e) => ({ text: changeCase(e.text ?? '', kind) })) : (kind) => upd({ text: changeCase(slide.text, kind), ...(slide.title ? { title: changeCase(slide.title, kind) } : {}), ...(slide.subtext ? { subtext: changeCase(slide.subtext, kind) } : {}) })}
+          onClear={boxMode ? () => patchBoxes(() => CLEAR_TEXT_FORMAT) : () => upd({ style: undefined })}
           shortcuts={!selected}
         />
       </Section>
