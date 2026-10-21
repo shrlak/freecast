@@ -36,6 +36,20 @@ function itemPresentation(s: NavState, i: number): Presentation | undefined {
   return item && item.kind !== 'header' ? findPres(s.library, item.presentationId) : undefined;
 }
 
+/** Where a presentation sits in the playlist, so a show started on it carries on into the next items. */
+export function playlistIndexFor(s: NavState, presentationId: string): number | null {
+  const cur = s.playlistIndex;
+  if (cur != null && itemPresentation(s, cur)?.id === presentationId) return cur;
+  const i = (activePlaylist(s)?.items ?? []).findIndex((it) => it.kind !== 'header' && it.presentationId === presentationId);
+  return i >= 0 ? i : cur;
+}
+
+/** Playlist position of the slide at `c`: its own, else where its presentation sits in the playlist. */
+function positionOf(s: NavState, c: Cursor): number | null {
+  const pi = c.playlistIndex ?? s.playlistIndex;
+  return pi != null && itemPresentation(s, pi)?.id === c.presentationId ? pi : playlistIndexFor(s, c.presentationId);
+}
+
 /** The slide after `c`, continuing into the next playlist item when playing from the playlist. */
 export function nextCursor(s: NavState, c: Cursor): Cursor | null {
   const p = findPres(s.library, c.presentationId);
@@ -46,7 +60,7 @@ export function nextCursor(s: NavState, c: Cursor): Cursor | null {
     return first != null ? { ...c, seq: first } : null;
   }
   const items = activePlaylist(s)?.items ?? [];
-  const pi = c.playlistIndex ?? s.playlistIndex;
+  const pi = positionOf(s, c);
   if (pi == null || itemPresentation(s, pi)?.id !== c.presentationId) return null;
   for (let i = pi + 1; i < items.length; i++) {
     const np = itemPresentation(s, i);
@@ -56,11 +70,35 @@ export function nextCursor(s: NavState, c: Cursor): Cursor | null {
   return null;
 }
 
+/**
+ * Every slide still to come, in the order the show plays them (across the playlist), starting
+ * with the first slide of `selectedId` when nothing is live yet.
+ */
+export function upcomingCursors(s: NavState, selectedId: string | null, limit = 400): Cursor[] {
+  const out: Cursor[] = [];
+  let c = s.cursor;
+  if (!c) {
+    const p = selectedId ? findPres(s.library, selectedId) : undefined;
+    const first = p ? playable(p, 0, 1) : null;
+    if (!p || first == null) return out;
+    c = { presentationId: p.id, seq: first, playlistIndex: playlistIndexFor(s, p.id) };
+    out.push(c);
+  }
+  const seen = new Set<string>();
+  for (let n = nextCursor(s, c); n && out.length < limit; n = nextCursor(s, n)) {
+    const key = `${n.presentationId}:${n.seq}:${n.playlistIndex ?? ''}`;
+    if (seen.has(key)) break;
+    seen.add(key);
+    out.push(n);
+  }
+  return out;
+}
+
 export function prevCursor(s: NavState, c: Cursor): Cursor | null {
   const p = findPres(s.library, c.presentationId);
   const here = p ? playable(p, c.seq - 1, -1) : null;
   if (here != null) return { ...c, seq: here };
-  const pi = c.playlistIndex ?? s.playlistIndex;
+  const pi = positionOf(s, c);
   if (pi == null || itemPresentation(s, pi)?.id !== c.presentationId) return null;
   for (let i = pi - 1; i >= 0; i--) {
     const np = itemPresentation(s, i);
