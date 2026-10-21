@@ -30,6 +30,16 @@ export function useMediaUrl(id: string | null | undefined): string | null {
 }
 
 const decoded = new Set<string>();
+export const isDecoded = (url: string) => decoded.has(url);
+
+/** Load and decode a picture ahead of showing it. Never rejects. */
+export function preloadImage(url: string): Promise<void> {
+  if (decoded.has(url)) return Promise.resolve();
+  const img = new Image();
+  img.src = url;
+  const done = () => void decoded.add(url);
+  return img.decode().then(done, done);
+}
 
 /**
  * The URL once the browser has decoded the picture. A new picture loads off-screen first and the
