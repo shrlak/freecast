@@ -27,20 +27,25 @@ export function mediaIdsFor(parts: { slides?: Slide[]; backgrounds?: (Background
   return [...ids];
 }
 
-/** Hand media to the server so remotes can draw slides the way this computer does. */
-export async function sendMediaToRemotes(ids: string[]) {
-  for (const id of ids) {
-    if (sent.has(id)) continue;
-    sent.add(id);
-    try {
-      const blob = await getMedia(id);
-      if (!blob || blob.size > MAX_BYTES) continue;
-      const res = await fetch(`/api/remote-media/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'content-type': blob.type || 'application/octet-stream' }, body: blob });
-      if (!res.ok) sent.delete(id);
-    } catch {
-      sent.delete(id);
-    }
+async function sendOne(id: string) {
+  try {
+    const blob = await getMedia(id);
+    if (!blob || blob.size > MAX_BYTES) return;
+    const res = await fetch(`/api/remote-media/${encodeURIComponent(id)}`, { method: 'PUT', headers: { 'content-type': blob.type || 'application/octet-stream' }, body: blob });
+    if (!res.ok) sent.delete(id);
+  } catch {
+    sent.delete(id);
   }
+}
+
+/** Hand media to the server (three at a time, in the order given) so remotes can draw slides like this computer does. */
+export async function sendMediaToRemotes(ids: string[]) {
+  const todo = ids.filter((id) => !sent.has(id));
+  todo.forEach((id) => sent.add(id));
+  const worker = async () => {
+    for (let id = todo.shift(); id; id = todo.shift()) await sendOne(id);
+  };
+  await Promise.all([worker(), worker(), worker()]);
 }
 
 /** Forget what was sent (the server restarted or a new remote needs everything again). */
