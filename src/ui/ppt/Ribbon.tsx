@@ -121,7 +121,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
   const applyBackground = (bg: Background | undefined) => (thisSlideOnly ? updateSlide({ background: bg }) : updatePres({ background: bg }));
   const transition = slide?.transition ?? p?.transition;
   const setTransition = (kind: TransitionKind) => {
-    const t = { kind, duration: transition?.duration ?? 400 };
+    const t = { kind, duration: transition?.duration ?? 1 };
     if (thisSlideOnly) updateSlide({ transition: t });
     else updatePres({ transition: t });
   };
@@ -271,12 +271,12 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             <Group label="화면 전환">
               {(['cut', 'fade', 'slide', 'zoom'] as TransitionKind[]).map((k) => (
                 <Big key={k} icon={{ cut: '▮', fade: '◐', slide: '⇥', zoom: '⤢' }[k]} label={{ cut: '없음', fade: '페이드', slide: '밀어내기', zoom: '확대' }[k]}
-                  active={(transition?.kind ?? 'fade') === k} disabled={!p} onClick={() => setTransition(k)} />
+                  active={(transition?.kind ?? 'cut') === k} disabled={!p} onClick={() => setTransition(k)} />
               ))}
             </Group>
             <Group label="타이밍">
-              <label className="rb-range">기간 (ms) <input type="number" min={0} max={3000} step={100} disabled={!p} value={transition?.duration ?? 400}
-                onChange={(e) => { const t = { kind: transition?.kind ?? 'fade', duration: Number(e.target.value) }; if (thisSlideOnly) updateSlide({ transition: t }); else updatePres({ transition: t }); }} /></label>
+              <label className="rb-range">기간 (ms) <input type="number" min={1} max={3000} step={1} disabled={!p} value={transition?.duration ?? 1}
+                onChange={(e) => { const t = { kind: transition?.kind ?? 'cut', duration: Math.max(1, Number(e.target.value) || 1) }; if (thisSlideOnly) updateSlide({ transition: t }); else updatePres({ transition: t }); }} /></label>
               <label className="rb-range">자동 넘김 (초) <input type="number" min={0} disabled={!slide} value={slide?.autoAdvance ?? ''}
                 onChange={(e) => updateSlide({ autoAdvance: Number(e.target.value) > 0 ? Number(e.target.value) : undefined })} /></label>
               <label className="rb-check"><input type="checkbox" checked={thisSlideOnly} onChange={(e) => setThisSlideOnly(e.target.checked)} /> 이 슬라이드만</label>

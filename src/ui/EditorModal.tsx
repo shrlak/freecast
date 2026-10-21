@@ -92,7 +92,7 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
                 <label>Key<input value={meta.key ?? ''} onChange={(e) => setM('key', e.target.value)} /></label>
                 <label>Tempo<input value={meta.tempo ?? ''} onChange={(e) => setM('tempo', e.target.value)} /></label>
                 <label>Transition
-                  <select value={transition?.kind ?? ''} onChange={(e) => setTransition(e.target.value ? { kind: e.target.value as TransitionKind, duration: transition?.duration ?? 400 } : undefined)}>
+                  <select value={transition?.kind ?? ''} onChange={(e) => setTransition(e.target.value ? { kind: e.target.value as TransitionKind, duration: transition?.duration ?? 1 } : undefined)}>
                     <option value="">Default (fade)</option>
                     <option value="cut">Cut</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="zoom">Zoom</option>
                   </select>

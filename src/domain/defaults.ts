@@ -211,7 +211,7 @@ export const DEFAULT_STAGE_LAYOUTS: StageLayout[] = [
 export function createEmptyLive(lib: Library): LiveState {
   return {
     slide: null, title: null, nextText: null, theme: lib.themes[0],
-    transition: { kind: 'fade', duration: 300 },
+    transition: { kind: 'cut', duration: 1 },
     background: presetBackground('Black'), black: false, message: null,
     activeProps: [], props: lib.props, timers: lib.timers, outputTimerId: null,
     screens: lib.screens, themes: lib.themes, copyright: null,
