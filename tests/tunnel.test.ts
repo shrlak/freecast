@@ -6,6 +6,10 @@ describe('parseTunnelUrl', () => {
   it('finds the address in the tunnel service output', () => {
     expect(parseTunnelUrl('abc123.lhr.life tunneled with tls termination, https://abc123.lhr.life\n')).toBe('https://abc123.lhr.life');
   });
+  it('never takes the localhost.run account console for a tunnel', () => {
+    expect(parseTunnelUrl('create a free account at https://admin.localhost.run/')).toBeNull();
+    expect(parseTunnelUrl('https://admin.localhost.run  then  abc.lhr.life tunneled, https://abc.lhr.life')).toBe('https://abc.lhr.life');
+  });
   it('ignores output without an address', () => {
     expect(parseTunnelUrl('Warning: Permanently added localhost.run')).toBeNull();
   });
