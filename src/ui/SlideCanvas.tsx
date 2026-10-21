@@ -6,7 +6,8 @@ import { CHURCH_LOGO_URL } from '../domain/defaults';
 import { TEMPLATE_LYRICS_THEME } from '../domain/templates/fill';
 import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
-import { useMediaUrl, useNow, useReadyImage, useWidth } from './hooks';
+import { isDecoded, preloadImage, useMediaUrl, useNow, useReadyImage, useWidth } from './hooks';
+import { mediaUrl, peekMediaUrl } from '../domain/media';
 
 export { CANVAS_W, CANVAS_H } from '../domain/canvas';
 import { CANVAS_W, CANVAS_H } from '../domain/canvas';
@@ -196,7 +197,8 @@ export function ElementView({ el }: { el: SlideElement }) {
     position: 'absolute', left: el.x, top: el.y, width: el.w, height: el.h, opacity: el.opacity ?? 1,
     transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
   };
-  if (el.kind === 'image') return url ? <img src={url} alt="" style={{ ...box, objectFit: el.fit ?? 'contain' }} /> : <div style={{ ...box, outline: '2px dashed #555' }} />;
+  // While a picture is still loading nothing is drawn (a placeholder box would flash); the slide waits for it, see useReadySlide.
+  if (el.kind === 'image') return url ? <img src={url} alt="" decoding="sync" style={{ ...box, objectFit: el.fit ?? 'contain' }} /> : null;
   if (el.kind === 'video') return videoUrl ? <video src={videoUrl} style={{ ...box, objectFit: el.fit ?? 'cover' }} autoPlay muted loop playsInline /> : <div style={{ ...box, outline: '2px dashed #555' }} />;
   if (el.kind === 'camera') return <div style={box}><CameraBg deviceId={el.deviceId ?? ''} label="Camera" animate /></div>;
   if (el.kind === 'shape') {
@@ -322,8 +324,37 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   );
 }
 
+/**
+ * The slide to draw. A new slide whose pictures (logos, photos) are not decoded yet waits for them
+ * (at most 0.6 s) with the previous slide still up, so the slide and its pictures appear together
+ * instead of the pictures popping in a moment later. Slides without pictures switch at once.
+ */
+function useReadySlide(slide: Slide | null): Slide | null {
+  const [shown, setShown] = useState(slide);
+  const ids = slide?.elements?.flatMap((e) => (e.kind === 'image' && e.mediaId ? [e.mediaId] : [])) ?? [];
+  const ready = ids.every((id) => {
+    const u = peekMediaUrl(id);
+    return !!u && isDecoded(u);
+  });
+  if (shown !== slide && (ready || !slide)) setShown(slide);
+  useEffect(() => {
+    if (shown === slide) return;
+    let alive = true;
+    const go = () => alive && setShown(slide);
+    Promise.all(ids.map((id) => mediaUrl(id).then((u) => (u ? preloadImage(u) : undefined)))).then(go, go);
+    const t = setTimeout(go, 600);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slide, shown]);
+  return shown;
+}
+
 /** Keeps the outgoing slide on screen while the new one transitions in. */
-function TransitionLayer({ slide, theme, transition, animate }: { slide: Slide | null; theme: Theme; transition?: Transition; animate: boolean }) {
+function TransitionLayer({ slide: wanted, theme, transition, animate }: { slide: Slide | null; theme: Theme; transition?: Transition; animate: boolean }) {
+  const slide = useReadySlide(wanted);
   const [prev, setPrev] = useState<{ slide: Slide; theme: Theme } | null>(null);
   const last = useRef<{ slide: Slide | null; theme: Theme }>({ slide, theme });
   const kind = animate ? transition?.kind ?? 'cut' : 'cut';
