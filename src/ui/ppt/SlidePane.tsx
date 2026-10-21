@@ -17,6 +17,10 @@ interface Props {
   item: number | null;
   selected: PaneSlide | null;
   pick: (r: PaneSlide) => void;
+  /** Slide ids picked together with Shift/Ctrl-click (empty: just `selected`). */
+  multi: string[];
+  /** A click on a slide; Shift extends the picked range, Ctrl/⌘ toggles one. */
+  onClickSlide: (r: PaneSlide, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => void;
   onMenu: (x: number, y: number, slideId: string) => void;
   onAdd: () => void;
 }
@@ -27,7 +31,7 @@ export const paneSlideId = (r: PaneSlide) => `pslide-${r.key}`;
  * The left 슬라이드 pane: every slide of the playlist (or of the presentation) in one list,
  * divided by the playlist's sections, the presentations' titles and the parts inside them.
  */
-export function SlidePane({ state, dispatch, rows, heading, p, item, selected, pick, onMenu, onAdd }: Props) {
+export function SlidePane({ state, dispatch, rows, heading, p, item, selected, pick, multi, onClickSlide, onMenu, onAdd }: Props) {
   const { library } = state;
   const liveSlideId = state.live.slide?.id;
 
@@ -46,12 +50,13 @@ export function SlidePane({ state, dispatch, rows, heading, p, item, selected, p
   const thumb = (r: PaneSlide, s: Slide) => {
     const pres = r.presentation;
     const theme = library.themes.find((t) => t.id === pres.themeId) || library.themes[0];
-    const sel = r.key === selected?.key;
+    const inMulti = multi.includes(s.id) && r.presentation.id === selected?.presentation.id && r.itemIndex === selected?.itemIndex;
+    const sel = r.key === selected?.key || inMulti;
     return (
-      <div id={paneSlideId(r)} className={`ppt-thumb ${sel ? 'sel' : ''} ${s.disabled ? 'hidden-slide' : ''}`}
-        onClick={() => pick(r)}
+      <div id={paneSlideId(r)} className={`ppt-thumb ${sel ? 'sel' : ''} ${inMulti ? 'multi' : ''} ${s.disabled ? 'hidden-slide' : ''}`}
+        onClick={(e) => onClickSlide(r, e)}
         onDoubleClick={() => goLive(r)}
-        onContextMenu={(e) => { e.preventDefault(); pick(r); onMenu(e.clientX, e.clientY, s.id); }}>
+        onContextMenu={(e) => { e.preventDefault(); if (!inMulti) onClickSlide(r, { shiftKey: false, metaKey: false, ctrlKey: false }); onMenu(e.clientX, e.clientY, s.id); }}>
         <span className="ppt-num">{r.number}{s.id === liveSlideId && <b className="ppt-live-dot" title="Live" />}</span>
         <div className="ppt-thumb-frame" style={{ borderColor: sel ? undefined : 'transparent' }}>
           <SlideCanvas slide={s} theme={theme} background={resolveBackground(s, pres)} bgEffect={pres.bgEffect} />
