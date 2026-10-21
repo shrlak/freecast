@@ -13,6 +13,14 @@ function isObj(v: unknown): v is Record<string, unknown> {
  * Validate data from storage or an imported file and fill in anything an older
  * version did not have. Returns null when it is not a FreeCast library.
  */
+/** The presentations without their own transitions (nor their slides'). */
+export function clearTransitions(list: Library['presentations']): Library['presentations'] {
+  return list.map((p) => {
+    const { transition: _p, ...rest } = p;
+    return { ...rest, slides: p.slides.map((s) => { const { transition: _s, ...r } = s; return r; }) };
+  });
+}
+
 export function normalizeLibrary(value: unknown): Library | null {
   if (!isObj(value) || value.version !== 1) return null;
   const { presentations, themes } = value;
@@ -30,10 +38,13 @@ export function normalizeLibrary(value: unknown): Library | null {
   const saved = isObj(value.sunday) ? value.sunday : null;
   const wanted = (id: string) => !saved || [saved.frontId, saved.prayerId, saved.backId].includes(id);
   const templates = seed.presentations.filter((p) => p.folder === 'Templates' && !ids.has(p.id) && wanted(p.id));
-  const own = value.aspect === '4:3' ? (presentations as Library['presentations']) : toFourThree(presentations as Library['presentations']);
+  const laidOut = value.aspect === '4:3' ? (presentations as Library['presentations']) : toFourThree(presentations as Library['presentations']);
+  // Once: every transition the library had is cleared, so all of them are the default (없음, 1 ms).
+  const own = value.transitionsReset === true ? laidOut : clearTransitions(laidOut);
   return {
     version: 1,
     aspect: '4:3',
+    transitionsReset: true,
     presentations: [...own, ...templates],
     // Themes added in later versions (광고, scripture) are appended if missing.
     themes: [...(themes as Library['themes']), ...DEFAULT_THEMES.filter((t) => !themes.some((x) => isObj(x) && x.id === t.id))],

@@ -398,6 +398,8 @@ export interface Library {
   version: 1;
   /** '4:3' once slides use the 1440×1080 canvas (libraries without it were laid out at 1920×1080). */
   aspect?: '4:3';
+  /** Set once every presentation's and slide's own transition has been cleared (default is 없음, 1 ms). */
+  transitionsReset?: true;
   presentations: Presentation[];
   themes: Theme[];
   playlists: Playlist[];
