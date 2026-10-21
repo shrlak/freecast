@@ -6,7 +6,7 @@ import { CHURCH_LOGO_URL } from '../domain/defaults';
 import { TEMPLATE_LYRICS_THEME } from '../domain/templates/fill';
 import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
-import { useMediaUrl, useNow, useWidth } from './hooks';
+import { useMediaUrl, useNow, useReadyImage, useWidth } from './hooks';
 
 export { CANVAS_W, CANVAS_H } from '../domain/canvas';
 import { CANVAS_W, CANVAS_H } from '../domain/canvas';
@@ -77,16 +77,31 @@ function CameraBg({ deviceId, label, animate }: { deviceId: string; label: strin
 
 function BackgroundLayer({ background, animate, video, onTime }: { background: Background | null; animate: boolean; video?: CanvasProps['video']; onTime?: CanvasProps['onVideoTime'] }) {
   const url = useMediaUrl(background?.kind === 'media' ? background.mediaId : null);
-  if (!background) return null;
-  if (background.kind === 'color') return <div className="layer" style={{ background: background.value }} />;
-  if (background.kind === 'gradient') return <div className="layer" style={{ backgroundImage: background.value }} />;
-  if (background.kind === 'camera') return <CameraBg deviceId={background.deviceId} label={background.label} animate={animate} />;
-  if (background.kind === 'image') return <img className="layer media" style={{ objectFit: background.fit ?? 'cover', background: '#fff' }} src={assetUrl(background.url)} alt="" />;
-  if (!url) return null;
-  const fit = background.fit ?? 'cover';
-  if (background.mediaType === 'image') return <img className="layer media" style={{ objectFit: fit }} src={url} alt="" />;
-  if (!animate) return <video className="layer media" style={{ objectFit: fit }} src={url} muted preload="metadata" />;
-  return <VideoBg url={url} fit={fit} loop={background.loop !== false} video={video} onTime={onTime} />;
+  const imageSrc = background?.kind === 'image' ? assetUrl(background.url) : background?.kind === 'media' && background.mediaType === 'image' ? url : null;
+  const ready = useReadyImage(imageSrc);
+  // What was drawn last: kept on screen while the next picture is still loading, so a slide change never shows an empty frame.
+  const held = useRef<ReactNode>(null);
+  if (!background) {
+    held.current = null;
+    return null;
+  }
+  const fit = background.kind === 'color' || background.kind === 'gradient' || background.kind === 'camera' ? undefined : background.fit ?? 'cover';
+  let node: ReactNode = null;
+  let pending = false;
+  if (background.kind === 'color') node = <div className="layer" style={{ background: background.value }} />;
+  else if (background.kind === 'gradient') node = <div className="layer" style={{ backgroundImage: background.value }} />;
+  else if (background.kind === 'camera') node = <CameraBg deviceId={background.deviceId} label={background.label} animate={animate} />;
+  else if (background.kind === 'image' || background.mediaType === 'image') {
+    pending = !ready;
+    if (ready) node = <img className="layer media" style={{ objectFit: fit, background: background.kind === 'image' ? '#fff' : undefined }} src={ready} alt="" decoding="sync" />;
+  } else if (url) {
+    node = animate
+      ? <VideoBg url={url} fit={fit!} loop={background.loop !== false} video={video} onTime={onTime} />
+      : <video className="layer media" style={{ objectFit: fit }} src={url} muted preload="metadata" />;
+  } else pending = background.kind === 'media';
+  if (pending) return held.current;
+  held.current = node;
+  return node;
 }
 
 /** Timers available to dynamic text ({timer:Name}) inside slides. */
