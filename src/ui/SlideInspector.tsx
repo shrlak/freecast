@@ -92,7 +92,7 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
         <label>Auto-advance (sec)<input type="number" min={0} value={slide.autoAdvance ?? ''} onChange={(e) => onChange({ autoAdvance: Number(e.target.value) > 0 ? Number(e.target.value) : undefined })} /></label>
         <label>Hotkey<input maxLength={1} value={slide.hotkey ?? ''} placeholder="e.g. c" onChange={(e) => onChange({ hotkey: e.target.value.toLowerCase() || undefined })} /></label>
         <label className="span2">Transition
-          <select value={slide.transition?.kind ?? ''} onChange={(e) => onChange({ transition: e.target.value ? { kind: e.target.value as TransitionKind, duration: slide.transition?.duration ?? 400 } : undefined })}>
+          <select value={slide.transition?.kind ?? ''} onChange={(e) => onChange({ transition: e.target.value ? { kind: e.target.value as TransitionKind, duration: slide.transition?.duration ?? 1 } : undefined })}>
             <option value="">Presentation default</option>
             <option value="cut">Cut</option><option value="fade">Fade</option><option value="slide">Slide</option><option value="zoom">Zoom</option>
           </select>

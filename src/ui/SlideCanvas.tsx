@@ -371,7 +371,7 @@ function TransitionLayer({ slide, theme, transition, animate }: { slide: Slide |
   const [prev, setPrev] = useState<{ slide: Slide; theme: Theme } | null>(null);
   const last = useRef<{ slide: Slide | null; theme: Theme }>({ slide, theme });
   const kind = animate ? transition?.kind ?? 'cut' : 'cut';
-  const duration = transition?.duration ?? 300;
+  const duration = transition?.duration ?? 1;
   useEffect(() => {
     const old = last.current;
     last.current = { slide, theme };

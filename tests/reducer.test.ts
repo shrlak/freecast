@@ -8,6 +8,13 @@ const run = (s: AppState, ...actions: Action[]) => actions.reduce(reducer, s);
 const fresh = () => createInitialState(createSeedLibrary());
 const text = (s: AppState) => s.live.slide?.text ?? null;
 
+describe('default transition', () => {
+  it('is 없음 (cut) with a 1 ms timing, for a slide with no transition of its own', () => {
+    const s = run(fresh(), { type: 'live/go', presentationId: 'p_welcome', seq: 0 });
+    expect(s.live.transition).toEqual({ kind: 'cut', duration: 1 });
+  });
+});
+
 describe('live navigation', () => {
   it('goes live and exposes the next slide', () => {
     const s = run(fresh(), { type: 'arrangement/select', presentationId: 'p_grace', id: null }, { type: 'live/go', presentationId: 'p_grace', seq: 0 });
