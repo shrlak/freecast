@@ -30,6 +30,10 @@ export const deleteMedia = (id: string) => tx('readwrite', (s) => s.delete(id)).
 export const getMedia = (id: string) => tx<Blob | undefined>('readonly', (s) => s.get(id));
 
 const urlCache = new Map<string, Promise<string | null>>();
+/** Object URLs already made, so a slide that needs the same picture again can draw it in its first frame. */
+const readyUrls = new Map<string, string>();
+
+export const peekMediaUrl = (id: string): string | null => readyUrls.get(id) ?? null;
 
 /** Object URL for a stored media id, cached for the life of the window. */
 export function mediaUrl(id: string): Promise<string | null> {
@@ -40,7 +44,10 @@ export function mediaUrl(id: string): Promise<string | null> {
       .catch(() => null);
     urlCache.set(id, p);
     // A remote that could not get it may succeed later (the computer sends media a moment after a slide is chosen).
-    p.then((u) => !u && urlCache.get(id) === p && urlCache.delete(id));
+    p.then((u) => {
+      if (u) readyUrls.set(id, u);
+      else if (urlCache.get(id) === p) urlCache.delete(id);
+    });
   }
   return p;
 }
@@ -62,6 +69,7 @@ async function fromComputer(id: string): Promise<string | null> {
 }
 
 export function forgetMediaUrl(id: string) {
+  readyUrls.delete(id);
   urlCache.get(id)?.then((u) => u && URL.revokeObjectURL(u));
   urlCache.delete(id);
 }

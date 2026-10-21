@@ -1,20 +1,62 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LiveState } from '../domain/types';
-import { mediaUrl } from '../domain/media';
+import { mediaUrl, peekMediaUrl } from '../domain/media';
 import { openLiveChannel } from '../domain/sync';
 import { loadLive, saveLive } from '../domain/persistence';
 
+/**
+ * Object URL for a stored picture/video. When the id changes (the next slide has another background)
+ * the previous URL stays until the new one is ready, so the screen never flashes empty between slides.
+ */
 export function useMediaUrl(id: string | null | undefined): string | null {
-  const [url, setUrl] = useState<string | null>(null);
+  const [, refresh] = useState(0);
+  const shown = useRef<string | null>(null);
+  const known = id ? peekMediaUrl(id) : null;
+  if (!id) shown.current = null;
+  else if (known) shown.current = known;
   useEffect(() => {
+    if (!id || known) return;
     let alive = true;
-    setUrl(null);
-    if (id) mediaUrl(id).then((u) => alive && setUrl(u));
+    mediaUrl(id).then((u) => {
+      if (!alive) return;
+      shown.current = u;
+      refresh((n) => n + 1);
+    });
     return () => {
       alive = false;
     };
-  }, [id]);
-  return url;
+  }, [id, known]);
+  return id ? shown.current : null;
+}
+
+const decoded = new Set<string>();
+
+/**
+ * The URL once the browser has decoded the picture. A new picture loads off-screen first and the
+ * previous one stays up meanwhile, so swapping backgrounds never shows an empty frame.
+ */
+export function useReadyImage(url: string | null): string | null {
+  const [, refresh] = useState(0);
+  const shown = useRef<string | null>(null);
+  if (!url) shown.current = null;
+  else if (decoded.has(url)) shown.current = url;
+  useEffect(() => {
+    if (!url || decoded.has(url)) return;
+    let alive = true;
+    const img = new Image();
+    img.src = url;
+    const done = () => {
+      decoded.add(url);
+      if (!alive) return;
+      shown.current = url;
+      refresh((n) => n + 1);
+    };
+    img.decode().then(done, done);
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  return url ? shown.current : null;
 }
 
 export function relayUrl(): string {
