@@ -70,7 +70,7 @@ function syncTunnel() {
   tunnelState = { status: 'connecting', url: null, error: null };
   tunnel = startTunnel(PORT, (st) => {
     tunnelState = st;
-  });
+  }, { dir: path.join(app.getPath('userData'), 'cloudflared') });
 }
 const origin = () => `http://127.0.0.1:${PORT}`;
 
@@ -290,7 +290,7 @@ ipcMain.handle('desktop:info', (e) => {
     ai: { proxyUrl: settings.ai.proxyUrl ?? '', hasGeminiKey: !!settings.ai.geminiKey, hasOpenrouterKey: !!settings.ai.openrouterKey },
     networkRemote: settings.networkRemote,
     lanUrls: settings.networkRemote ? lanAddresses().map((ip) => `http://${ip}:${PORT}`) : [],
-    internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, pin: settings.internetRemote ? settings.remotePin : '' },
+    internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null, pin: settings.internetRemote ? settings.remotePin : '' },
   };
 });
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
