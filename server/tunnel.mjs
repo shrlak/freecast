@@ -6,11 +6,21 @@ import { spawn } from 'node:child_process';
 
 const TUNNEL_HOST = 'nokey@localhost.run';
 // Free tunnels are random *.lhr.life addresses; links such as admin.localhost.run (the account console) are not tunnels.
-const URL_RE = /https:\/\/(?!admin\.)[a-z0-9-]+\.lhr\.life/i;
+const HOST_RE = /(?:https:\/\/)?((?!admin\.)[a-z0-9][a-z0-9-]*\.lhr\.life)/i;
 
-/** Pull the public address out of what the tunnel service prints. */
+/** Terminal colour / cursor codes and other control characters removed. */
+export function cleanOutput(text) {
+  return String(text)
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b[@-Z\\-_]/g, '')
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
+}
+
+/** Pull the public address out of what the tunnel service prints (plain text, a styled screen or JSON). */
 export function parseTunnelUrl(text) {
-  return URL_RE.exec(text)?.[0].toLowerCase() ?? null;
+  const m = HOST_RE.exec(cleanOutput(text));
+  return m ? `https://${m[1].toLowerCase()}` : null;
 }
 
 /**
@@ -33,6 +43,8 @@ export function isPublicHost(host) {
  */
 export function startTunnel(port, onChange) {
   let child = null;
+  // localhost.run's default screen is a styled text UI; JSON output is plain. Try JSON first, then text.
+  let json = true;
   let stopped = false;
   let retry;
   let state = { status: 'connecting', url: null, error: null };
@@ -55,6 +67,7 @@ export function startTunnel(port, onChange) {
         '-o', 'BatchMode=yes',
         '-R', `80:127.0.0.1:${port}`,
         TUNNEL_HOST,
+        ...(json ? ['--', '--output', 'json'] : []),
       ], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     } catch (e) {
       return set({ status: 'error', error: e.message });
@@ -70,9 +83,10 @@ export function startTunnel(port, onChange) {
     // Connected but no address after a while: say what the service printed.
     const quiet = setTimeout(() => {
       if (gotUrl || stopped) return;
-      const said = out.replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').filter(Boolean).slice(-3).join(' ');
+      const said = cleanOutput(out).trim().split('\n').filter(Boolean).slice(-3).join(' ');
       set({ status: 'error', url: null, error: `주소를 받지 못했습니다${said ? `: ${said.slice(0, 240)}` : ''}` });
-    }, 25_000);
+      child?.kill();
+    }, 20_000);
     child.on('close', () => clearTimeout(quiet));
     child.stdout.on('data', read);
     child.stderr.on('data', read);
@@ -85,9 +99,10 @@ export function startTunnel(port, onChange) {
       if (stopped) return;
       if (state.status === 'error' && !/^(연결|주소)/.test(state.error ?? '')) return;
       // Never got an address: show what the service said instead of waiting forever.
-      const said = out.replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').filter(Boolean).slice(-3).join(' ');
+      const said = cleanOutput(out).trim().split('\n').filter(Boolean).slice(-3).join(' ');
       if (gotUrl) set({ status: 'connecting', url: null });
-      else set({ status: 'error', url: null, error: `연결 실패${said ? `: ${said.slice(0, 240)}` : ''}` });
+      else json = !json;
+      if (!gotUrl) set({ status: 'error', url: null, error: `연결 실패${said ? `: ${said.slice(0, 240)}` : ''}` });
       retry = setTimeout(connect, gotUrl ? 5000 : 15000);
     });
   };

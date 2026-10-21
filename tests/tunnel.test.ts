@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs server module
-import { isPublicHost, parseTunnelUrl } from '../server/tunnel.mjs';
+import { cleanOutput, isPublicHost, parseTunnelUrl } from '../server/tunnel.mjs';
 
 describe('parseTunnelUrl', () => {
   it('finds the address in the tunnel service output', () => {
@@ -9,6 +9,13 @@ describe('parseTunnelUrl', () => {
   it('never takes the localhost.run account console for a tunnel', () => {
     expect(parseTunnelUrl('create a free account at https://admin.localhost.run/')).toBeNull();
     expect(parseTunnelUrl('https://admin.localhost.run  then  abc.lhr.life tunneled, https://abc.lhr.life')).toBe('https://abc.lhr.life');
+  });
+  it('reads the address from a styled screen, bare host names and JSON', () => {
+    expect(parseTunnelUrl('\x1b[49m\x1b[?25l> \x1b[1mabc123.lhr.life\x1b[0m')).toBe('https://abc123.lhr.life');
+    expect(parseTunnelUrl('{"event":"tunnel_status","address":"Abc-1.lhr.life","connection_id":"x"}')).toBe('https://abc-1.lhr.life');
+  });
+  it('cleans terminal codes for messages', () => {
+    expect(cleanOutput('\x1b[49m\x1b[?25lhello\x1b[0m')).toBe('hello');
   });
   it('ignores output without an address', () => {
     expect(parseTunnelUrl('Warning: Permanently added localhost.run')).toBeNull();
