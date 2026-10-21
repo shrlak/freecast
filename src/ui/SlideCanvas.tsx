@@ -236,8 +236,23 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
 /** The theme with this slide's own formatting applied on top. */
 export const slideTheme = (theme: Theme, slide: Slide): Theme => (slide.style ? { ...theme, ...slide.style } : theme);
 
+/** Bumps whenever web fonts finish loading, so text fitted with a fallback font is fitted again. */
+function useFontEpoch(): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    const fonts = document.fonts;
+    if (!fonts) return;
+    const bump = () => setN((v) => v + 1);
+    fonts.addEventListener('loadingdone', bump);
+    fonts.ready.then(bump).catch(() => undefined);
+    return () => fonts.removeEventListener('loadingdone', bump);
+  }, []);
+  return n;
+}
+
 function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const theme = slideTheme(base, slide);
+  const fontEpoch = useFontEpoch();
   const hasQr = !!slide.qr?.length;
   const inner = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -246,7 +261,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const [tooLong, setTooLong] = useState(false);
   const lyricLines = theme.noWrap ?? theme.id === TEMPLATE_LYRICS_THEME;
   const noWrap = lyricLines && !tooLong;
-  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}|${lyricLines}|${theme.letterSpacing}|${theme.list}|${theme.indent}|${theme.columns}|${theme.vertical}`;
+  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}|${lyricLines}|${theme.letterSpacing}|${theme.list}|${theme.indent}|${theme.columns}|${theme.vertical}|${fontEpoch}`;
   useLayoutEffect(() => {
     setScale(1);
     setTooLong(false);
