@@ -25,6 +25,8 @@ export interface UpdateState {
 
 export interface DesktopBridge {
   info(): Promise<DesktopInfo>;
+  /** A .pptx drawn by PowerPoint / LibreOffice on this computer, as a PDF; null when neither can. */
+  pptxToPdf(bytes: Uint8Array): Promise<Uint8Array | null>;
   openView(url: string, displayId?: number | null): Promise<void>;
   /** Slide show starts: cover the projector (or this screen) right away, like PowerPoint. */
   present(url: string): Promise<void>;

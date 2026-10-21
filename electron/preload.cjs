@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('freecastDesktop', {
   info: () => ipcRenderer.invoke('desktop:info'),
+  pptxToPdf: (bytes) => ipcRenderer.invoke('desktop:pptxToPdf', bytes),
   openView: (url, displayId) => ipcRenderer.invoke('desktop:openView', url, displayId),
   present: (url) => ipcRenderer.invoke('desktop:present', url),
   endShow: () => ipcRenderer.invoke('desktop:endShow'),

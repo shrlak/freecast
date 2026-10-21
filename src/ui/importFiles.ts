@@ -3,6 +3,7 @@ import { putMedia } from '../domain/media';
 import { uid } from '../domain/lyrics';
 import { importPptx } from '../domain/io/pptxImport';
 import { renderPdf } from '../domain/io/pdf';
+import { desktop } from '../domain/desktop';
 import { pptxSlides } from '../domain/templates/serviceTemplates';
 
 async function storeImage(blob: Blob, name: string, addMedia: (m: MediaMeta) => void): Promise<string> {
@@ -28,6 +29,18 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
       onProgress?.(`Reading ${file.name}…`);
       const data = await file.arrayBuffer();
       const imported = await importPptx(new Blob([data])).catch(() => []);
+      // Best: let PowerPoint (or LibreOffice) draw the slides, so each one is exactly the original.
+      const pdf = await desktop?.pptxToPdf(new Uint8Array(data)).catch(() => null);
+      if (pdf) {
+        const pages = await renderPdf(new Blob([pdf as BlobPart]), { scale: 2.5, quality: 0.95 }).catch(() => []);
+        if (pages.length) {
+          for (const [i, page] of pages.entries()) {
+            const notes = imported.length === pages.length ? imported[i].notes : undefined;
+            slides.push({ ...imageSlide(await storeImage(page.blob, `${base} ${i + 1}`, addMedia), base), notes });
+          }
+          continue;
+        }
+      }
       let n = 0;
       // Every picture, box and text of the slide becomes its own object at the same place, size and
       // order, so it looks and plays like the PowerPoint slide and can still be edited.
@@ -53,7 +66,7 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
       }
     } else if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
       onProgress?.(`Rendering ${file.name}…`);
-      for (const page of await renderPdf(file, { scale: 2 })) {
+      for (const page of await renderPdf(file, { scale: 2.5, quality: 0.95 })) {
         slides.push(imageSlide(await storeImage(page.blob, `${base} p${page.page}`, addMedia), base));
       }
     } else if (file.type.startsWith('image/')) {

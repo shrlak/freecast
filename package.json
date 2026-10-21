@@ -1,7 +1,7 @@
 {
   "name": "freecast",
   "private": true,
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Free presentation software for worship and live events",
   "type": "module",
   "scripts": {

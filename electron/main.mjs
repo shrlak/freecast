@@ -10,6 +10,7 @@ import { checkForUpdates, installUpdate, startUpdater, updateState } from './upd
 import { PUBLISH } from './publish.mjs';
 import { setAiConfigProvider } from '../server/ai.mjs';
 import { startTunnel } from '../server/tunnel.mjs';
+import { pptxToPdf } from './pptxToPdf.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(here, '..');
@@ -293,6 +294,7 @@ ipcMain.handle('desktop:info', (e) => {
     internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null, pin: settings.internetRemote ? settings.remotePin : '' },
   };
 });
+ipcMain.handle('desktop:pptxToPdf', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptxToPdf(bytes) : null));
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
   if (!fromMain(e) || typeof url !== 'string') return;
   openView(url, typeof displayId === 'number' ? displayId : displayId === null ? null : undefined);
