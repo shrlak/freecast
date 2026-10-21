@@ -47,14 +47,15 @@ export function startTunnel(port, onChange) {
     let gotUrl = false;
     try {
       child = spawn('ssh', [
-        '-T', '-N',
+        // No -N: localhost.run prints the public address on the session channel, which -N never opens.
+        '-T',
         '-o', 'StrictHostKeyChecking=accept-new',
         '-o', 'ServerAliveInterval=30',
         '-o', 'ExitOnForwardFailure=yes',
         '-o', 'BatchMode=yes',
         '-R', `80:127.0.0.1:${port}`,
         TUNNEL_HOST,
-      ], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+      ], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     } catch (e) {
       return set({ status: 'error', error: e.message });
     }
