@@ -13,7 +13,7 @@ export interface DesktopInfo {
   ai: { proxyUrl: string; hasGeminiKey: boolean; hasOpenrouterKey: boolean };
   networkRemote: boolean;
   lanUrls: string[];
-  internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; pin: string };
+  internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; note: string | null; pin: string };
 }
 
 export interface UpdateState {

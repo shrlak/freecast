@@ -18,7 +18,7 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
     return desktop?.onDisplays(() => refresh());
   }, []);
   // The internet address appears a few seconds after switching on, and can change if the connection drops.
-  const waiting = info?.internet.on && info.internet.status !== 'error';
+  const waiting = info?.internet.on;
   useEffect(() => {
     if (!waiting) return;
     const t = setInterval(refresh, 2000);
@@ -95,7 +95,7 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
         }} />
         Let a phone or tablet control FreeCast over the internet
       </label>
-      {info.internet.on && info.internet.status === 'connecting' && <p className="hint">Connecting…</p>}
+      {info.internet.on && info.internet.status === 'connecting' && <p className="hint">{info.internet.note ?? 'Connecting…'}</p>}
       {info.internet.on && info.internet.status === 'error' && <p className="hint">{info.internet.error}</p>}
       {info.internet.on && info.internet.url && (
         <div className="stack">
