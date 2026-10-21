@@ -5,7 +5,8 @@
 import { spawn } from 'node:child_process';
 
 const TUNNEL_HOST = 'nokey@localhost.run';
-const URL_RE = /https:\/\/[a-z0-9-]+\.(?:lhr\.life|localhost\.run)/i;
+// Free tunnels are random *.lhr.life addresses; links such as admin.localhost.run (the account console) are not tunnels.
+const URL_RE = /https:\/\/(?!admin\.)[a-z0-9-]+\.lhr\.life/i;
 
 /** Pull the public address out of what the tunnel service prints. */
 export function parseTunnelUrl(text) {
@@ -43,6 +44,7 @@ export function startTunnel(port, onChange) {
   const connect = () => {
     set({ status: 'connecting', url: null, error: null });
     let out = '';
+    let gotUrl = false;
     try {
       child = spawn('ssh', [
         '-T', '-N',
@@ -59,8 +61,18 @@ export function startTunnel(port, onChange) {
     const read = (chunk) => {
       out = (out + chunk).slice(-4000);
       const url = parseTunnelUrl(out);
-      if (url && state.url !== url) set({ status: 'on', url, error: null });
+      if (url && state.url !== url) {
+        gotUrl = true;
+        set({ status: 'on', url, error: null });
+      }
     };
+    // Connected but no address after a while: say what the service printed.
+    const quiet = setTimeout(() => {
+      if (gotUrl || stopped) return;
+      const said = out.replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').filter(Boolean).slice(-3).join(' ');
+      set({ status: 'error', url: null, error: `주소를 받지 못했습니다${said ? `: ${said.slice(0, 240)}` : ''}` });
+    }, 25_000);
+    child.on('close', () => clearTimeout(quiet));
     child.stdout.on('data', read);
     child.stderr.on('data', read);
     child.on('error', (e) => {
@@ -69,9 +81,13 @@ export function startTunnel(port, onChange) {
     });
     child.on('close', () => {
       child = null;
-      if (stopped || state.status === 'error') return;
-      set({ status: 'connecting', url: null });
-      retry = setTimeout(connect, 5000);
+      if (stopped) return;
+      if (state.status === 'error' && !/^(연결|주소)/.test(state.error ?? '')) return;
+      // Never got an address: show what the service said instead of waiting forever.
+      const said = out.replace(/\x1b\[[0-9;]*m/g, '').trim().split('\n').filter(Boolean).slice(-3).join(' ');
+      if (gotUrl) set({ status: 'connecting', url: null });
+      else set({ status: 'error', url: null, error: `연결 실패${said ? `: ${said.slice(0, 240)}` : ''}` });
+      retry = setTimeout(connect, gotUrl ? 5000 : 15000);
     });
   };
 
