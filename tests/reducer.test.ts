@@ -39,6 +39,17 @@ describe('live navigation', () => {
     expect(s.cursor).toMatchObject({ presentationId: 'p_grace', seq: 0 });
   });
 
+  it('next/prev work even when the live slide has no playlist position', () => {
+    let s = run(fresh(), { type: 'playlist/select', index: 1 });
+    const welcome = s.library.presentations.find((p) => p.id === 'p_welcome')!;
+    s = run(s, { type: 'live/go', presentationId: 'p_welcome', seq: welcome.slides.length - 1 });
+    s = { ...s, playlistIndex: null, cursor: { ...s.cursor!, playlistIndex: null } };
+    s = run(s, { type: 'live/next' });
+    expect(s.cursor).toMatchObject({ presentationId: 'p_grace', seq: 0 });
+    s = { ...s, playlistIndex: null, cursor: { ...s.cursor!, playlistIndex: null } };
+    expect(run(s, { type: 'live/prev' }).cursor?.presentationId).toBe('p_welcome');
+  });
+
   it('lists every upcoming slide across the playlist, in play order', () => {
     let s = run(fresh(), { type: 'select', id: 'p_welcome' }, { type: 'live/next' });
     const list = upcomingCursors(s, s.selectedId);
