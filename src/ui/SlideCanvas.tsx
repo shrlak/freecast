@@ -324,37 +324,50 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   );
 }
 
+/** Pictures a slide needs on screen with it: its background picture and its image elements. */
+function frameAssets(slide: Slide | null, background: Background | null) {
+  const urls: string[] = [];
+  const ids: string[] = [];
+  if (background?.kind === 'image') urls.push(assetUrl(background.url));
+  else if (background?.kind === 'media' && background.mediaType === 'image') ids.push(background.mediaId);
+  for (const e of slide?.elements ?? []) if (e.kind === 'image' && e.mediaId) ids.push(e.mediaId);
+  return { urls, ids };
+}
+
 /**
- * The slide to draw. A new slide whose pictures (logos, photos) are not decoded yet waits for them
- * (at most 0.6 s) with the previous slide still up, so the slide and its pictures appear together
- * instead of the pictures popping in a moment later. Slides without pictures switch at once.
+ * The slide and background to draw. A new slide waits (at most 0.6 s, the old one staying up) until its
+ * background and pictures are decoded, and then slide, background and pictures appear in the same frame:
+ * no black flash from a dark-on-white slide over the old background, no logo popping in late.
+ * Slides without pictures, and pictures shown before, switch at once.
  */
-function useReadySlide(slide: Slide | null): Slide | null {
-  const [shown, setShown] = useState(slide);
-  const ids = slide?.elements?.flatMap((e) => (e.kind === 'image' && e.mediaId ? [e.mediaId] : [])) ?? [];
-  const ready = ids.every((id) => {
+function useReadyFrame(slide: Slide | null, background: Background | null, theme: Theme): Frame {
+  const [shown, setShown] = useState<Frame>({ slide, background, theme });
+  const same = shown.slide === slide && shown.background === background && shown.theme === theme;
+  const { urls, ids } = frameAssets(slide, background);
+  const ready = urls.every(isDecoded) && ids.every((id) => {
     const u = peekMediaUrl(id);
     return !!u && isDecoded(u);
   });
-  if (shown !== slide && (ready || !slide)) setShown(slide);
+  if (!same && ready) setShown({ slide, background, theme });
   useEffect(() => {
-    if (shown === slide) return;
+    if (same) return;
     let alive = true;
-    const go = () => alive && setShown(slide);
-    Promise.all(ids.map((id) => mediaUrl(id).then((u) => (u ? preloadImage(u) : undefined)))).then(go, go);
+    const go = () => alive && setShown({ slide, background, theme });
+    Promise.all([...urls.map(preloadImage), ...ids.map((id) => mediaUrl(id).then((u) => (u ? preloadImage(u) : undefined)))]).then(go, go);
     const t = setTimeout(go, 600);
     return () => {
       alive = false;
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slide, shown]);
+  }, [slide, background, theme, same]);
   return shown;
 }
 
+const sameSlide = (a: Slide, b: Slide) => a === b || (a.id === b.id && JSON.stringify(a) === JSON.stringify(b));
+
 /** Keeps the outgoing slide on screen while the new one transitions in. */
-function TransitionLayer({ slide: wanted, theme, transition, animate }: { slide: Slide | null; theme: Theme; transition?: Transition; animate: boolean }) {
-  const slide = useReadySlide(wanted);
+function TransitionLayer({ slide, theme, transition, animate }: { slide: Slide | null; theme: Theme; transition?: Transition; animate: boolean }) {
   const [prev, setPrev] = useState<{ slide: Slide; theme: Theme } | null>(null);
   const last = useRef<{ slide: Slide | null; theme: Theme }>({ slide, theme });
   const kind = animate ? transition?.kind ?? 'cut' : 'cut';
@@ -362,7 +375,8 @@ function TransitionLayer({ slide: wanted, theme, transition, animate }: { slide:
   useEffect(() => {
     const old = last.current;
     last.current = { slide, theme };
-    if (kind === 'cut' || !old.slide || old.slide === slide) return;
+    // The same slide delivered twice (computer and network) must not fade into itself.
+    if (kind === 'cut' || !old.slide || (slide && sameSlide(old.slide, slide))) return;
     setPrev({ slide: old.slide, theme: old.theme });
     const t = setTimeout(() => setPrev(null), duration);
     return () => clearTimeout(t);
@@ -431,6 +445,34 @@ function LogoLayer({ mediaId }: { mediaId: string | null }) {
 }
 
 /** Renders a slide at 1440x1080 (4:3) and scales it to fit its container. */
+/** Pictures this window has already put on screen once: showing one again paints at once. */
+const paintedAssets = new Set<string>();
+
+type Frame = { slide: Slide | null; background: Background | null; theme: Theme };
+
+/**
+ * Double buffering for a picture's first appearance. A large picture takes a few frames to paint the
+ * first time, and until it does the new slide would show over an empty (black) background. So when the
+ * new frame has a picture never shown before, the previous frame stays on top for 0.1 s while the new
+ * one paints underneath, then it is removed. Returns that previous frame while it is held.
+ */
+function useFrameHold(frame: Frame): Frame | null {
+  const [view, setView] = useState<{ frame: Frame; ghost: Frame | null }>({ frame, ghost: null });
+  if (view.frame !== frame) {
+    const { urls, ids } = frameAssets(frame.slide, frame.background);
+    const fresh = [...urls, ...ids].some((k) => !paintedAssets.has(k));
+    setView({ frame, ghost: fresh && (view.frame.slide || view.frame.background) ? view.frame : null });
+  }
+  useEffect(() => {
+    const { urls, ids } = frameAssets(view.frame.slide, view.frame.background);
+    [...urls, ...ids].forEach((k) => paintedAssets.add(k));
+    if (!view.ghost) return;
+    const t = setTimeout(() => setView((v) => (v.ghost ? { ...v, ghost: null } : v)), 100);
+    return () => clearTimeout(t);
+  }, [view]);
+  return view.ghost;
+}
+
 export function SlideCanvas(p: CanvasProps) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const layers = p.screen?.layers ?? { background: true, slide: true, props: true, messages: true, timer: true };
@@ -440,6 +482,8 @@ export function SlideCanvas(p: CanvasProps) {
   const matte = p.screen?.key === 'matte';
   const fx = p.bgEffect;
   const m = p.screen?.mask;
+  const frame = useReadyFrame(p.slide, p.background, p.theme);
+  const ghost = useFrameHold(frame);
   const mask: CSSProperties | null = m && m.kind !== 'none'
     ? { boxShadow: `0 0 0 3000px ${fill === 'transparent' ? '#000' : fill}`, inset: m.inset, borderRadius: m.kind === 'oval' ? '50%' : 0 }
     : null;
@@ -449,11 +493,17 @@ export function SlideCanvas(p: CanvasProps) {
       <div className={`canvas ${matte ? 'matte' : ''}`} style={{ transform: `scale(${width / CANVAS_W})`, width: CANVAS_W, height: CANVAS_H }}>
         {layers.background && !matte && (
           <div className="layer bg-layer" style={fx?.blur ? { filter: `blur(${fx.blur}px)`, inset: -fx.blur * 2 } : undefined}>
-            <BackgroundLayer background={p.background} animate={!!p.animate} video={p.video} onTime={p.onVideoTime} />
+            <BackgroundLayer background={frame.background} animate={!!p.animate} video={p.video} onTime={p.onVideoTime} />
           </div>
         )}
         {layers.background && !matte && fx?.dim ? <div className="layer" style={{ background: `rgba(0,0,0,${fx.dim})` }} /> : null}
-        {layers.slide && <TransitionLayer slide={p.slide} theme={p.theme} transition={p.transition} animate={!!p.animate} />}
+        {layers.slide && <TransitionLayer slide={frame.slide} theme={frame.theme} transition={p.transition} animate={!!p.animate} />}
+        {ghost && (
+          <>
+            {layers.background && !matte && <div className="layer bg-layer"><BackgroundLayer background={ghost.background} animate={false} /></div>}
+            {layers.slide && ghost.slide && <div className="layer"><SlideBody slide={ghost.slide} theme={ghost.theme} /></div>}
+          </>
+        )}
         {(layers.announcements ?? true) && p.announcement && (
           <div className="layer announcement-layer" key={p.announcement.slide.id}><SlideBody slide={p.announcement.slide} theme={p.announcement.theme} /></div>
         )}
