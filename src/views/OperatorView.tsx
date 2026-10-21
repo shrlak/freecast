@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createInitialState, reducer, type Action } from '../domain/reducer';
 import { loadLibrary, normalizeLibrary, saveLibrary } from '../domain/persistence';
-import { activePlaylist } from '../domain/live';
+import { activePlaylist, findPres, upcomingCursors } from '../domain/live';
 import { sequence } from '../domain/arrangement';
 import { uid } from '../domain/lyrics';
 import { presentationFromSongFile } from '../domain/io/songFormats';
 import { exportBackup, importBackup } from '../domain/io/backup';
 import { exportPptx } from '../domain/io/pptxExport';
-import type { Presentation } from '../domain/types';
+import type { Presentation, Theme } from '../domain/types';
 import { useLiveBroadcast, useRelay } from '../ui/hooks';
 import { LibraryPanel } from '../ui/LibraryPanel';
 import { SlideGrid } from '../ui/SlideGrid';
@@ -198,25 +198,32 @@ export function OperatorView() {
   const playlist = activePlaylist(state);
   useEffect(() => {
     let cancelled = false;
-    const theme = selected ? state.library.themes.find((t) => t.id === selected.themeId) ?? state.library.themes[0] : null;
-    const info: RemoteInfo = {
-      presentation: selected && theme ? {
-        id: selected.id,
-        title: selected.title,
-        theme,
-        bgEffect: selected.bgEffect ?? null,
-        slides: sequence(selected).map(({ slide }, seq) => ({ seq, slide, background: resolveBackground(slide, selected) })),
-      } : null,
-      cursorSeq: state.cursor?.presentationId === selected?.id ? state.cursor?.seq ?? null : null,
-    };
+    const themes: Record<string, Theme> = {};
+    const upcoming: RemoteInfo['upcoming'] = [];
+    let lastPres = state.cursor?.presentationId ?? null;
+    for (const c of upcomingCursors(state, state.selectedId)) {
+      const p = findPres(state.library, c.presentationId);
+      const slide = p ? sequence(p)[c.seq]?.slide : undefined;
+      if (!p || !slide) continue;
+      themes[p.themeId] ??= state.library.themes.find((t) => t.id === p.themeId) ?? state.library.themes[0];
+      upcoming.push({
+        presentationId: p.id, seq: c.seq, playlistIndex: c.playlistIndex ?? state.playlistIndex ?? null,
+        title: p.title, heading: p.id !== lastPres, themeId: p.themeId, bgEffect: p.bgEffect ?? null,
+        slide, background: resolveBackground(slide, p),
+      });
+      lastPres = p.id;
+    }
+    const info: RemoteInfo = { upcoming, themes };
     // Pictures first, so the remote's previews have them by the time it draws the slides.
-    const ids = mediaIdsFor({ slides: info.presentation?.slides.map((x) => x.slide), backgrounds: info.presentation?.slides.map((x) => x.background) });
-    (remotes > 0 ? sendMediaToRemotes(ids) : Promise.resolve()).then(() => !cancelled && relay.send({ type: 'info', info }));
+    const ids = mediaIdsFor({ slides: upcoming.map((x) => x.slide), backgrounds: upcoming.map((x) => x.background) });
+    // Slides are re-sent a moment after the last edit, not on every keystroke.
+    const t = setTimeout(() => (remotes > 0 ? sendMediaToRemotes(ids) : Promise.resolve()).then(() => !cancelled && relay.send({ type: 'info', info })), 300);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, state.library.themes, state.cursor, relay.connected, remotes]);
+  }, [state.library, state.selectedId, state.cursor, state.playlistIndex, state.activePlaylistId, relay.connected, remotes]);
 
   // A restarted server has forgotten the media it was given.
   useEffect(() => resetSentMedia(), [relay.connected]);

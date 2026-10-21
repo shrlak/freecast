@@ -36,6 +36,14 @@ function itemPresentation(s: NavState, i: number): Presentation | undefined {
   return item && item.kind !== 'header' ? findPres(s.library, item.presentationId) : undefined;
 }
 
+/** Where a presentation sits in the playlist, so a show started on it carries on into the next items. */
+export function playlistIndexFor(s: NavState, presentationId: string): number | null {
+  const cur = s.playlistIndex;
+  if (cur != null && itemPresentation(s, cur)?.id === presentationId) return cur;
+  const i = (activePlaylist(s)?.items ?? []).findIndex((it) => it.kind !== 'header' && it.presentationId === presentationId);
+  return i >= 0 ? i : cur;
+}
+
 /** The slide after `c`, continuing into the next playlist item when playing from the playlist. */
 export function nextCursor(s: NavState, c: Cursor): Cursor | null {
   const p = findPres(s.library, c.presentationId);
@@ -54,6 +62,30 @@ export function nextCursor(s: NavState, c: Cursor): Cursor | null {
     if (np && first != null) return { presentationId: np.id, seq: first, playlistIndex: i };
   }
   return null;
+}
+
+/**
+ * Every slide still to come, in the order the show plays them (across the playlist), starting
+ * with the first slide of `selectedId` when nothing is live yet.
+ */
+export function upcomingCursors(s: NavState, selectedId: string | null, limit = 400): Cursor[] {
+  const out: Cursor[] = [];
+  let c = s.cursor;
+  if (!c) {
+    const p = selectedId ? findPres(s.library, selectedId) : undefined;
+    const first = p ? playable(p, 0, 1) : null;
+    if (!p || first == null) return out;
+    c = { presentationId: p.id, seq: first, playlistIndex: playlistIndexFor(s, p.id) };
+    out.push(c);
+  }
+  const seen = new Set<string>();
+  for (let n = nextCursor(s, c); n && out.length < limit; n = nextCursor(s, n)) {
+    const key = `${n.presentationId}:${n.seq}:${n.playlistIndex ?? ''}`;
+    if (seen.has(key)) break;
+    seen.add(key);
+    out.push(n);
+  }
+  return out;
 }
 
 export function prevCursor(s: NavState, c: Cursor): Cursor | null {

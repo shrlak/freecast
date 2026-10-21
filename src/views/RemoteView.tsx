@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { Background, LiveState, Slide, Theme } from '../domain/types';
 import { SlideCanvas } from '../ui/SlideCanvas';
 import { liveCanvasProps } from '../ui/liveProps';
 import { useRelay } from '../ui/hooks';
 
-/** What the operator shares with remotes: the slides of the selected presentation, drawn the way they look on screen. */
+/** What the operator shares with remotes: every slide still to come (across the playlist), with what it needs to be drawn. */
 export interface RemoteInfo {
-  presentation: {
-    id: string;
+  upcoming: {
+    presentationId: string;
+    seq: number;
+    playlistIndex: number | null;
     title: string;
-    theme: Theme;
+    /** First slide of a presentation other than the live one: start of a new section. */
+    heading: boolean;
+    themeId: string;
     bgEffect: { dim: number; blur: number } | null;
-    slides: { seq: number; slide: Slide; background: Background | null }[];
-  } | null;
-  cursorSeq: number | null;
+    slide: Slide;
+    background: Background | null;
+  }[];
+  themes: Record<string, Theme>;
 }
 
 /** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network, or the internet address from Settings. */
@@ -59,10 +64,6 @@ export function RemoteView() {
     );
   }
 
-  const pres = info?.presentation ?? null;
-  // Everything after the live slide; before anything is live, the whole presentation.
-  const upcoming = pres ? pres.slides.filter((s) => info!.cursorSeq == null || s.seq > info!.cursorSeq) : [];
-
   return (
     <div className="remote-root">
       <header className="remote-head">
@@ -81,15 +82,18 @@ export function RemoteView() {
       <div className="remote-current">
         {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} /> : <div className="remote-empty">Nothing live</div>}
       </div>
-      {pres && !!upcoming.length && (
+      {!!info?.upcoming.length && (
         <section>
-          <h3>{pres.title} · Up next</h3>
+          <h3>Up next</h3>
           <div className="remote-slides">
-            {upcoming.map((s) => (
-              <button key={s.seq} onClick={() => cmd({ type: 'live/go', presentationId: pres.id, seq: s.seq })}>
-                <SlideCanvas slide={s.slide} theme={pres.theme} background={s.background} bgEffect={pres.bgEffect} />
-                <span className="remote-slide-num">{s.seq + 1}</span>
-              </button>
+            {info.upcoming.map((u) => (
+              <Fragment key={`${u.presentationId}:${u.seq}:${u.playlistIndex}`}>
+                {u.heading && <div className="remote-section">{u.title}</div>}
+                <button onClick={() => cmd({ type: 'live/go', presentationId: u.presentationId, seq: u.seq, playlistIndex: u.playlistIndex })}>
+                  <SlideCanvas slide={u.slide} theme={info.themes[u.themeId]} background={u.background} bgEffect={u.bgEffect} />
+                  <span className="remote-slide-num">{u.seq + 1}</span>
+                </button>
+              </Fragment>
             ))}
           </div>
         </section>

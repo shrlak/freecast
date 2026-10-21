@@ -6,7 +6,7 @@ import { sequence } from './arrangement';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
-import { activePlaylist, findPres, goLive, nextCursor, prevCursor, themeFor, type Cursor, type NavState } from './live';
+import { activePlaylist, findPres, goLive, nextCursor, playlistIndexFor, prevCursor, themeFor, type Cursor, type NavState } from './live';
 import { dedupeSongs } from './sunday/dedupe';
 import { resetTimer, startTimer, stopTimer } from './timers';
 
@@ -62,7 +62,7 @@ export type Action =
   | { type: 'sunday/settings'; patch: Partial<SundaySettings> }
   | { type: 'library/replace'; library: Library }
   | { type: 'usage/clear' }
-  | { type: 'live/go'; presentationId: string; seq: number; now?: number }
+  | { type: 'live/go'; presentationId: string; seq: number; playlistIndex?: number | null; now?: number }
   | { type: 'live/next'; now?: number }
   | { type: 'live/prev' }
   | { type: 'live/clearAll' }
@@ -360,9 +360,9 @@ function core(s: AppState, a: Action): AppState {
     case 'usage/clear':
       return setLib(s, { usage: [] });
     case 'live/go':
-      return live(s, { presentationId: a.presentationId, seq: a.seq, playlistIndex: s.playlistIndex }, a.now);
+      return live(s, { presentationId: a.presentationId, seq: a.seq, playlistIndex: a.playlistIndex !== undefined ? a.playlistIndex : playlistIndexFor(s, a.presentationId) }, a.now);
     case 'live/next': {
-      if (!s.cursor) return s.selectedId ? live(s, { presentationId: s.selectedId, seq: 0 }, a.now) : s;
+      if (!s.cursor) return s.selectedId ? live(s, { presentationId: s.selectedId, seq: 0, playlistIndex: playlistIndexFor(s, s.selectedId) }, a.now) : s;
       const n = nextCursor(s, s.cursor);
       return n ? live(s, n, a.now) : s;
     }

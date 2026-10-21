@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialState, reducer, type Action, type AppState } from '../src/domain/reducer';
 import { createSeedLibrary } from '../src/domain/defaults';
 import { isLibrary, normalizeLibrary } from '../src/domain/persistence';
+import { upcomingCursors } from '../src/domain/live';
 
 const run = (s: AppState, ...actions: Action[]) => actions.reduce(reducer, s);
 const fresh = () => createInitialState(createSeedLibrary());
@@ -27,6 +28,29 @@ describe('live navigation', () => {
     const dox = s.library.presentations.find((p) => p.id === 'p_doxology')!;
     s = run(s, { type: 'slide/update', presentationId: 'p_doxology', slideId: dox.slides[1].id, patch: { disabled: true } }, { type: 'live/go', presentationId: 'p_doxology', seq: 0 }, { type: 'live/next' });
     expect(s.live.slide?.text).toBe('Amen.');
+  });
+
+  it('a show started on a presentation that is in the playlist carries on into the next items', () => {
+    // Selected from the library (no playlist position), like pressing Start slideshow on a fresh app.
+    let s = run(fresh(), { type: 'presentation/select', id: 'p_welcome' });
+    expect(s.playlistIndex).toBeNull();
+    const welcome = s.library.presentations.find((p) => p.id === 'p_welcome')!;
+    s = run(s, { type: 'live/go', presentationId: 'p_welcome', seq: welcome.slides.length - 1 }, { type: 'live/next' });
+    expect(s.cursor).toMatchObject({ presentationId: 'p_grace', seq: 0 });
+  });
+
+  it('lists every upcoming slide across the playlist, in play order', () => {
+    let s = run(fresh(), { type: 'presentation/select', id: 'p_welcome' }, { type: 'live/next' });
+    const list = upcomingCursors(s, s.selectedId);
+    const total = (id: string) => s.library.presentations.find((p) => p.id === id)!.slides.length;
+    expect(list[0].presentationId).toBe('p_welcome');
+    expect(list.length).toBeGreaterThan(total('p_welcome') - 1);
+    expect(new Set(list.map((c) => c.presentationId)).size).toBeGreaterThan(1);
+    // Following next from the live slide visits exactly this list.
+    for (const c of list) {
+      s = run(s, { type: 'live/next' });
+      expect(s.cursor).toMatchObject({ presentationId: c.presentationId, seq: c.seq });
+    }
   });
 
   it('advances through the playlist, skipping headers, and back', () => {
