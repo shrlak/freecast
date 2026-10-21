@@ -28,6 +28,7 @@ import { AudioPlayer } from '../ui/AudioPanel';
 import { filesToSlides } from '../ui/importFiles';
 import type { RemoteInfo } from './RemoteView';
 import { resolveBackground } from '../domain/autoBackground';
+import { mediaIdsFor, resetSentMedia, sendMediaToRemotes } from '../domain/remoteMedia';
 import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
 import { UpdateBanner } from '../ui/UpdateBanner';
@@ -171,7 +172,9 @@ export function OperatorView() {
   const latestLib = useRef(state.library);
   latestLib.current = state.library;
 
+  const [remotes, setRemotes] = useState(0);
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
+    if (m.type === 'remotes') setRemotes(Number(m.count) || 0);
     if (m.type !== 'command' || !m.command) return;
     let c = m.command as Action & { now?: number };
     // Slide show from the remote: same as the Start / End buttons on this computer.
@@ -194,6 +197,7 @@ export function OperatorView() {
 
   const playlist = activePlaylist(state);
   useEffect(() => {
+    let cancelled = false;
     const theme = selected ? state.library.themes.find((t) => t.id === selected.themeId) ?? state.library.themes[0] : null;
     const info: RemoteInfo = {
       presentation: selected && theme ? {
@@ -205,9 +209,22 @@ export function OperatorView() {
       } : null,
       cursorSeq: state.cursor?.presentationId === selected?.id ? state.cursor?.seq ?? null : null,
     };
-    relay.send({ type: 'info', info });
+    // Pictures first, so the remote's previews have them by the time it draws the slides.
+    const ids = mediaIdsFor({ slides: info.presentation?.slides.map((x) => x.slide), backgrounds: info.presentation?.slides.map((x) => x.background) });
+    (remotes > 0 ? sendMediaToRemotes(ids) : Promise.resolve()).then(() => !cancelled && relay.send({ type: 'info', info }));
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, state.library.themes, state.cursor, relay.connected]);
+  }, [selected, state.library.themes, state.cursor, relay.connected, remotes]);
+
+  // A restarted server has forgotten the media it was given.
+  useEffect(() => resetSentMedia(), [relay.connected]);
+
+  // What is live (background, logo, props) goes to remotes too.
+  useEffect(() => {
+    if (remotes > 0) sendMediaToRemotes(mediaIdsFor({ live: state.live }));
+  }, [remotes, state.live]);
 
   useMidi(midiOn, (a) => dispatch(a), state.library.macros);
 

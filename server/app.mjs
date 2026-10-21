@@ -7,6 +7,7 @@ import os from 'node:os';
 import { aiMiddleware } from './ai.mjs';
 import { attachRelay } from './relay.mjs';
 import { isPublicHost } from './tunnel.mjs';
+import { remoteMediaGet, remoteMediaMiddleware } from './remoteMedia.mjs';
 import { controlMiddleware } from './control.mjs';
 import { dmxMiddleware } from './dmx.mjs';
 import { cloudMiddleware } from './cloud.mjs';
@@ -49,10 +50,11 @@ export function startServer({ root, port, host = '127.0.0.1', publicPin = () => 
   let control = (_req, _res, next) => next();
   // Visitors on the public internet address get the app files and the remote relay only:
   // no AI, cloud, DMX or control endpoints.
-  const everything = (req, res) => aiMiddleware(req, res, () => recognitionMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res))))));
+  const everything = (req, res) => remoteMediaMiddleware(req, res, () => aiMiddleware(req, res, () => recognitionMiddleware(req, res, () => cloudMiddleware(req, res, () => dmxMiddleware(req, res, () => control(req, res, () => serveStatic(req, res)))))));
   // The console (and its login) is never offered on the internet address: any page there is the remote.
   const publicPage = (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
+    if (req.method === 'GET' && url.pathname.startsWith('/remote-media/')) return remoteMediaGet(req, res);
     if (!/\.\w+$/.test(url.pathname) && url.searchParams.get('view') !== 'remote') {
       const pin = url.searchParams.get('pin');
       res.writeHead(302, { location: `/?view=remote${pin ? `&pin=${encodeURIComponent(pin)}` : ''}` });
@@ -60,7 +62,7 @@ export function startServer({ root, port, host = '127.0.0.1', publicPin = () => 
     }
     serveStatic(req, res);
   };
-  const server = http.createServer((req, res) => (isPublicHost(req.headers.host) ? publicPage(req, res) : everything(req, res)));
+  const server = http.createServer((req, res) => (isPublicHost(req.headers.host) ? publicPage(req, res) : req.method === 'GET' && req.url?.startsWith('/remote-media/') ? remoteMediaGet(req, res) : everything(req, res)));
   const wss = attachRelay(server, { publicPin });
   control = controlMiddleware(wss);
   return new Promise((resolve, reject) => {

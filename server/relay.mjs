@@ -42,6 +42,12 @@ export function attachRelay(httpServer, { publicPin = () => '' } = {}) {
     });
   });
 
+  // The console only needs to ship slide media while a remote is connected.
+  const tellHosts = () => {
+    const count = [...wss.clients].filter((c) => c.readyState === 1 && c.role === 'remote').length;
+    broadcast(JSON.stringify({ type: 'remotes', count }), (c) => c.role === 'host');
+  };
+
   const broadcast = (data, filter) => {
     for (const c of wss.clients) if (c.readyState === 1 && filter(c)) c.send(data);
   };
@@ -73,6 +79,7 @@ export function attachRelay(httpServer, { publicPin = () => '' } = {}) {
         }
         ws.role = role;
         ws.send(JSON.stringify({ type: 'welcome', pinRequired: Boolean(pin) }));
+        if (role === 'remote' || role === 'host') tellHosts();
         if (role !== 'host') {
           if (lastState) ws.send(lastState);
           if (lastInfo && role === 'remote') ws.send(lastInfo);
@@ -90,6 +97,7 @@ export function attachRelay(httpServer, { publicPin = () => '' } = {}) {
       }
     });
   });
+  wss.on('connection', (ws) => ws.on('close', () => ws.role === 'remote' && tellHosts()));
   wss.toHost = (command) => {
     if (!validCommand(command)) return false;
     let sent = false;

@@ -79,7 +79,7 @@ export function RemoteView() {
         <button className="primary" onClick={() => cmd({ type: 'live/next' })}>▶</button>
       </div>
       <div className="remote-current">
-        {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} animate={false} /> : <div className="remote-empty">Nothing live</div>}
+        {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} /> : <div className="remote-empty">Nothing live</div>}
       </div>
       {pres && !!upcoming.length && (
         <section>

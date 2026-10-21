@@ -36,11 +36,29 @@ export function mediaUrl(id: string): Promise<string | null> {
   let p = urlCache.get(id);
   if (!p) {
     p = getMedia(id)
-      .then((b) => (b ? URL.createObjectURL(b) : null))
+      .then((b) => (b ? URL.createObjectURL(b) : isRemote() ? fromComputer(id) : null))
       .catch(() => null);
     urlCache.set(id, p);
+    // A remote that could not get it may succeed later (the computer sends media a moment after a slide is chosen).
+    p.then((u) => !u && urlCache.get(id) === p && urlCache.delete(id));
   }
   return p;
+}
+
+const isRemote = () => document.body?.dataset.view === 'remote';
+
+/** The phone/tablet remote has no media of its own: it gets what slides use from the computer. */
+async function fromComputer(id: string): Promise<string | null> {
+  for (let i = 0; i < 8; i++) {
+    try {
+      const res = await fetch(`/remote-media/${encodeURIComponent(id)}`);
+      if (res.ok) return URL.createObjectURL(await res.blob());
+    } catch {
+      // network hiccup: try again
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  return null;
 }
 
 export function forgetMediaUrl(id: string) {
