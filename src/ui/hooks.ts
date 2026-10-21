@@ -144,13 +144,21 @@ export function useLiveBroadcast(live: LiveState, relaySend: (m: unknown) => voi
 /** Output side: receive live state locally (BroadcastChannel) or over the network (relay). */
 export function useLiveFeed(): LiveState | null {
   const [live, setLive] = useState<LiveState | null>(() => loadLive());
+  // The computer sends every change twice (same-computer channel and network relay): the repeat is ignored.
+  const lastJson = useRef('');
+  const apply = (state: LiveState) => {
+    const json = JSON.stringify(state);
+    if (json === lastJson.current) return;
+    lastJson.current = json;
+    setLive(state);
+  };
   useEffect(() => {
-    const ch = openLiveChannel((m) => m.type === 'state' && setLive(m.state));
+    const ch = openLiveChannel((m) => m.type === 'state' && apply(m.state));
     ch.post({ type: 'hello' });
     return () => ch.close();
   }, []);
   useRelay({ type: 'hello', role: 'viewer' }, (m) => {
-    if (m.type === 'state' && m.state) setLive(m.state as LiveState);
+    if (m.type === 'state' && m.state) apply(m.state as LiveState);
   });
   return live;
 }
