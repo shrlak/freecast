@@ -32,7 +32,7 @@ describe('live navigation', () => {
 
   it('a show started on a presentation that is in the playlist carries on into the next items', () => {
     // Selected from the library (no playlist position), like pressing Start slideshow on a fresh app.
-    let s = run(fresh(), { type: 'presentation/select', id: 'p_welcome' });
+    let s = run(fresh(), { type: 'select', id: 'p_welcome' });
     expect(s.playlistIndex).toBeNull();
     const welcome = s.library.presentations.find((p) => p.id === 'p_welcome')!;
     s = run(s, { type: 'live/go', presentationId: 'p_welcome', seq: welcome.slides.length - 1 }, { type: 'live/next' });
@@ -40,7 +40,7 @@ describe('live navigation', () => {
   });
 
   it('lists every upcoming slide across the playlist, in play order', () => {
-    let s = run(fresh(), { type: 'presentation/select', id: 'p_welcome' }, { type: 'live/next' });
+    let s = run(fresh(), { type: 'select', id: 'p_welcome' }, { type: 'live/next' });
     const list = upcomingCursors(s, s.selectedId);
     const total = (id: string) => s.library.presentations.find((p) => p.id === id)!.slides.length;
     expect(list[0].presentationId).toBe('p_welcome');
