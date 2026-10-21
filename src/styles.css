@@ -526,6 +526,7 @@ body[data-view='multiview'] { overflow: auto; }
 .ppt-thumb-frame { flex: 1; position: relative; border: 2px solid transparent; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .ppt-thumb:hover .ppt-thumb-frame { border-color: #c8c6c4 !important; }
 .ppt-thumb.sel .ppt-thumb-frame { border-color: var(--accent) !important; }
+.ppt-thumb.multi .ppt-thumb-frame { background: rgba(43,87,154,.18); }
 .ppt-thumb.hidden-slide .ppt-thumb-frame { opacity: .4; }
 .ppt-group { position: absolute; left: 0; bottom: 0; font-size: 9.5px; color: #fff; padding: 0 5px; border-top-right-radius: 3px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .ppt-add { margin: 4px 0 0 28px; }

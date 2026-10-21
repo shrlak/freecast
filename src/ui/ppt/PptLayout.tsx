@@ -49,6 +49,43 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   const item = selected?.itemIndex ?? (source && 'playlist' in source
     ? state.playlistIndex ?? source.playlist.items.findIndex((i) => i.kind !== 'header' && i.presentationId === p?.id)
     : null);
+  /** Slides picked together (Shift/Ctrl-click) in the edited presentation; empty = just the one being edited. */
+  const [multi, setMulti] = useState<string[]>([]);
+  const sameBlock = (r: PaneSlide) => !!selected && r.presentation.id === selected.presentation.id && r.itemIndex === selected.itemIndex;
+  const onClickSlide = (r: PaneSlide, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
+    if (selected && sameBlock(r) && e.shiftKey) {
+      const a = paneSlides.indexOf(selected), b = paneSlides.indexOf(r);
+      setMulti(paneSlides.slice(Math.min(a, b), Math.max(a, b) + 1).filter(sameBlock).map((x) => x.slide.id));
+    } else if (selected && sameBlock(r) && (e.metaKey || e.ctrlKey)) {
+      const cur = multi.length ? multi : [selected.slide.id];
+      setMulti(cur.includes(r.slide.id) ? cur.filter((id) => id !== r.slide.id) : [...cur, r.slide.id]);
+    } else {
+      setMulti([]);
+      pick(r);
+    }
+  };
+  /** The slides an action (delete, section) applies to, in list order. */
+  const picked = (): string[] => {
+    const ids = multi.length && selected ? multi : slide ? [slide.id] : [];
+    return p ? p.slides.filter((s) => ids.includes(s.id)).map((s) => s.id) : [];
+  };
+  const deleteSlides = (ids: string[]) => {
+    if (!p || !ids.length) return;
+    const left = p.slides.filter((s) => !ids.includes(s.id));
+    const at = Math.min(Math.max(0, p.slides.findIndex((s) => ids.includes(s.id))), left.length - 1);
+    updateSlides(left);
+    cmd.setSlideId(left[at]?.id ?? null);
+    setMulti([]);
+  };
+  const makeSection = (ids: string[]) => {
+    if (!p || !ids.length) return;
+    const name = prompt('섹션 이름', slide?.label || '새 섹션')?.trim();
+    if (!name) return;
+    const slides = p.slides.map((s) => (ids.includes(s.id) ? { ...s, group: name, label: undefined } : s));
+    // A song's 진행 plays groups by name; a renamed group would drop out of it, so play the slides as listed.
+    dispatch({ type: 'presentation/update', id: p.id, patch: p.arrangementId ? { slides, arrangementId: null } : { slides } });
+    setMulti([]);
+  };
   const pick = (r: PaneSlide) => {
     if (r.itemIndex !== null && r.itemIndex !== state.playlistIndex) dispatch({ type: 'playlist/select', index: r.itemIndex });
     cmd.setSlideId(r.slide.id);
@@ -68,8 +105,14 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (!paneSlides.length || t.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('.modal-backdrop')) return;
+      if ((e.key === 'Backspace' || e.key === 'Delete') && !selEl && selected) {
+        e.preventDefault();
+        deleteSlides(picked());
+        return;
+      }
       const step = { ArrowDown: 1, ArrowRight: 1, PageDown: 1, ArrowUp: -1, ArrowLeft: -1, PageUp: -1 }[e.key];
       if (!step) return;
+      setMulti([]);
       e.preventDefault();
       const at = selected ? paneSlides.indexOf(selected) : -1;
       const next = paneSlides[Math.min(paneSlides.length - 1, Math.max(0, at + step))];
@@ -122,7 +165,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           {leftTab === 'library' ? (
             <LibraryPanel state={state} dispatch={dispatch} onNew={() => cmd.open('new')} online={cmd.online} onReloadOnline={cmd.reloadOnline} />
           ) : (
-            <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick}
+            <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick} multi={multi} onClickSlide={onClickSlide}
               heading={source && 'playlist' in source ? source.playlist.name : p?.title ?? ''}
               onMenu={(x, y, id) => setMenu({ x, y, id })}
               onAdd={() => { if (!p) return; const n = { id: uid('s'), group: slide?.group ?? 'Slide', text: '' }; updateSlides([...p.slides, n]); cmd.setSlideId(n.id); }} />
@@ -172,12 +215,13 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
       {menu && (
         <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button onClick={() => slideMenu(menu.id, 'live')}>▶ 지금 화면에 표시</button>
+          <button onClick={() => { const ids = picked(); setMenu(null); makeSection(ids); }}>📑 섹션 만들기{multi.length > 1 ? ` (${multi.length}장)` : ''}</button>
           <button onClick={() => { setMenu(null); setDesigning(true); }}>✏️ 개체 편집</button>
           <button onClick={() => slideMenu(menu.id, 'dup')}>⧉ 슬라이드 복제</button>
           <button onClick={() => slideMenu(menu.id, 'up')}>↑ 위로 이동</button>
           <button onClick={() => slideMenu(menu.id, 'down')}>↓ 아래로 이동</button>
           <button onClick={() => slideMenu(menu.id, 'skip')}>⏭ 슬라이드 숨기기/해제</button>
-          <button className="danger" onClick={() => slideMenu(menu.id, 'del')}>🗑 슬라이드 삭제</button>
+          <button className="danger" onClick={() => { const ids = picked(); setMenu(null); deleteSlides(ids); }}>🗑 슬라이드 삭제{multi.length > 1 ? ` (${multi.length}장)` : ''}</button>
         </div>
       )}
       {designing && p && slide && (
