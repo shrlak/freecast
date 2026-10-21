@@ -49,7 +49,7 @@ const isRemote = () => document.body?.dataset.view === 'remote';
 
 /** The phone/tablet remote has no media of its own: it gets what slides use from the computer. */
 async function fromComputer(id: string): Promise<string | null> {
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 40; i++) {
     try {
       const res = await fetch(`/remote-media/${encodeURIComponent(id)}`);
       if (res.ok) return URL.createObjectURL(await res.blob());

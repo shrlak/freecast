@@ -173,6 +173,7 @@ export function OperatorView() {
   latestLib.current = state.library;
 
   const [remotes, setRemotes] = useState(0);
+  const lastLibrary = useRef(state.library);
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
     if (m.type === 'remotes') setRemotes(Number(m.count) || 0);
     if (m.type !== 'command' || !m.command) return;
@@ -214,10 +215,18 @@ export function OperatorView() {
       lastPres = p.id;
     }
     const info: RemoteInfo = { upcoming, themes };
-    // Pictures first, so the remote's previews have them by the time it draws the slides.
+    // One message may not exceed the relay's 4 MB limit: a very long show sends the nearest slides only.
+    while (upcoming.length > 1 && JSON.stringify(info).length > 3_000_000) upcoming.length = Math.ceil(upcoming.length / 2);
+    // The slide list goes out at once (right away when only the live slide moved, a moment after an edit);
+    // pictures follow in the background, nearest slides first, and appear on the phone as they arrive.
     const ids = mediaIdsFor({ slides: upcoming.map((x) => x.slide), backgrounds: upcoming.map((x) => x.background) });
-    // Slides are re-sent a moment after the last edit, not on every keystroke.
-    const t = setTimeout(() => (remotes > 0 ? sendMediaToRemotes(ids) : Promise.resolve()).then(() => !cancelled && relay.send({ type: 'info', info })), 300);
+    const edited = lastLibrary.current !== state.library;
+    lastLibrary.current = state.library;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      relay.send({ type: 'info', info });
+      if (remotes > 0) sendMediaToRemotes(ids);
+    }, edited ? 300 : 0);
     return () => {
       cancelled = true;
       clearTimeout(t);
