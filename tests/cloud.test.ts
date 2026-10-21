@@ -35,3 +35,13 @@ describe('mergeLibrary', () => {
     expect(syncable(l).presentations.map((p) => p.id)).toEqual(['p1']);
   });
 });
+
+describe('transitions reset', () => {
+  it('a copy from an older app does not bring its transitions back through a merge', () => {
+    const old = lib([{ ...pres('p1', '곡'), transition: { kind: 'fade', duration: 400 } }]);
+    delete (old as { transitionsReset?: true }).transitionsReset;
+    const { library } = mergeLibrary(null, lib([pres('p1', '곡')]), old);
+    expect(library.presentations[0].transition).toBeUndefined();
+    expect(library.transitionsReset).toBe(true);
+  });
+});

@@ -151,6 +151,7 @@ export function createSeedLibrary(): Library {
   return {
     version: 1,
     aspect: '4:3',
+    transitionsReset: true,
     presentations,
     themes: DEFAULT_THEMES.map((t) => ({ ...t })),
     playlists: [{

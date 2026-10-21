@@ -1,5 +1,6 @@
 import type { Library, Presentation } from './types';
 import { uid } from './lyrics';
+import { clearTransitions } from './persistence';
 
 /** The part of the library that is shared through the cloud (online songs come from GitHub instead). */
 export function syncable(lib: Library): Library {
@@ -53,8 +54,13 @@ export interface MergeResult {
 }
 
 /** Merge the cloud library into this computer's library (both without online songs). */
-export function mergeLibrary(base: Library | null, local: Library, remote: Library): MergeResult {
+export function mergeLibrary(base0: Library | null, local0: Library, remote0: Library): MergeResult {
   const conflicts: string[] = [];
+  // A copy from before transitions were reset (an older app) must not bring its transitions back.
+  const fresh = (l: Library): Library => (l.transitionsReset === true ? l : { ...l, presentations: clearTransitions(l.presentations) });
+  const base = base0 && fresh(base0);
+  const local = fresh(local0);
+  const remote = fresh(remote0);
   // First sync on this computer (no shared history): the cloud copy wins, local-only items are added.
   const presentations = mergeById<Presentation>(base?.presentations, local.presentations, remote.presentations, (l, r) => {
     if (!base) return [r];
@@ -73,6 +79,7 @@ export function mergeLibrary(base: Library | null, local: Library, remote: Libra
     library: {
       version: 1,
       aspect: '4:3',
+      transitionsReset: true,
       presentations,
       themes: m('themes'),
       playlists: m('playlists'),

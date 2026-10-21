@@ -8,6 +8,26 @@ const run = (s: AppState, ...actions: Action[]) => actions.reduce(reducer, s);
 const fresh = () => createInitialState(createSeedLibrary());
 const text = (s: AppState) => s.live.slide?.text ?? null;
 
+describe('transitions reset', () => {
+  const withFade = () => {
+    const lib = createSeedLibrary();
+    delete (lib as { transitionsReset?: true }).transitionsReset;
+    lib.presentations[0].transition = { kind: 'fade', duration: 400 };
+    lib.presentations[0].slides[0].transition = { kind: 'zoom', duration: 800 };
+    return lib;
+  };
+  it('clears every presentation and slide transition once', () => {
+    const lib = normalizeLibrary(withFade())!;
+    expect(lib.transitionsReset).toBe(true);
+    expect(lib.presentations.every((p) => p.transition === undefined && p.slides.every((s) => s.transition === undefined))).toBe(true);
+  });
+  it('keeps a transition picked after the reset', () => {
+    const lib = normalizeLibrary(withFade())!;
+    lib.presentations[0].transition = { kind: 'fade', duration: 300 };
+    expect(normalizeLibrary(lib)!.presentations[0].transition).toEqual({ kind: 'fade', duration: 300 });
+  });
+});
+
 describe('default transition', () => {
   it('is 없음 (cut) with a 1 ms timing, for a slide with no transition of its own', () => {
     const s = run(fresh(), { type: 'live/go', presentationId: 'p_welcome', seq: 0 });
