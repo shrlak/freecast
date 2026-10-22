@@ -840,3 +840,27 @@ body[data-view='multiview'] { overflow: auto; }
 .cloud-storage-bar.critical .cloud-storage-media { background: #c42b1c; }
 
 .playlist-retention { padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
+
+/* The viewport stays still; only the upcoming slide list owns a scroll area. */
+.remote-console { height: 100vh; height: 100dvh; overflow: hidden; padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); gap: 8px; }
+.remote-console > .remote-head, .remote-console > .remote-connection { flex-shrink: 0; }
+.remote-console > .remote-connection { padding: 0; }
+.remote-console .remote-controls { display: grid; grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; flex: 1; min-height: 0; }
+.remote-main { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); grid-auto-rows: auto; gap: 8px; min-height: 0; min-width: 0; }
+.remote-console .remote-show button { padding: 10px 4px; }
+.remote-console .remote-nav button { padding: 10px; font-size: 24px; }
+.remote-console .remote-black { padding: 8px 4px; white-space: normal; }
+.remote-console .remote-current { min-height: 0; display: grid; place-items: center; container-type: size; }
+.remote-console .remote-current > .canvas-frame { width: min(100cqw, calc(100cqh * 4 / 3)); }
+.remote-console .remote-empty { aspect-ratio: auto; width: 100%; height: 100%; }
+.remote-console .remote-next { min-width: 0; padding: 0; max-height: 3em; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.remote-upcoming { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; min-height: 0; min-width: 0; }
+.remote-upcoming-scroll { min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+@media (orientation: landscape) {
+  .remote-console { max-width: 1440px; }
+  .remote-console .remote-controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .remote-console .remote-show button { padding: 6px 4px; }
+  .remote-console .remote-nav button { padding: 4px; font-size: 22px; }
+  .remote-console .remote-black { padding: 5px 4px; }
+  .remote-main { gap: 6px; }
+}

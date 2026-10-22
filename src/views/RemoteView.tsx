@@ -69,7 +69,7 @@ export function RemoteView() {
   }
 
   return (
-    <div className="remote-root">
+    <div className="remote-root remote-console">
       <header className="remote-head">
         <strong>FreeCast</strong>
         <span className={`dot ${ready ? 'on' : ''}`} />
@@ -77,13 +77,14 @@ export function RemoteView() {
       </header>
       <p className="remote-connection" role="status" aria-live="polite">{connectionLabel}</p>
       <fieldset disabled={!ready} className="remote-controls">
+      <div className="remote-main">
       <div className="remote-show">
         <button className="primary" onClick={() => cmd({ type: 'show/start' })}>▶ Start slideshow</button>
         <button className="danger" onClick={() => cmd({ type: 'show/end' })}>■ End slideshow</button>
       </div>
       <div className="remote-nav">
-        <button onClick={() => cmd({ type: 'live/prev' })}>◀</button>
-        <button className="primary" onClick={() => cmd({ type: 'live/next' })}>▶</button>
+        <button aria-label="Previous slide" onClick={() => cmd({ type: 'live/prev' })}>◀</button>
+        <button className="primary" aria-label="Next slide" onClick={() => cmd({ type: 'live/next' })}>▶</button>
       </div>
       <button className={`remote-black ${live?.black ? 'active' : ''}`} onClick={() => cmd({ type: 'live/toggleBlack' })}>
         {live?.black ? '■ Black screen on — tap to show slide' : '■ Black screen'}
@@ -97,11 +98,12 @@ export function RemoteView() {
           {live.slide?.notes && <><label>노트</label>{live.slide.notes}</>}
         </div>
       )}
-      {!!info?.upcoming.length && (
-        <section>
+      </div>
+        <section className="remote-upcoming" aria-label="Up next">
           <h3>Up next</h3>
+          <div className="remote-upcoming-scroll" tabIndex={0} role="region" aria-label="Upcoming slides">
           <div className="remote-slides">
-            {info.upcoming.map((u) => (
+            {info?.upcoming.map((u) => (
               <Fragment key={`${u.presentationId}:${u.seq}:${u.playlistIndex}`}>
                 {u.heading && <div className="remote-section">{u.title}</div>}
                 <button onClick={() => cmd({ type: 'live/go', presentationId: u.presentationId, seq: u.seq, playlistIndex: u.playlistIndex })}>
@@ -111,8 +113,9 @@ export function RemoteView() {
               </Fragment>
             ))}
           </div>
+          {!info?.upcoming.length && <p className="muted small">No upcoming slides</p>}
+          </div>
         </section>
-      )}
       </fieldset>
     </div>
   );
