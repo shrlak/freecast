@@ -828,3 +828,7 @@ body[data-view='multiview'] { overflow: auto; }
 .cloud-storage-bar { display: flex; height: 16px; overflow: hidden; border-radius: 8px; background: #e1dfdd; margin: 8px 0; }
 .cloud-storage-media { background: #2e9e66; }
 .cloud-storage-library { background: #2b579a; }
+
+.name-dialog { width: min(440px, 94vw); }
+.cloud-storage-bar.warning .cloud-storage-media { background: #c67c00; }
+.cloud-storage-bar.critical .cloud-storage-media { background: #c42b1c; }

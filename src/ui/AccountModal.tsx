@@ -12,7 +12,7 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const { status, device } = cloud;
-  useEffect(() => { if (status.session) void cloud.refreshStorage(); }, [status.session?.token, status.lastSync, cloud.refreshStorage]);
+  useEffect(() => { if (status.session) void cloud.refreshStorage(); }, [status.session?.token, cloud.refreshStorage]);
   const [deviceName, setDeviceName] = useState(device.name);
   const [deviceUser, setDeviceUser] = useState(device.userName);
   useEffect(() => { setDeviceName(device.name); setDeviceUser(device.userName); }, [device]);

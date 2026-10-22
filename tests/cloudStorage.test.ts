@@ -23,3 +23,22 @@ describe('server library storage accounting', () => {
     expect(summarizeCloudStorage({}, [])).not.toHaveProperty('limitBytes');
   });
 });
+
+describe('measured server quota', () => {
+  it('calculates percentages against the actual decimal quota rather than the media composition', async () => {
+    const { parseServerStorage, formatQuotaBytes } = await import('../src/domain/cloudStorage');
+    const usage = parseServerStorage({ usedBytes: 1_250_000_000, limitBytes: 5_000_000_000, freecastBytes: 1_000_000_000, sharedBytes: 250_000_000, mediaBytes: 100, libraryBytes: 20, mediaCount: 1, checkedAt: 123, accountUsageComplete: false });
+    expect(usage.server?.usedPercent).toBe(25);
+    expect(usage.totalBytes).toBe(120);
+    expect(formatQuotaBytes(usage.server!.limitBytes)).toBe('5 GB');
+    expect(usage.server?.accountUsageComplete).toBe(false);
+  });
+  it('rejects missing/invalid measurements and preserves above-limit percentages', async () => {
+    const { parseServerStorage } = await import('../src/domain/cloudStorage');
+    const raw = { usedBytes: 6_000_000_000, limitBytes: 5_000_000_000, freecastBytes: 5_000_000_000, sharedBytes: 1_000_000_000, mediaBytes: 100, libraryBytes: 20, mediaCount: 1, checkedAt: 123 };
+    expect(parseServerStorage(raw).server?.usedPercent).toBe(120);
+    expect(() => parseServerStorage({ ...raw, usedBytes: NaN })).toThrow();
+    expect(() => parseServerStorage({ ...raw, limitBytes: 0 })).toThrow();
+    expect(() => parseServerStorage({})).toThrow();
+  });
+});

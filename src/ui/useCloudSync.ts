@@ -13,6 +13,8 @@ export interface CloudStatus {
   state: 'off' | 'syncing' | 'synced' | 'error';
   message: string | null;
   lastSync: number | null;
+  storageUsage?: CloudStorageUsage | null;
+  storageError?: string | null;
 }
 
 const PUSH_DELAY = 1000;
@@ -64,6 +66,13 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
       if (storageRequest.current === request && loadSession()?.token === session.token) setStorage((s) => ({ ...s, loading: false, error: (e as Error).message }));
     }
   }, []);
+
+  useEffect(() => {
+    if (!status.session) return;
+    void refreshStorage();
+    const timer = setInterval(() => void refreshStorage(), 30000);
+    return () => clearInterval(timer);
+  }, [status.session?.token, refreshStorage]);
 
   const setSession = (s: CloudSession | null) => {
     saveSession(s);
@@ -123,6 +132,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
       if (loadSession()?.token !== session.token) return;
       setStatus((s) => ({ ...s, state: 'synced', message: null, lastSync: Date.now() }));
       succeeded = true;
+      void refreshStorage();
     } catch (e) {
       if (loadSession()?.token !== session.token) return;
       const err = e as Error & { status?: number };
@@ -138,7 +148,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
         setTimeout(() => void sync('push'), PUSH_DELAY);
       }
     }
-  }, [absorb]);
+  }, [absorb, refreshStorage]);
 
   // Start + poll.
   useEffect(() => {
@@ -176,7 +186,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
     setStorage({ loading: false, usage: null, error: null });
   };
 
-  return { status, storage, refreshStorage, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, syncNow: () => sync('pull') };
+  return { status: { ...status, storageUsage: storage.usage, storageError: storage.error }, storage, refreshStorage, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, syncNow: () => sync('pull') };
 }
 
 export type CloudSync = ReturnType<typeof useCloudSync>;

@@ -16,6 +16,7 @@ import type { Commands } from './commands';
 import { SlidePane, paneSlideId } from './SlidePane';
 import { paneSource, selectedRow, slidePaneRows, type PaneSlide } from './paneRows';
 import { resolveBackground } from '../../domain/autoBackground';
+import { NameDialog } from '../NameDialog';
 import { AutoTextarea } from '../AutoTextarea';
 
 const LOCK_MSG = '🔒 화면에 표시 중이라 삭제·추가가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요';
@@ -28,6 +29,7 @@ interface Props {
 
 /** PowerPoint-style window: ribbon, slide list, slide editor with notes, Format pane, status bar. */
 export function PptLayout({ state, dispatch, cmd }: Props) {
+  const [sectionRequest, setSectionRequest] = useState<{ presentationId: string; ids: string[]; initialValue: string } | null>(null);
   const [leftTab, setLeftTab] = useState<'slides' | 'library'>('slides');
   const [designing, setDesigning] = useState(false);
   /** The object selected on the canvas (shown in the Format pane). */
@@ -82,12 +84,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   };
   const makeSection = (ids: string[]) => {
     if (!p || !ids.length) return;
-    const name = prompt('섹션 이름', slide?.label || '새 섹션')?.trim();
-    if (!name) return;
-    const slides = p.slides.map((s) => (ids.includes(s.id) ? { ...s, group: name, label: undefined } : s));
-    // A song's 진행 plays groups by name; a renamed group would drop out of it, so play the slides as listed.
-    dispatch({ type: 'presentation/update', id: p.id, patch: p.arrangementId ? { slides, arrangementId: null } : { slides } });
-    setMulti([]);
+    setSectionRequest({ presentationId: p.id, ids, initialValue: slide?.label || '새 섹션' });
   };
   const pick = (r: PaneSlide) => {
     if (r.itemIndex !== null && r.itemIndex !== state.playlistIndex) dispatch({ type: 'playlist/select', index: r.itemIndex });
@@ -207,6 +204,13 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
 
   return (
     <div className="ppt" onClick={() => menu && setMenu(null)}>
+      {sectionRequest && <NameDialog title="섹션 이름" initialValue={sectionRequest.initialValue} onClose={() => setSectionRequest(null)} onSave={(name) => {
+        const target = state.library.presentations.find((p) => p.id === sectionRequest.presentationId);
+        if (!target) return '프레젠테이션이 삭제되었습니다.';
+        const slides = target.slides.map((s) => sectionRequest.ids.includes(s.id) ? { ...s, group: name, label: undefined } : s);
+        dispatch({ type: 'presentation/update', id: target.id, patch: target.arrangementId ? { slides, arrangementId: null } : { slides } });
+        setMulti([]);
+      }} />}
       <Ribbon state={state} dispatch={dispatch} cmd={cmd} presentation={p} slide={slide} onDesign={() => setDesigning(true)} />
       <div className="ppt-body">
         <aside className="ppt-left">
