@@ -333,6 +333,7 @@ body[data-view='remote'] { overflow: auto; }
 .remote-show button { padding: 14px 8px; font-size: 15px; }
 .remote-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .remote-nav button { padding: 20px; font-size: 26px; }
+.remote-black { padding: 14px 8px; font-size: 15px; }
 .remote-current { border-radius: 10px; overflow: hidden; border: 2px solid var(--live); background: #000; }
 .remote-empty { aspect-ratio: 4 / 3; display: grid; place-items: center; color: var(--muted); }
 .remote-root h3 { margin: 6px 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
