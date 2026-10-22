@@ -54,15 +54,11 @@ describe('prayer topics', () => {
     expect(topics[0].points).toEqual(['지난 한 주간을 돌아보며', '정결한 마음으로']);
   });
 
-  it('keeps three topics on one slide even when their points are long', () => {
-    const long = Array.from({ length: 3 }, (_, i) => ({ title: `t${i}`, points: ['가'.repeat(60), '나'.repeat(60), '다'.repeat(60)] }));
-    expect(planPrayerSlides(long).map((s) => s.length)).toEqual([3]);
-  });
-
-  it('splits evenly with at most three per slide', () => {
-    expect(planPrayerSlides(topics).map((s) => s.length)).toEqual([2, 2]);
+  it('puts each topic on its own slide', () => {
+    expect(planPrayerSlides(topics).map((s) => s.length)).toEqual([1, 1, 1, 1]);
     const five = Array.from({ length: 5 }, (_, i) => ({ title: `t${i}`, points: [] }));
-    expect(planPrayerSlides(five).map((s) => s.length)).toEqual([3, 2]);
+    expect(planPrayerSlides(five)).toHaveLength(5);
+    expect(planPrayerSlides([])).toEqual([]);
   });
 
   it('formats bold numbered titles and bullet points', () => {
@@ -125,7 +121,7 @@ describe('service builder', () => {
     expect(headers).toEqual(['Front', '찬양', '성경 말씀', '설교 후 찬양', '광고', 'Back / End']);
     expect(playlist.name).toBe('0712 주일예배');
     const front = presentations.find((p) => p.title === '0712 Front')!;
-    expect(front.slides.filter((s) => s.text.includes('●')).length).toBe(2);
+    expect(front.slides.filter((s) => s.text.includes('●')).length).toBe(4);
     expect(front.slides.some((s) => s.subtext === '07/12/2026')).toBe(true);
     const back = presentations.find((p) => p.title === '0712 Back')!;
     expect(back.slides[0].group).toMatch(/^공동체 고백/);

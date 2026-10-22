@@ -27,24 +27,8 @@ export function parsePrayerTopics(text: string): PrayerTopic[] {
   return topics;
 }
 
-/**
- * Split topics across slides: at most 3 per slide, spread evenly (3 → 3, 4 → 2+2, 5 → 3+2).
- * Three topics always share one slide, however long their points are.
- */
-export function planPrayerSlides(topics: PrayerTopic[]): PrayerTopic[][] {
-  if (!topics.length) return [];
-  const count = Math.ceil(topics.length / 3);
-  const base = Math.floor(topics.length / count);
-  const extra = topics.length % count;
-  const slides: PrayerTopic[][] = [];
-  let i = 0;
-  for (let k = 0; k < count; k++) {
-    const size = base + (k < extra ? 1 : 0);
-    slides.push(topics.slice(i, i + size));
-    i += size;
-  }
-  return slides;
-}
+/** One topic per slide, so each can be printed as large as the slide allows. */
+export const planPrayerSlides = (topics: PrayerTopic[]): PrayerTopic[][] => topics.map((t) => [t]);
 
 /** Slide body: "**1. Title**" lines (rendered bold) followed by "● point" lines. */
 export function prayerSlideText(topics: PrayerTopic[], startNumber: number): string {
