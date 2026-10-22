@@ -85,8 +85,13 @@ jobs:
           v="$(node -p "require('./package.json').version")"
           update="${{ matrix.os == 'macos-latest' && 'latest-mac.yml' || 'latest.yml' }}"
           [ -f "release/$update" ] || { echo "::error::release/$update was not built"; exit 1; }
-          find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print0 \
-            | xargs -0 gh release upload "v$v" --clobber
+          # Asset names as electron-builder's own publisher gave them and as latest*.yml refer to them:
+          # spaces become hyphens ("FreeCast Setup 1.2.3.exe" -> "FreeCast-Setup-1.2.3.exe"); `gh` would turn them into dots.
+          mkdir upload
+          find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) | while IFS= read -r f; do
+            cp "$f" "upload/$(basename "$f" | tr ' ' '-')"
+          done
+          gh release upload "v$v" upload/* --clobber
 
   # Every release carries all three installers (Apple Silicon Mac, Intel Mac, Windows) and the files the
   # auto-updater reads; fail loudly if one is missing.
