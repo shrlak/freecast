@@ -14,7 +14,7 @@ export interface RestorePoint {
   id: number;
   at: number;
   /** 'auto' (timer / startup), 'manual', or 'before restore'. */
-  kind: 'auto' | 'manual' | 'safety' | 'import' | 'show';
+  kind: 'auto' | 'manual' | 'safety' | 'import' | 'show' | 'sync';
   presentations: number;
   slides: number;
   json: string;
@@ -86,3 +86,16 @@ export const libraryOf = (p: RestorePoint): Library | null => {
     return null;
   }
 };
+
+/** Save each distinct state at the beginning of sync, including attempts that fail offline. */
+let syncSnapshotQueue: Promise<void> = Promise.resolve();
+export function saveSyncRestorePoint(lib: Library): Promise<void> {
+  const json = serialize(lib);
+  const job = syncSnapshotQueue.then(async () => {
+    const previous = (await listRestorePoints()).find((p) => p.kind === 'sync');
+    if (previous?.json === json) return;
+    await saveRestorePoint(lib, 'sync', Date.now(), '수정 후 동기화 시작');
+  });
+  syncSnapshotQueue = job.catch(() => undefined);
+  return job;
+}

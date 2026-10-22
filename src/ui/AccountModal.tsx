@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CloudStoragePanel } from './CloudStoragePanel';
 import type { CloudSync } from './useCloudSync';
 
 /** Sign in to the church cloud library (or create an account with the 관리자 password). */
@@ -11,6 +12,7 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const { status, device } = cloud;
+  useEffect(() => { if (status.session) void cloud.refreshStorage(); }, [status.session?.token, status.lastSync, cloud.refreshStorage]);
   const [deviceName, setDeviceName] = useState(device.name);
   const [deviceUser, setDeviceUser] = useState(device.userName);
   useEffect(() => { setDeviceName(device.name); setDeviceUser(device.userName); }, [device]);
@@ -48,6 +50,7 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
             <div className="stack">
               <p><b>{status.session.username}</b>(으)로 로그인됨</p>
               {done && <p role="status">{done}</p>}
+              <CloudStoragePanel cloud={cloud} />
               <h3>현재 기기</h3>
               <p className="small">{device.platform}{device.computerName ? ` · ${device.computerName}` : ''}{device.appVersion ? ` · FreeCast ${device.appVersion}` : ''}<br />기기 ID: {device.id}</p>
               <label className="stack">기기 이름<input maxLength={60} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="예: 교회 방송실 Mac" /></label>

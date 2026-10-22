@@ -823,3 +823,8 @@ body[data-view='multiview'] { overflow: auto; }
 .activity-table { overflow: auto; }
 .activity-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .activity-table th, .activity-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+
+.cloud-storage { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.cloud-storage-bar { display: flex; height: 16px; overflow: hidden; border-radius: 8px; background: #e1dfdd; margin: 8px 0; }
+.cloud-storage-media { background: #2e9e66; }
+.cloud-storage-library { background: #2b579a; }

@@ -3,7 +3,7 @@ import { deviceLabel } from '../domain/device';
 import type { Library } from '../domain/types';
 import { libraryOf, listRestorePoints, saveRestorePoint, type RestorePoint } from '../domain/restorePoints';
 
-const KIND = { auto: '자동', manual: '직접 저장', safety: '복원 직전', import: '자료 가져오기 전', show: '발표 시작 전' } as const;
+const KIND = { auto: '자동', manual: '직접 저장', safety: '복원 직전', import: '자료 가져오기 전', show: '발표 시작 전', sync: '수정 후 동기화 시작' } as const;
 
 /** 복원 지점: snapshots of the whole library taken automatically, to roll back a bad edit later. */
 export function RestorePointsModal({ library, onRestore, onClose, notify }: {
@@ -14,7 +14,7 @@ export function RestorePointsModal({ library, onRestore, onClose, notify }: {
 }) {
   const [points, setPoints] = useState<RestorePoint[] | null>(null);
   const reload = () => listRestorePoints().then(setPoints).catch(() => setPoints([]));
-  useEffect(() => { void reload(); }, []);
+  useEffect(() => { void reload(); const timer = setInterval(() => void reload(), 3000); return () => clearInterval(timer); }, []);
 
   const saveNow = async () => {
     await saveRestorePoint(library, 'manual');
@@ -38,7 +38,7 @@ export function RestorePointsModal({ library, onRestore, onClose, notify }: {
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="wizard-body stack">
-          <p className="hint">FreeCast가 10분마다(바뀐 경우) 라이브러리를 자동 저장해 둡니다. 자료 가져오기 전·발표 시작 전에도 저장하며 최근 30개까지 보관합니다.</p>
+          <p className="hint">FreeCast가 10분마다(바뀐 경우) 라이브러리를 자동 저장해 둡니다. 수정 후 동기화가 시작될 때마다 변경된 상태를 저장하고, 자료 가져오기 전·발표 시작 전에도 저장하며 최근 30개까지 보관합니다.</p>
           <button onClick={saveNow}>지금 저장</button>
           {points === null ? <p className="muted">불러오는 중…</p> : !points.length ? <p className="muted">아직 복원 지점이 없습니다</p> : (
             <ul className="restore-list">
