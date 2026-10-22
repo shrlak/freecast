@@ -847,7 +847,8 @@ body[data-view='multiview'] { overflow: auto; }
 .remote-console > .remote-connection { padding: 0; }
 .remote-console .remote-controls { display: grid; grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; flex: 1; min-height: 0; }
 .remote-main { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); grid-auto-rows: auto; gap: 8px; min-height: 0; min-width: 0; }
-.remote-console .remote-show button { padding: 10px 4px; }
+.remote-console .remote-show { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.remote-console .remote-show button { padding: 10px 4px; min-width: 0; white-space: normal; }
 .remote-console .remote-nav button { padding: 10px; font-size: 24px; }
 .remote-console .remote-black { padding: 8px 4px; white-space: normal; }
 .remote-console .remote-current { min-height: 0; display: grid; place-items: center; container-type: size; }
