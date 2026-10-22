@@ -85,6 +85,12 @@ export function RemoteView() {
       <div className="remote-current">
         {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} /> : <div className="remote-empty">Nothing live</div>}
       </div>
+      {(live?.nextText || live?.slide?.notes) && (
+        <div className="remote-next">
+          {live.nextText && <><label>다음</label>{live.nextText.replace(/\*\*/g, '')}</>}
+          {live.slide?.notes && <><label>노트</label>{live.slide.notes}</>}
+        </div>
+      )}
       {!!info?.upcoming.length && (
         <section>
           <h3>Up next</h3>

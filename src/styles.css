@@ -791,3 +791,25 @@ body[data-view='multiview'] { overflow: auto; }
 .fmt-body .ppt-text-format select.ppt-font { width: auto; flex: 1 1 110px; }
 .ppt-text-format .font-size .fs-input { width: 40px !important; flex: none; }
 .ppt-text-format .font-size { flex: none; }
+
+/* quick find, restore points, lock, chord controls */
+.find-backdrop { place-items: start center; padding-top: 12vh; }
+.find-modal { width: min(640px, 94vw); }
+.find-input { margin: 12px; font-size: 16px; padding: 10px 12px; }
+.find-list { list-style: none; margin: 0; padding: 0 0 8px; overflow: auto; max-height: 60vh; }
+.find-list li { display: flex; align-items: stretch; }
+.find-list li.on { background: rgba(75, 199, 137, .15); }
+.find-main { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: none; border: 0; padding: 8px 16px; min-width: 0; }
+.find-snippet { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.find-where, .find-none { font-size: 12px; opacity: .6; }
+.find-none { padding: 8px 16px; }
+.find-edit { background: none; border: 0; padding: 0 14px; }
+.restore-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.restore-list li { display: flex; align-items: center; gap: 10px; }
+.restore-list li > span:first-child { min-width: 170px; }
+.restore-list li > span.muted { flex: 1; }
+.chord-ctl { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.chord-ctl button { padding: 2px 8px; }
+.ppt-lock.on { color: #fbbf24; }
+.remote-next { font-size: 14px; opacity: .85; white-space: pre-line; padding: 6px 10px; }
+.remote-next label { display: block; font-size: 11px; opacity: .6; }

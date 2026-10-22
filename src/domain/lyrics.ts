@@ -90,6 +90,26 @@ const CHORD = /\[([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:\/[A-G][#b]?)?)\
 export const hasChords = (text: string) => new RegExp(CHORD.source).test(text);
 export const stripChords = (text: string) => text.replace(CHORD, '').replace(/ {2,}/g, ' ');
 
+const SHARP_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_NOTES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+/** One chord name (G, Am7, D/F#) moved up by `semitones` (negative = down); flats stay flats. */
+export function transposeChord(chord: string, semitones: number): string {
+  const by = ((semitones % 12) + 12) % 12;
+  return chord.replace(/[A-G][#b]?/g, (note) => {
+    const flat = note.endsWith('b');
+    const i = (flat ? FLAT_NOTES : SHARP_NOTES).indexOf(note);
+    // E#, Cb, B# and the like are not in the tables: leave them as written.
+    return i < 0 ? note : (flat ? FLAT_NOTES : SHARP_NOTES)[(i + by) % 12];
+  });
+}
+
+/** Every [chord] in the text moved by `semitones`; lyrics are untouched. */
+export function transposeChords(text: string, semitones: number): string {
+  if (((semitones % 12) + 12) % 12 === 0) return text;
+  return text.replace(CHORD, (_, c: string) => `[${transposeChord(c, semitones)}]`);
+}
+
 /** Split a line into chord row + lyric row, aligned by character position. */
 export function chordRows(line: string): { chords: string; lyric: string } {
   let chords = '';

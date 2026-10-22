@@ -1,7 +1,7 @@
 import type { CloudStatus } from '../useCloudSync';
 import type { ServiceUploads } from './useServiceUploads';
 
-export type Modal = 'edit' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | null;
+export type Modal = 'edit' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | null;
 export type ImportKind = 'library' | 'slides' | 'lyrics' | 'backup';
 export type PptViewMode = 'normal' | 'sorter' | 'presenter';
 export type Layout = 'ppt' | 'classic';
@@ -34,6 +34,9 @@ export interface Commands {
   slideId: string | null;
   setSlideId: (id: string | null) => void;
   cloud: CloudStatus;
+  /** 🔒 While a slide is on screen, Enter / Delete in the editor do nothing. */
+  locked: boolean;
+  setLocked: (on: boolean) => void;
   /** This week's 주일예배: uploads go straight into it. */
   service: ServiceUploads;
 }

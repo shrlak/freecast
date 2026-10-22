@@ -79,6 +79,7 @@ export type Action =
   | { type: 'library/logo'; mediaId: string | null }
   | { type: 'live/stageMessage'; message: string | null }
   | { type: 'live/messageScroll'; on: boolean }
+  | { type: 'live/chords'; shift?: number; capo?: number }
   | { type: 'live/videoSeek'; t: number }
   | { type: 'live/videoLoop'; on: boolean }
   | { type: 'announce/start'; presentationId: string }
@@ -402,6 +403,8 @@ function core(s: AppState, a: Action): AppState {
       return { ...setLib(s, { logoMediaId: a.mediaId }), live: { ...s.live, logoMediaId: a.mediaId } };
     case 'live/stageMessage':
       return { ...s, live: { ...s.live, stageMessage: a.message?.trim() ? a.message.trim() : null } };
+    case 'live/chords':
+      return { ...s, live: { ...s.live, chordShift: a.shift ?? s.live.chordShift ?? 0, capo: Math.min(11, Math.max(0, a.capo ?? s.live.capo ?? 0)) } };
     case 'live/messageScroll':
       return { ...s, live: { ...s.live, messageScroll: a.on } };
     case 'live/videoSeek':
@@ -460,7 +463,8 @@ export function reducer(s: AppState, a: Action): AppState {
   if (next === s) return s;
   if (next.library === s.library || a.type.startsWith('live/') || NO_HISTORY.has(a.type)) return syncLive(next);
   const key = historyKey(a);
-  const coalesce = key === s.lastKey && (a.type === 'theme/upsert' || a.type.endsWith('/update') || a.type.endsWith('/upsert'));
+  const slideList = a.type === 'presentation/update' && 'slides' in a.patch;
+  const coalesce = !slideList && key === s.lastKey && (a.type === 'theme/upsert' || a.type.endsWith('/update') || a.type.endsWith('/upsert'));
   return syncLive({
     ...next,
     past: coalesce ? s.past : [...s.past, s.library].slice(-60),

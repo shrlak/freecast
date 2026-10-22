@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import type { StageLayout } from '../domain/types';
 import { useLiveFeed, useNow } from '../ui/hooks';
 import { formatClock, timerValue } from '../domain/timers';
-import { chordRows, hasChords, stripChords } from '../domain/lyrics';
+import { chordRows, hasChords, stripChords, transposeChords } from '../domain/lyrics';
 import { DEFAULT_STAGE_LAYOUTS } from '../domain/defaults';
 import { SlideCanvas } from '../ui/SlideCanvas';
 import { liveCanvasProps } from '../ui/liveProps';
@@ -37,7 +37,9 @@ export function StageView() {
   const clock = new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   const running = (live?.timers ?? []).filter((t) => t.running || t.kind === 'countdownTo');
   const slide = live?.slide;
-  const current = slide ? [slide.title, slide.text.replace(/\*\*/g, '')].filter(Boolean).join('\n') : null;
+  // Key change and capo from the operator: the chords shown are the shapes to play.
+  const shift = (live?.chordShift ?? 0) - (live?.capo ?? 0);
+  const current = slide ? transposeChords([slide.title, slide.text.replace(/\*\*/g, '')].filter(Boolean).join('\n'), shift) : null;
   const videoLeft = live?.video.endsAt ? live.video.endsAt - now : null;
   const onlyClock = !L.current && !L.next && !L.notes && !L.preview;
 
@@ -46,6 +48,9 @@ export function StageView() {
       <header className="stage-top">
         {L.clock && <span className="stage-clock">{clock}</span>}
         <span className="stage-title">{live?.title ?? ''}{slide?.group ? ` · ${slide.group}` : ''}</span>
+        {L.chords && (!!live?.chordShift || !!live?.capo) && (
+          <span className="stage-timer"><small>Key</small> {live?.chordShift ? `${live.chordShift > 0 ? '+' : ''}${live.chordShift}` : '±0'}{live?.capo ? ` · Capo ${live.capo}` : ''}</span>
+        )}
         {L.videoCountdown && videoLeft != null && videoLeft > 0 && <span className="stage-timer"><small>Video</small> {formatClock(-videoLeft)}</span>}
         {L.timers && running.slice(0, 3).map((t) => {
           const v = timerValue(t, now);

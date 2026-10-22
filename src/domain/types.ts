@@ -443,6 +443,10 @@ export interface LiveState {
   /** Scroll the message across the screen like a ticker. */
   messageScroll: boolean;
   stageLayouts?: StageLayout[];
+  /** Stage display chords: semitones the key is moved up (negative = down). */
+  chordShift?: number;
+  /** Stage display chords: capo fret, so the chords shown are the shapes to play. */
+  capo?: number;
   /** Separate looping layer (e.g. lower-third announcements during pre-service). */
   announcement: { slide: Slide; theme: Theme; title: string } | null;
 }
