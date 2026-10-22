@@ -82,34 +82,56 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
   handler.current = onMessage;
   const socket = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'offline'>('connecting');
   const helloKey = JSON.stringify(hello);
   useEffect(() => {
     if (!hello) return;
     let closed = false;
     let retry: ReturnType<typeof setTimeout>;
+    let heartbeat: ReturnType<typeof setInterval>;
+    let deadline: ReturnType<typeof setTimeout>;
+    let attempted = false;
     const connect = () => {
+      if (closed) return;
+      setConnected(false);
+      setStatus(navigator.onLine ? (attempted ? 'reconnecting' : 'connecting') : 'offline');
+      attempted = true;
       const ws = new WebSocket(relayUrl());
+      let lastReply = Date.now();
+      deadline = setTimeout(() => ws.close(), 10000);
       socket.current = ws;
       ws.onopen = () => {
+        if (closed) return;
         ws.send(helloKey);
-        setConnected(true);
+        heartbeat = setInterval(() => {
+          if (Date.now() - lastReply > 30000) ws.close();
+          else if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+        }, 10000);
       };
       ws.onmessage = (e) => {
+        if (closed) return;
         try {
-          handler.current(JSON.parse(String(e.data)));
+          const message = JSON.parse(String(e.data));
+          lastReply = Date.now();
+          if (message.type === 'welcome') { clearTimeout(deadline); setConnected(true); setStatus('connected'); }
+          if (message.type !== 'pong') handler.current(message);
         } catch {
           // ignore malformed frames
         }
       };
+      ws.onerror = () => ws.close();
       ws.onclose = () => {
+        clearTimeout(deadline); clearInterval(heartbeat);
+        if (closed) return;
         setConnected(false);
+        setStatus(navigator.onLine ? 'reconnecting' : 'offline');
         if (!closed) retry = setTimeout(connect, 2000);
       };
     };
     connect();
     return () => {
       closed = true;
-      clearTimeout(retry);
+      clearTimeout(retry); clearTimeout(deadline); clearInterval(heartbeat);
       socket.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,7 +139,7 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
   const send = (m: unknown) => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(m));
   };
-  return { send, connected };
+  return { send, connected, status };
 }
 
 /** Operator side: publish live state to output/stage windows (same computer) and the relay (other devices). */

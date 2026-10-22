@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { CloudSync } from './useCloudSync';
 
 /** Sign in to the church cloud library (or create an account with the 관리자 password). */
-export function AccountModal({ cloud, onClose }: { cloud: CloudSync; onClose: () => void }) {
+export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync; onClose: () => void; onActivity: () => void }) {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -10,7 +10,10 @@ export function AccountModal({ cloud, onClose }: { cloud: CloudSync; onClose: ()
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
-  const { status } = cloud;
+  const { status, device } = cloud;
+  const [deviceName, setDeviceName] = useState(device.name);
+  const [deviceUser, setDeviceUser] = useState(device.userName);
+  useEffect(() => { setDeviceName(device.name); setDeviceUser(device.userName); }, [device]);
 
   const submit = async () => {
     setBusy(true);
@@ -24,7 +27,7 @@ export function AccountModal({ cloud, onClose }: { cloud: CloudSync; onClose: ()
         setAdmin('');
       } else {
         await cloud.login(username.trim(), password);
-        onClose();
+        setDone('로그인했습니다. 이 기기의 이름과 사용자를 등록할 수 있습니다.');
       }
     } catch (e) {
       setError((e as Error).message);
@@ -44,11 +47,22 @@ export function AccountModal({ cloud, onClose }: { cloud: CloudSync; onClose: ()
           {status.session ? (
             <div className="stack">
               <p><b>{status.session.username}</b>(으)로 로그인됨</p>
+              {done && <p role="status">{done}</p>}
+              <h3>현재 기기</h3>
+              <p className="small">{device.platform}{device.computerName ? ` · ${device.computerName}` : ''}{device.appVersion ? ` · FreeCast ${device.appVersion}` : ''}<br />기기 ID: {device.id}</p>
+              <label className="stack">기기 이름<input maxLength={60} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="예: 교회 방송실 Mac" /></label>
+              <label className="stack">기기 사용자 이름<input maxLength={60} value={deviceUser} onChange={(e) => setDeviceUser(e.target.value)} placeholder="예: 김철수" /></label>
+              <button onClick={() => { try { cloud.renameDevice(deviceName, deviceUser); setDone('이 기기의 이름과 사용자를 저장했습니다.'); setError(null); } catch (e) { setError((e as Error).message); } }}>기기 정보 저장</button>
+              {error && <p role="alert">{error}</p>}
+              <p className="hint">이 설정은 이 기기에만 적용됩니다. 브라우저별로 별도 기기로 등록되며, 이름은 이후 사용기록에 적용됩니다.</p>
+              <h3>라이브러리에 등록된 기기</h3>
+              <ul>{cloud.registeredDevices.map((d) => <li key={d.id}>{d.name}{d.id === device.id ? ' (현재 기기)' : ''} · {d.userName || '사용자 미등록'} · {d.platform}<br /><span className="muted small">마지막 접속 {new Date(d.lastSeen).toLocaleString()} · {d.account ?? '계정 정보 없음'}</span></li>)}</ul>
               <p className="muted small">
                 {status.state === 'syncing' ? `동기화 중… ${status.message ?? ''}` : status.state === 'error' ? `동기화 오류: ${status.message}` : status.lastSync ? `마지막 동기화 ${new Date(status.lastSync).toLocaleString()}` : '대기 중'}
               </p>
               <p className="hint">이 컴퓨터의 프레젠테이션·재생목록·테마·미디어가 교회 서버(Cloudflare Worker)에 저장되고, 같은 계정으로 로그인한 모든 기기에서 열립니다. 두 기기에서 같은 프레젠테이션을 동시에 고치면 둘 다 남깁니다.</p>
               <div className="row gap-s">
+                <button onClick={onActivity}>사용기록 보기</button>
                 <button className="primary" onClick={cloud.syncNow} disabled={status.state === 'syncing'}>지금 동기화</button>
                 <button className="danger" onClick={async () => { await cloud.logout(); onClose(); }}>로그아웃</button>
               </div>

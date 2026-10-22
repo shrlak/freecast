@@ -3,6 +3,7 @@ import type { Action } from '../domain/reducer';
 import type { Library } from '../domain/types';
 import { cloudApi, loadBase, loadSession, saveBase, saveSession, syncMedia, type CloudSession } from '../domain/cloud';
 import { mergeLibrary, syncable } from '../domain/cloudMerge';
+import { getDevice, initializeDevice, saveDeviceProfile } from '../domain/device';
 import { normalizeLibrary } from '../domain/persistence';
 
 export interface CloudStatus {
@@ -21,6 +22,25 @@ const POLL_EVERY = 20_000;
  */
 export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notify: (m: string) => void) {
   const [status, setStatus] = useState<CloudStatus>(() => ({ session: loadSession(), state: loadSession() ? 'syncing' : 'off', message: null, lastSync: null }));
+  const [device, setDevice] = useState(getDevice);
+  const resumedToken = useRef(loadSession()?.token ?? null);
+  useEffect(() => {
+    if (!status.session || resumedToken.current !== status.session.token) return;
+    resumedToken.current = null;
+    const identity = getDevice();
+    dispatch({ type: 'activity/record', entry: { id: crypto.randomUUID(), at: Date.now(), action: 'app/open', detail: identity.name, device: identity, account: status.session.username } });
+  }, [status.session?.token, dispatch]);
+  useEffect(() => { void initializeDevice().then(setDevice).catch(() => undefined); }, []);
+  useEffect(() => {
+    if (!status.session) return;
+    dispatch({ type: 'device/register', device: { ...device, lastSeen: Date.now(), account: status.session.username } });
+  }, [device, status.session?.token, dispatch]);
+  const record = (action: string, account: string | null, identity = getDevice()) => dispatch({ type: 'activity/record', entry: { id: crypto.randomUUID(), at: Date.now(), action, detail: identity.name, device: identity, account } });
+  const renameDevice = (name: string, userName: string) => {
+    const identity = saveDeviceProfile(name, userName);
+    setDevice(identity);
+    record('device/profile', loadSession()?.username ?? null, identity);
+  };
   const libRef = useRef(library);
   libRef.current = library;
   const busy = useRef(false);
@@ -34,9 +54,9 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
   /** Merge a server library into ours; returns the merged syncable library. */
   const absorb = useCallback(async (remoteData: unknown, remoteVersion: number, session: CloudSession) => {
     const remote = normalizeLibrary(remoteData);
-    const local = syncable(libRef.current);
-    if (!remote) return { merged: local, version: remoteVersion };
+    if (!remote) return { merged: syncable(libRef.current), version: remoteVersion };
     const base = await loadBase();
+    const local = syncable(libRef.current);
     const { library: merged, conflicts } = mergeLibrary(base, local, remote);
     dispatch({ type: 'library/merge', library: merged });
     await saveBase(remote);
@@ -112,15 +132,16 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
   const login = async (username: string, password: string) => {
     const r = await cloudApi.login(username, password);
     setSession({ token: r.data.token, username: r.data.username, version: 0 });
+    record('account/login', r.data.username);
     notify(`${r.data.username}(으)로 로그인했습니다 — 라이브러리를 동기화합니다`);
   };
   const logout = async () => {
     const s = loadSession();
-    if (s) await cloudApi.logout(s.token);
+    if (s) { record('account/logout', s.username); await cloudApi.logout(s.token); }
     setSession(null);
   };
 
-  return { status, login, logout, syncNow: () => sync('pull') };
+  return { status, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, syncNow: () => sync('pull') };
 }
 
 export type CloudSync = ReturnType<typeof useCloudSync>;

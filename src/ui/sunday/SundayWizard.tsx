@@ -10,6 +10,7 @@ import { parseRefs, formatRef } from '../../domain/bible/refs';
 import { buildScripture, loadScriptureChunks } from '../../domain/bible/slides';
 import { findLiveService } from '../../domain/sunday/liveDeck';
 import { withSharedSongs } from '../../domain/online';
+import { saveRestorePoint } from '../../domain/restorePoints';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { WIZARD_PARTS, type ServiceUploads, type WizardPart } from '../ppt/useServiceUploads';
 import { exportPptx } from '../../domain/io/pptxExport';
@@ -126,8 +127,10 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
     if (!files?.length) return;
     setBusy('Importing…');
     try {
+      await saveRestorePoint(state.library, 'import', Date.now(), `${d.date} 주일예배`);
       const slides = await filesToSlides(Array.from(files), addMedia, setBusy);
-      set({ [key]: [...d[key], ...slides] } as Partial<Draft>);
+      if (!slides.length) throw new Error('슬라이드를 읽지 못했습니다. 기존 자료는 유지됩니다.');
+      set({ [key]: key === 'sermonSlides' ? slides : [...d[key], ...slides] } as Partial<Draft>);
     } catch (e) {
       notify(`Import failed: ${(e as Error).message}`);
     } finally {
@@ -138,6 +141,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
   const build = async (thenExport: boolean) => {
     setBusy('Building the service…');
     try {
+      await saveRestorePoint(state.library, 'import', Date.now(), `${d.date} 주일예배`);
       const scriptureSlides = refs.refs.length && chosen.length
         ? await buildScripture(refs.refs, { translations: chosen, versesPerSlide: sunday.versesPerSlide, sermonTitle: d.sermonTitle, preacher: d.preacher })
         : [];

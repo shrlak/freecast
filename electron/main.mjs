@@ -2,6 +2,7 @@
 // audience outputs and stage displays as native windows placed on your displays.
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, safeStorage, screen, session, shell, dialog } from 'electron';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lanAddresses, startServer } from '../server/app.mjs';
@@ -316,6 +317,7 @@ ipcMain.handle('desktop:info', (e) => {
   return {
     version: app.getVersion(),
     platform: process.platform,
+    computerName: os.hostname(),
     displays: displayList(),
     outputDisplays: settings.outputDisplays,
     ai: { proxyUrl: settings.ai.proxyUrl ?? '', hasGeminiKey: !!settings.ai.geminiKey, hasOpenrouterKey: !!settings.ai.openrouterKey },

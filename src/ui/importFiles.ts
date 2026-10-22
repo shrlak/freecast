@@ -26,6 +26,7 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
   for (const file of files) {
     const base = file.name.replace(/\.[^.]+$/, '');
     if (/\.pptx$/i.test(file.name)) {
+      const addPptMedia = (m: MediaMeta) => addMedia({ ...m, backgroundHidden: true });
       onProgress?.(`Reading ${file.name}…`);
       const data = await file.arrayBuffer();
       const imported = await importPptx(new Blob([data])).catch(() => []);
@@ -36,7 +37,7 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
         if (pages.length) {
           for (const [i, page] of pages.entries()) {
             const notes = imported.length === pages.length ? imported[i].notes : undefined;
-            slides.push({ ...imageSlide(await storeImage(page.blob, `${base} ${i + 1}`, addMedia), base), notes });
+            slides.push({ ...imageSlide(await storeImage(page.blob, `${base} ${i + 1}`, addPptMedia), base), notes });
           }
           continue;
         }
@@ -51,7 +52,7 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
         mediaId: () => uid('m'),
         store: async (id, blob) => {
           await putMedia(id, blob);
-          addMedia({ id, name: `${base} ${++n}`, type: 'image' });
+          addPptMedia({ id, name: `${base} ${++n}`, type: 'image' });
         },
       }).catch(() => []);
       if (faithful.length) {
@@ -60,7 +61,7 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
         continue;
       }
       for (const [i, s] of imported.entries()) {
-        const mediaId = s.image ? await storeImage(s.image, `${base} ${i + 1}`, addMedia) : undefined;
+        const mediaId = s.image ? await storeImage(s.image, `${base} ${i + 1}`, addPptMedia) : undefined;
         slides.push({
           id: uid('s'), group: base, title: s.title, text: s.text, notes: s.notes,
           background: mediaId ? { kind: 'media', mediaId, mediaType: 'image', fit: 'contain' } : undefined,

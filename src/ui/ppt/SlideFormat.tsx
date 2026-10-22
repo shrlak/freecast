@@ -143,7 +143,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
                 : <span className="fmt-swatch-fill" style={b.background.kind === 'color' ? { background: b.background.value } : { backgroundImage: (b.background as { value: string }).value }} />}
             </button>
           ))}
-          {state.library.media.filter((m) => m.type !== 'audio').map((m) => (
+          {state.library.media.filter((m) => m.type !== 'audio' && !m.backgroundHidden).map((m) => (
             <button key={m.id} className="fmt-swatch" title={m.name} onClick={() => setBg({ kind: 'media', mediaId: m.id, mediaType: m.type === 'video' ? 'video' : 'image', fit: 'cover' })}>
               <MediaThumb id={m.id} video={m.type === 'video'} />
             </button>

@@ -110,7 +110,7 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
           <option value="">＋ Add action…</option>
           <optgroup label="Macros">{lib.macros.map((m) => <option key={m.id} value={`macro:${m.id}`}>Run “{m.name}”</option>)}</optgroup>
           <optgroup label="Media">
-            {visual.map((m) => <option key={m.id} value={`bg:${m.id}`}>Background: {m.name}</option>)}
+            {visual.filter((m) => !m.backgroundHidden).map((m) => <option key={m.id} value={`bg:${m.id}`}>Background: {m.name}</option>)}
             {lib.media.filter((m) => m.type === 'audio').map((m) => <option key={m.id} value={`audio:${m.id}`}>Play: {m.name}</option>)}
             <option value="audio:">Stop audio</option>
           </optgroup>

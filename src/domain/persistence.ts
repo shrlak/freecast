@@ -1,4 +1,5 @@
-import type { Library, LiveState, Playlist } from './types';
+import type { Library, LiveState, MediaMeta, Playlist, DeviceRegistration } from './types';
+import { isActivityEntry, isDeviceIdentity } from './activity';
 import { createSeedLibrary, DEFAULT_THEMES } from './defaults';
 import { CANVAS_W, LEGACY_CANVAS_W } from './canvas';
 
@@ -45,11 +46,16 @@ export function normalizeLibrary(value: unknown): Library | null {
     version: 1,
     aspect: '4:3',
     transitionsReset: true,
+    devices: arr<DeviceRegistration>(value.devices, []).filter((d) => isDeviceIdentity(d) && Number.isFinite(d.lastSeen) && (d.account === null || typeof d.account === 'string')),
+    activity: arr<unknown>(value.activity, []).filter(isActivityEntry).slice(-2000),
+    lastModified: isActivityEntry(value.lastModified) ? value.lastModified : undefined,
     presentations: [...own, ...templates],
     // Themes added in later versions (광고, scripture) are appended if missing.
     themes: [...(themes as Library['themes']), ...DEFAULT_THEMES.filter((t) => !themes.some((x) => isObj(x) && x.id === t.id))],
     playlists,
-    media: arr(value.media, []),
+    backgroundLibraryReset: true,
+    media: arr<MediaMeta>(value.media, []).map((m) =>
+      value.backgroundLibraryReset === true || m.type === 'audio' ? m : { ...m, backgroundHidden: true }),
     timers: arr(value.timers, seed.timers),
     props: arr(value.props, seed.props),
     messageTemplates: arr(value.messageTemplates, seed.messageTemplates),

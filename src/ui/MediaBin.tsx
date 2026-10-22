@@ -66,7 +66,7 @@ export function MediaBin({ state, dispatch }: Props) {
   const items: { key: string; name: string; background: Background; media?: MediaMeta }[] = [
     ...BACKGROUND_PRESETS.map((p) => ({ key: p.name, name: p.name, background: p.background })),
     ...cameras.map((c) => ({ key: c.deviceId, name: c.label, background: { kind: 'camera', deviceId: c.deviceId, label: c.label } as Background })),
-    ...state.library.media.filter((m) => m.type !== 'audio').map((m) => ({
+    ...state.library.media.filter((m) => m.type !== 'audio' && !m.backgroundHidden).map((m) => ({
       key: m.id, name: m.name, media: m,
       background: { kind: 'media', mediaId: m.id, mediaType: m.type === 'video' ? 'video' : 'image', fit } as Background,
     })),
