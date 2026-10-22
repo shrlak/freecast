@@ -103,3 +103,8 @@ export function chordRows(line: string): { chords: string; lyric: string } {
   lyric += line.slice(last);
   return { chords: chords.trimEnd(), lyric };
 }
+
+/** An empty slide on a plain white background (what Enter adds in the editor). */
+export function blankSlide(group = 'Slide'): Slide {
+  return { id: uid('s'), group, text: '', background: { kind: 'color', value: '#ffffff' }, style: { color: '#000000' } };
+}

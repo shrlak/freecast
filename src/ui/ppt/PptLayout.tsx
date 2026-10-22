@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Slide } from '../../domain/types';
-import { uid } from '../../domain/lyrics';
+import { blankSlide, uid } from '../../domain/lyrics';
 import { sequence } from '../../domain/arrangement';
 import { activePlaylist } from '../../domain/live';
 import { SlideFormat } from './SlideFormat';
@@ -108,6 +108,17 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
       if ((e.key === 'Backspace' || e.key === 'Delete') && !selEl && selected) {
         e.preventDefault();
         deleteSlides(picked());
+        return;
+      }
+      // Enter adds a blank white slide after the current one (Enter on a focused button still presses it).
+      if (e.key === 'Enter' && !selEl && p && slide && !e.metaKey && !e.ctrlKey && !e.altKey && !t.closest('button,a,[role="button"]')) {
+        e.preventDefault();
+        const n = blankSlide(slide.group);
+        const slides = [...p.slides];
+        slides.splice(p.slides.indexOf(slide) + 1, 0, n);
+        updateSlides(slides);
+        cmd.setSlideId(n.id);
+        setMulti([]);
         return;
       }
       const step = { ArrowDown: 1, ArrowRight: 1, PageDown: 1, ArrowUp: -1, ArrowLeft: -1, PageUp: -1 }[e.key];
