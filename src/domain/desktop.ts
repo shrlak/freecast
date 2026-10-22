@@ -13,7 +13,9 @@ export interface DesktopInfo {
   ai: { proxyUrl: string; hasGeminiKey: boolean; hasOpenrouterKey: boolean };
   networkRemote: boolean;
   lanUrls: string[];
-  internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; note: string | null; pin: string };
+  internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; note: string | null;
+    /** The permanent address phones open (via the church Worker); null while the internet remote is off. */
+    link: string | null; linkStatus: 'off' | 'pending' | 'ok' | 'unavailable' | 'error'; linkError: string | null };
 }
 
 export interface UpdateState {
@@ -35,8 +37,8 @@ export interface DesktopBridge {
   setAiConfig(patch: { proxyUrl?: string; geminiKey?: string; openrouterKey?: string }): Promise<void>;
   setNetworkRemote(on: boolean): Promise<void>;
   setInternetRemote(on: boolean): Promise<void>;
-  /** Change the PIN (and so lock out phones that had the old one). */
-  newRemotePin(): Promise<void>;
+  /** Make a new permanent link (the old one stops working). */
+  newRemoteLink(): Promise<void>;
   closeOutputs(): Promise<void>;
   updateState(): Promise<UpdateState | null>;
   checkUpdates(): Promise<UpdateState | null>;

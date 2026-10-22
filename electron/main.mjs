@@ -1,7 +1,6 @@
 // FreeCast desktop app: runs the FreeCast server inside the app and shows the console,
 // audience outputs and stage displays as native windows placed on your displays.
 import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, safeStorage, screen, session, shell, dialog } from 'electron';
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +9,8 @@ import { checkForUpdates, installUpdate, startUpdater, updateState } from './upd
 import { PUBLISH } from './publish.mjs';
 import { setAiConfigProvider } from '../server/ai.mjs';
 import { startTunnel } from '../server/tunnel.mjs';
+import { aiConfig } from '../server/aiProviders.mjs';
+import { linkAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
 import { pptxToPdf } from './pptxToPdf.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +23,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 // ---------- settings ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
-let settings = { networkRemote: false, internetRemote: false, remotePin: '', ai: {}, outputDisplays: {} };
+let settings = { networkRemote: false, internetRemote: false, remoteLinkId: '', remoteLinkSecret: '', ai: {}, outputDisplays: {} };
 
 function loadSettings() {
   try {
@@ -30,14 +31,14 @@ function loadSettings() {
     let ai = {};
     if (raw.aiEnc && safeStorage.isEncryptionAvailable()) ai = JSON.parse(safeStorage.decryptString(Buffer.from(raw.aiEnc, 'base64')));
     else if (raw.aiPlain) ai = raw.aiPlain;
-    settings = { networkRemote: !!raw.networkRemote, internetRemote: !!raw.internetRemote, remotePin: typeof raw.remotePin === 'string' ? raw.remotePin : '', ai, outputDisplays: raw.outputDisplays ?? {} };
+    settings = { networkRemote: !!raw.networkRemote, internetRemote: !!raw.internetRemote, remoteLinkId: typeof raw.remoteLinkId === 'string' ? raw.remoteLinkId : '', remoteLinkSecret: typeof raw.remoteLinkSecret === 'string' ? raw.remoteLinkSecret : '', ai, outputDisplays: raw.outputDisplays ?? {} };
   } catch {
     // first run
   }
 }
 
 function saveSettings() {
-  const out = { networkRemote: settings.networkRemote, internetRemote: settings.internetRemote, remotePin: settings.remotePin, outputDisplays: settings.outputDisplays };
+  const out = { networkRemote: settings.networkRemote, internetRemote: settings.internetRemote, remoteLinkId: settings.remoteLinkId, remoteLinkSecret: settings.remoteLinkSecret, outputDisplays: settings.outputDisplays };
   // AI proxy address and optional own Gemini / OpenRouter keys, encrypted with the OS keychain.
   if (Object.keys(settings.ai ?? {}).length) {
     if (safeStorage.isEncryptionAvailable()) out.aiEnc = safeStorage.encryptString(JSON.stringify(settings.ai)).toString('base64');
@@ -51,26 +52,55 @@ function saveSettings() {
 let running = null;
 async function restartServer() {
   await running?.close();
-  running = await startServer({ root: path.join(appRoot, 'dist'), port: PORT, host: settings.networkRemote ? '0.0.0.0' : '127.0.0.1', publicPin: () => (settings.internetRemote ? settings.remotePin : '') });
+  running = await startServer({ root: path.join(appRoot, 'dist'), port: PORT, host: settings.networkRemote ? '0.0.0.0' : '127.0.0.1', publicOpen: () => settings.internetRemote });
 }
 
 // ---------- internet remote (phones on any network) ----------
 let tunnel = null;
 let tunnelState = { status: 'off', url: null, error: null };
+// The permanent link (church Worker → the tunnel's current address): 'off' | 'pending' | 'ok' | 'unavailable' | 'error'.
+let linkState = { status: 'off', error: null };
+let linkTimer = null;
+let publishedFor = null;
+
+const linkOpts = () => ({ proxy: aiConfig().proxyUrl, origin: aiConfig().proxyOrigin, id: settings.remoteLinkId, secret: settings.remoteLinkSecret });
+
+/** Tell the Worker where the tunnel is now (retries until it hears us). */
+async function publishLink() {
+  clearTimeout(linkTimer);
+  const url = tunnelState.url;
+  if (!settings.internetRemote || tunnelState.status !== 'on' || !url) return;
+  linkState = { status: 'pending', error: null };
+  const r = await registerLink({ ...linkOpts(), url });
+  if (!settings.internetRemote || tunnelState.url !== url) return;
+  if (r.ok) {
+    publishedFor = url;
+    linkState = { status: 'ok', error: null };
+    return;
+  }
+  linkState = { status: r.missing ? 'unavailable' : 'error', error: r.error };
+  linkTimer = setTimeout(publishLink, r.missing ? 10 * 60_000 : 30_000);
+}
 
 function syncTunnel() {
   tunnel?.stop();
   tunnel = null;
+  clearTimeout(linkTimer);
+  publishedFor = null;
   tunnelState = { status: 'off', url: null, error: null };
+  linkState = { status: 'off', error: null };
   if (!settings.internetRemote) return;
-  // Public visitors always need a PIN: make one the first time.
-  if (!/^\d{6}$/.test(settings.remotePin)) {
-    settings.remotePin = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+  // The permanent link is made once and then kept, until "New Link" is pressed.
+  if (!settings.remoteLinkId || !settings.remoteLinkSecret) {
+    const c = newLinkCredentials();
+    settings.remoteLinkId = c.id;
+    settings.remoteLinkSecret = c.secret;
     saveSettings();
   }
   tunnelState = { status: 'connecting', url: null, error: null };
   tunnel = startTunnel(PORT, (st) => {
     tunnelState = st;
+    if (st.status === 'on' && st.url && st.url !== publishedFor) publishLink();
   }, { dir: path.join(app.getPath('userData'), 'cloudflared') });
 }
 const origin = () => `http://127.0.0.1:${PORT}`;
@@ -291,7 +321,8 @@ ipcMain.handle('desktop:info', (e) => {
     ai: { proxyUrl: settings.ai.proxyUrl ?? '', hasGeminiKey: !!settings.ai.geminiKey, hasOpenrouterKey: !!settings.ai.openrouterKey },
     networkRemote: settings.networkRemote,
     lanUrls: settings.networkRemote ? lanAddresses().map((ip) => `http://${ip}:${PORT}`) : [],
-    internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null, pin: settings.internetRemote ? settings.remotePin : '' },
+    internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null,
+      link: settings.internetRemote && settings.remoteLinkId ? linkAddress(aiConfig().proxyUrl, settings.remoteLinkId) : null, linkStatus: linkState.status, linkError: linkState.error },
   };
 });
 ipcMain.handle('desktop:pptxToPdf', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptxToPdf(bytes) : null));
@@ -332,10 +363,17 @@ ipcMain.handle('desktop:setInternetRemote', (e, on) => {
   saveSettings();
   syncTunnel();
 });
-ipcMain.handle('desktop:newRemotePin', (e) => {
+ipcMain.handle('desktop:newRemoteLink', async (e) => {
   if (!fromMain(e)) return;
-  settings.remotePin = '';
-  syncTunnel();
+  // The old link stops working; phones with it must scan or open the new one.
+  if (settings.remoteLinkId) await removeLink({ ...linkOpts(), url: '' });
+  const c = newLinkCredentials();
+  settings.remoteLinkId = c.id;
+  settings.remoteLinkSecret = c.secret;
+  saveSettings();
+  publishedFor = null;
+  linkState = { status: 'pending', error: null };
+  publishLink();
 });
 ipcMain.handle('desktop:updateState', (e) => (fromMain(e) ? updateState() : null));
 ipcMain.handle('desktop:checkUpdates', (e) => (fromMain(e) ? checkForUpdates() : null));

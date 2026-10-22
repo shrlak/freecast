@@ -99,13 +99,25 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
       {info.internet.on && info.internet.status === 'error' && <p className="hint">{info.internet.error}</p>}
       {info.internet.on && info.internet.url && (
         <div className="stack">
-          <code className="small selectable">{info.internet.url}/?view=remote</code>
-          <div className="row gap-xs">
-            <span>PIN <strong className="selectable">{info.internet.pin}</strong></span>
-            <button onClick={async () => { await desktop!.newRemotePin(); refresh(); }}>New PIN</button>
-          </div>
-          <img src={qrDataUrl(`${info.internet.url}/?view=remote&pin=${info.internet.pin}`)} alt="Remote link" width={160} height={160} />
-          <p className="hint">Scan the code with the phone (it includes the PIN), or open the link and type the PIN. The address changes each time FreeCast starts. Only the remote works this way; keep the PIN to yourself.</p>
+          {/* The permanent link once the church Worker has it; until then the tunnel's own (temporary) address. */}
+          {(() => {
+            const fixed = info.internet.linkStatus === 'ok' && info.internet.link;
+            const shown = fixed ? info.internet.link! : `${info.internet.url}/?view=remote`;
+            return (
+              <>
+                <code className="small selectable">{shown}</code>
+                <div className="row gap-xs">
+                  <button onClick={async () => { if (!confirm('Make a new link? Phones using the old link will stop working.')) return; await desktop!.newRemoteLink(); refresh(); }}>New Link</button>
+                </div>
+                <img src={qrDataUrl(shown)} alt="Remote link" width={160} height={160} />
+                {fixed
+                  ? <p className="hint">This link stays the same every time FreeCast starts — save it on the phone. Anyone with the link can control FreeCast, so only share it with the media team. Press New Link to replace it.</p>
+                  : info.internet.linkStatus === 'pending'
+                    ? <p className="hint">Setting up the permanent link…</p>
+                    : <p className="hint">Temporary link (it changes each time FreeCast starts). {info.internet.linkError ?? ''} The permanent link appears here once the church server (Worker) has the remote-link update — see worker/remote-link.js.</p>}
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

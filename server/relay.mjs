@@ -23,19 +23,19 @@ function validCommand(c) {
 
 /**
  * Returns the WebSocket server plus helpers for the HTTP control API.
- * Visitors arriving over the public internet address may only be remotes, and always need
- * `publicPin()`; repeated wrong PINs lock public visitors out for a minute.
+ * Visitors arriving over the public internet address may only be remotes, and only while
+ * `publicOpen()` says the internet remote is switched on. The address itself is the key:
+ * it is long and random, and a new one can be made at any time.
  */
-export function attachRelay(httpServer, { publicPin = () => '' } = {}) {
+export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   let lastState = null;
   let lastInfo = null;
-  let failures = [];
 
   httpServer.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/freecast-ws')) return;
     const pub = isPublicHost(req.headers.host);
-    if (pub && !publicPin()) return socket.destroy();
+    if (pub && !publicOpen()) return socket.destroy();
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.pub = pub;
       wss.emit('connection', ws);
@@ -63,17 +63,12 @@ export function attachRelay(httpServer, { publicPin = () => '' } = {}) {
       }
       if (msg?.type === 'hello') {
         const role = ['host', 'viewer', 'remote'].includes(msg.role) ? msg.role : 'viewer';
-        const pin = ws.pub ? publicPin() : PIN;
-        if (ws.pub) {
-          const now = Date.now();
-          failures = failures.filter((t) => now - t < 60_000);
-          if (role !== 'remote' || failures.length >= 5) {
-            ws.send(JSON.stringify({ type: 'error', error: role !== 'remote' ? 'Not allowed' : 'Too many wrong PINs, wait a minute' }));
-            return ws.close();
-          }
+        const pin = ws.pub ? '' : PIN;
+        if (ws.pub && role !== 'remote') {
+          ws.send(JSON.stringify({ type: 'error', error: 'Not allowed' }));
+          return ws.close();
         }
         if (role === 'remote' && pin && msg.pin !== pin) {
-          if (ws.pub) failures.push(Date.now());
           ws.send(JSON.stringify({ type: 'error', error: 'Wrong PIN' }));
           return ws.close();
         }
