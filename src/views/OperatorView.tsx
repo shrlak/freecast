@@ -371,10 +371,32 @@ export function OperatorView() {
         notify(`Imported ${created.length} song${created.length === 1 ? '' : 's'}`);
       } else {
         notify('Importing…');
-        const slides = await filesToSlides(files, (m) => dispatch({ type: 'media/add', media: m }), notify);
-        const title = files.length === 1 ? files[0].name.replace(/\.[^.]+$/, '') : 'Imported slides';
-        dispatch({ type: 'presentation/create', presentation: { id: uid('p'), title, slides, themeId: 'theme_classic', folder: 'Imported' } });
-        notify(`Imported ${slides.length} slides`);
+        const approx: string[] = [];
+        const toSlides = (list: File[]) => filesToSlides(list, (m) => dispatch({ type: 'media/add', media: m }), notify, (n) => approx.push(n));
+        const isPptx = (f: File) => /\.pptx$/i.test(f.name);
+        let total = 0;
+        // Each PowerPoint file becomes its own presentation in a new 재생목록 named after the file.
+        for (const f of files.filter(isPptx)) {
+          const slides = await toSlides([f]);
+          const title = f.name.replace(/\.[^.]+$/, '');
+          const id = uid('p');
+          dispatch({
+            type: 'presentation/createMany',
+            presentations: [{ id, title, slides, themeId: 'theme_classic', folder: 'Imported' }],
+            playlist: { id: uid('pl'), name: title, items: [{ id: uid('pli'), presentationId: id }] },
+          });
+          total += slides.length;
+        }
+        const others = files.filter((f) => !isPptx(f));
+        if (others.length) {
+          const slides = await toSlides(others);
+          const title = others.length === 1 ? others[0].name.replace(/\.[^.]+$/, '') : 'Imported slides';
+          dispatch({ type: 'presentation/create', presentation: { id: uid('p'), title, slides, themeId: 'theme_classic', folder: 'Imported' } });
+          total += slides.length;
+        }
+        notify(approx.length
+          ? `Imported ${total} slides — ${approx.join(', ')} could not be drawn exactly (PowerPoint or LibreOffice is needed), so some text may differ`
+          : `Imported ${total} slides`);
       }
     } catch (e) {
       notify(`Import failed: ${(e as Error).message}`);

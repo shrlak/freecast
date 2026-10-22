@@ -21,7 +21,7 @@ const imageSlide = (mediaId: string, group: string): Slide => ({
  * Turn PPTX, PDF and image files into slides, in the order given:
  * PDF → one slide per page, image → one slide, PPTX → its slides as they look (every picture, box and text its own object, plus notes).
  */
-export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => void, onProgress?: (msg: string) => void): Promise<Slide[]> {
+export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => void, onProgress?: (msg: string) => void, onApprox?: (fileName: string) => void): Promise<Slide[]> {
   const slides: Slide[] = [];
   for (const file of files) {
     const base = file.name.replace(/\.[^.]+$/, '');
@@ -41,6 +41,8 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
           continue;
         }
       }
+      // No PowerPoint or LibreOffice to draw it: the slides are rebuilt from the file, so text can differ a little.
+      onApprox?.(file.name);
       let n = 0;
       // Every picture, box and text of the slide becomes its own object at the same place, size and
       // order, so it looks and plays like the PowerPoint slide and can still be edited.
