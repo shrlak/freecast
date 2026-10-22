@@ -1,6 +1,7 @@
 import { useState, type Dispatch } from 'react';
 import type { AppState, Action } from '../domain/reducer';
 import { activePlaylist } from '../domain/live';
+import { NameDialog } from './NameDialog';
 import { uid } from '../domain/lyrics';
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }: Props) {
+  const [nameRequest, setNameRequest] = useState<{ kind: 'new' | 'rename' | 'duplicate' | 'header' | 'renameHeader'; playlistId?: string; itemId?: string; initialValue: string; title: string } | null>(null);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const { presentations, playlists } = state.library;
@@ -28,7 +30,22 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
   const byId = new Map(presentations.map((p) => [p.id, p]));
   const liveId = state.cursor?.presentationId;
 
+  const saveName = (name: string): string | void => {
+    if (!nameRequest) return;
+    if (nameRequest.kind === 'new') { dispatch({ type: 'playlist/create', playlist: { id: uid('pl'), name, items: [] } }); return; }
+    const target = playlists.find((p) => p.id === nameRequest.playlistId);
+    if (!target) return '재생목록이 삭제되었거나 더 이상 존재하지 않습니다.';
+    if (nameRequest.kind === 'rename') dispatch({ type: 'playlist/rename', id: target.id, name });
+    else if (nameRequest.kind === 'duplicate') dispatch({ type: 'playlist/duplicate', id: target.id, newId: uid('pl'), name });
+    else if (nameRequest.kind === 'header') dispatch({ type: 'playlist/set', playlist: { ...target, items: [...target.items, { id: uid('pli'), kind: 'header', title: name }] } });
+    else {
+      if (!target.items.some((i) => i.id === nameRequest.itemId && i.kind === 'header')) return '헤더가 삭제되었습니다.';
+      dispatch({ type: 'playlist/set', playlist: { ...target, items: target.items.map((i) => i.id === nameRequest.itemId && i.kind === 'header' ? { ...i, title: name } : i) } });
+    }
+  };
+
   return (
+    <>
     <aside className="panel sidebar">
       <section className="side-section grow">
         <div className="section-head">
@@ -80,22 +97,10 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
             {playlists.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <div className="row gap-xs">
-            <button className="mini-btn" title="New playlist" onClick={() => {
-              const name = prompt('Playlist name', 'New playlist');
-              if (name) dispatch({ type: 'playlist/create', playlist: { id: uid('pl'), name, items: [] } });
-            }}>＋</button>
-            <button className="mini-btn" title="Add section header" onClick={() => {
-              const title = prompt('Header title', 'Section');
-              if (title) dispatch({ type: 'playlist/addItem', item: { id: uid('pli'), kind: 'header', title } });
-            }}>H</button>
-            <button className="mini-btn" title="Duplicate as template (e.g. next week's service)" onClick={() => {
-              const name = playlist && prompt('Name for the copy', `${playlist.name} copy`);
-              if (name && playlist) dispatch({ type: 'playlist/duplicate', id: playlist.id, newId: uid('pl'), name });
-            }}>⧉</button>
-            <button className="mini-btn" title="Rename playlist" onClick={() => {
-              const name = playlist && prompt('Rename playlist', playlist.name);
-              if (name && playlist) dispatch({ type: 'playlist/rename', id: playlist.id, name });
-            }}>✎</button>
+            <button className="mini-btn" title="New playlist" onClick={() => setNameRequest({ kind: 'new', initialValue: 'New playlist', title: '새 재생목록' })}>＋</button>
+            <button className="mini-btn" title="Add section header" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'header', playlistId: playlist.id, initialValue: 'Section', title: '헤더 이름' })}>H</button>
+            <button className="mini-btn" title="Duplicate as template (e.g. next week's service)" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'duplicate', playlistId: playlist.id, initialValue: `${playlist.name} copy`, title: '템플릿으로 복제' })}>⧉</button>
+            <button className="mini-btn" title="Rename playlist" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'rename', playlistId: playlist.id, initialValue: playlist.name, title: '재생목록 이름 변경' })}>✎</button>
             <button className="mini-btn" title="Delete playlist" disabled={playlists.length <= 1} onClick={() => playlist && confirm(`Delete playlist “${playlist.name}”?`) && dispatch({ type: 'playlist/delete', id: playlist.id })}>🗑</button>
           </div>
         </div>
@@ -109,8 +114,9 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
                 className={isHeader ? 'playlist-header' : `list-item ${state.playlistIndex === i ? 'selected' : ''} ${state.cursor?.playlistIndex === i ? 'is-live' : ''}`}
                 onClick={() => !isHeader && dispatch({ type: 'playlist/select', index: i })}
               >
-                <span className="truncate">{title}</span>
+                <span className="truncate" onDoubleClick={() => isHeader && playlist && setNameRequest({ kind: 'renameHeader', playlistId: playlist.id, itemId: item.id, initialValue: item.title, title: '헤더 이름' })}>{title}</span>
                 <span className="row gap-xs item-actions">
+                  {isHeader && <button className="mini-btn" title="Name header" onClick={(e) => { e.stopPropagation(); if (playlist) setNameRequest({ kind: 'renameHeader', playlistId: playlist.id, itemId: item.id, initialValue: item.title, title: '헤더 이름' }); }}>✎</button>}
                   <button className="mini-btn" title="Move up" onClick={(e) => { e.stopPropagation(); dispatch({ type: 'playlist/move', from: i, to: i - 1 }); }}>↑</button>
                   <button className="mini-btn" title="Move down" onClick={(e) => { e.stopPropagation(); dispatch({ type: 'playlist/move', from: i, to: i + 1 }); }}>↓</button>
                   <button className="mini-btn" title="Remove" onClick={(e) => { e.stopPropagation(); dispatch({ type: 'playlist/removeItem', index: i }); }}>✕</button>
@@ -122,5 +128,7 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
         </ol>
       </section>
     </aside>
+    {nameRequest && <NameDialog title={nameRequest.title} initialValue={nameRequest.initialValue} onSave={saveName} onClose={() => setNameRequest(null)} />}
+    </>
   );
 }

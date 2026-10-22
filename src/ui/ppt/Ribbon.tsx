@@ -1,3 +1,4 @@
+import { formatStoragePercent } from '../../domain/cloudStorage';
 import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Background, Presentation, Slide, SlideElement, TransitionKind } from '../../domain/types';
@@ -148,7 +149,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
         <span className="rb-busy" role="status">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}</span>
         {busy && <span className="rb-busy">{busy}</span>}
         <button className="rb-account" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">
-          {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : ' ✓'}` : '☁ 로그인'}
+          {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : ' ✓'}` : '☁ 로그인'}{cmd.cloud.session && (cmd.cloud.storageError ? ' · 서버 용량 확인 필요' : cmd.cloud.storageUsage?.server ? ` · 서버 ${formatStoragePercent(cmd.cloud.storageUsage.server.usedPercent)}%` : '')}
         </button>
         <button className="rb-present" disabled={!p} title="지금 편집 중인 슬라이드부터 발표 (Shift+F5) — 처음부터는 F5" onClick={() => cmd.startShow(true)}>▶ 발표</button>
         <input ref={uploadRef} type="file" hidden onChange={(e) => { onUpload(Array.from(e.target.files ?? [])); e.target.value = ''; }} />

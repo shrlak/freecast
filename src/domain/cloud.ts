@@ -1,7 +1,7 @@
 // Client for the church cloud library (Worker /freecast/* via this app's /api/cloud proxy).
 import type { Library } from './types';
 import { deleteMedia as deleteLocalMedia, getMedia, putMedia } from './media';
-import { summarizeCloudStorage } from './cloudStorage';
+import { summarizeCloudStorage, parseServerStorage } from './cloudStorage';
 import { normalizeLibrary } from './persistence';
 
 const SESSION_KEY = 'freecast.cloud';
@@ -103,6 +103,13 @@ export async function syncMedia(token: string, lib: Library, onProgress: (msg: s
 
 /** Read server data, not this computer's pending edits or media cache. */
 export async function getCloudStorageUsage(token: string) {
+  try {
+    const response = await call<unknown>('storage', { token });
+    return parseServerStorage(response.data);
+  } catch (e) {
+    if ((e as { status?: number }).status !== 404) throw e;
+    // Older Workers still provide logical file sizes; never label them as full database usage.
+  }
   const [remote, items] = await Promise.all([cloudApi.getLibrary(token), cloudApi.listMedia(token)]);
   return summarizeCloudStorage(remote?.data ?? null, items);
 }
