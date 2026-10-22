@@ -80,6 +80,8 @@ export interface MediaMeta {
   id: string;
   name: string;
   type: MediaType;
+  /** Slide assets stay available for playback without appearing in the background library. */
+  backgroundHidden?: boolean;
   markers?: PlaybackMarker[];
 }
 
@@ -373,7 +375,27 @@ export interface Schedule {
   lastRun?: string;
 }
 
+export interface DeviceIdentity {
+  id: string;
+  name: string;
+  userName: string;
+  platform: string;
+  computerName?: string;
+  appVersion?: string;
+}
+export interface DeviceRegistration extends DeviceIdentity { lastSeen: number; account: string | null }
+export interface ActivityEntry {
+  id: string;
+  at: number;
+  action: string;
+  detail: string;
+  device: DeviceIdentity;
+  account: string | null;
+}
+
 export interface UsageEntry {
+  device?: DeviceIdentity;
+  account?: string | null;
   at: number;
   presentationId: string;
   title: string;
@@ -396,10 +418,15 @@ export interface SundaySettings {
 
 export interface Library {
   version: 1;
+  devices?: DeviceRegistration[];
+  activity?: ActivityEntry[];
+  lastModified?: ActivityEntry;
   /** '4:3' once slides use the 1440×1080 canvas (libraries without it were laid out at 1920×1080). */
   aspect?: '4:3';
   /** Set once every presentation's and slide's own transition has been cleared (default is 없음, 1 ms). */
   transitionsReset?: true;
+  /** Existing background registrations have been cleared without deleting slide assets. */
+  backgroundLibraryReset?: true;
   presentations: Presentation[];
   themes: Theme[];
   playlists: Playlist[];

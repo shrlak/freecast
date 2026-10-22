@@ -6,8 +6,8 @@ import type { Slide } from '../src/domain/types';
 const slide = (group: string, text = '', extra: Partial<Slide> = {}): Slide => ({ id: group, group, text, ...extra });
 
 describe('backgrounds', () => {
-  it('offers the template white + logo, black, white and the song title background', () => {
-    expect(BACKGROUND_PRESETS.map((p) => p.name)).toEqual(['KCCP 흰색 + 로고', 'Black', 'White', '찬양 제목']);
+  it('offers the template white + logo, black, white and the starry sky background', () => {
+    expect(BACKGROUND_PRESETS.map((p) => p.name)).toEqual(['KCCP 흰색 + 로고', 'Black', 'White', '별이 있는 밤하늘']);
   });
 
   it('gives a song’s title slide its own background, and other title slides stay black', () => {
@@ -32,6 +32,6 @@ describe('backgrounds', () => {
     expect(resolveBackground(slide('Verse 1', '', { background: own }))).toBe(own);
     expect(resolveBackground(slide('Verse 1'), { title: 't', folder: '', background: BG_BLACK })).toBe(BG_BLACK);
     // a removed picture or gradient is decided automatically
-    expect(resolveBackground(slide('Verse 1'), { title: 't', folder: '', background: { kind: 'image', url: 'backgrounds/night-sky.jpg' } })).toBe(BG_WHITE_LOGO);
+    expect(resolveBackground(slide('Verse 1'), { title: 't', folder: '', background: { kind: 'image', url: 'backgrounds/removed.jpg' } })).toBe(BG_WHITE_LOGO);
   });
 });

@@ -36,7 +36,9 @@ export function RemoteView() {
   const [live, setLive] = useState<LiveState | null>(null);
   const [info, setInfo] = useState<RemoteInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { send, connected } = useRelay({ type: 'hello', role: 'remote', pin }, (m) => {
+  const [hostConnected, setHostConnected] = useState(false);
+  const { send, connected, status } = useRelay({ type: 'hello', role: 'remote', pin }, (m) => {
+    if (m.type === 'host-status') setHostConnected(m.connected === true);
     if (m.type === 'state') setLive(m.state as LiveState);
     if (m.type === 'info') setInfo(m.info as RemoteInfo);
     if (m.type === 'error') setError(String(m.error));
@@ -44,7 +46,9 @@ export function RemoteView() {
   useEffect(() => {
     document.title = 'FreeCast Remote';
   }, []);
-  const cmd = (command: Record<string, unknown>) => send({ type: 'command', command });
+  const ready = connected && hostConnected;
+  const cmd = (command: Record<string, unknown>) => { if (ready) send({ type: 'command', command }); };
+  const connectionLabel = status === 'offline' ? '인터넷 연결 끊김 · 네트워크를 확인하세요' : status === 'reconnecting' ? '연결 끊김 · 자동 재연결 중…' : !connected ? '연결 중…' : !hostConnected ? '서버 연결됨 · 컴퓨터에서 FreeCast를 열어 주세요' : '컴퓨터 연결됨';
 
   if (error) {
     const submit = (v: string) => {
@@ -68,9 +72,11 @@ export function RemoteView() {
     <div className="remote-root">
       <header className="remote-head">
         <strong>FreeCast</strong>
-        <span className={`dot ${connected ? 'on' : ''}`} />
+        <span className={`dot ${ready ? 'on' : ''}`} />
         <span className="muted small truncate">{live?.title ?? 'Nothing live'}</span>
       </header>
+      <p className="remote-connection" role="status" aria-live="polite">{connectionLabel}</p>
+      <fieldset disabled={!ready} className="remote-controls">
       <div className="remote-show">
         <button className="primary" onClick={() => cmd({ type: 'show/start' })}>▶ Start slideshow</button>
         <button className="danger" onClick={() => cmd({ type: 'show/end' })}>■ End slideshow</button>
@@ -107,6 +113,7 @@ export function RemoteView() {
           </div>
         </section>
       )}
+      </fieldset>
     </div>
   );
 }

@@ -18,9 +18,10 @@ export const DEFAULT_THEMES: Theme[] = [
   { id: 'theme_info', name: 'Info / 광고', fontFamily: SANS, fontSize: 52, fontWeight: 500, color: '#ffffff', align: 'left', vAlign: 'top', lineHeight: 1.45, padding: 120, shadow: false, uppercase: false, ...base },
 ];
 
-/** The only backgrounds: the church template's white slide with the KCCP logo (the 1018 예배 look), black and white. */
+/** Curated background library: church logo, black, white and the original starry sky. */
 export const BG_WHITE_LOGO: Background = { kind: 'image', url: 'backgrounds/white-logo.png', fit: 'cover' };
 export const BG_BLACK: Background = { kind: 'color', value: '#000000' };
+export const BG_NIGHT_SKY: Background = { kind: 'image', url: 'backgrounds/night-sky.jpg', fit: 'cover' };
 export const BG_WHITE: Background = { kind: 'color', value: '#ffffff' };
 /** The 찬양 제목 slide: deep blue, lighter in the middle, so the title stands out before the white lyric slides. */
 export const BG_SONG_TITLE: Background = { kind: 'gradient', value: 'radial-gradient(ellipse at 50% 45%, #2b5fa8 0%, #14305c 55%, #0a1a35 100%)' };
@@ -29,7 +30,7 @@ export const BACKGROUND_PRESETS: { name: string; background: Background }[] = [
   { name: 'KCCP 흰색 + 로고', background: BG_WHITE_LOGO },
   { name: 'Black', background: BG_BLACK },
   { name: 'White', background: BG_WHITE },
-  { name: '찬양 제목', background: BG_SONG_TITLE },
+  { name: '별이 있는 밤하늘', background: BG_NIGHT_SKY },
 ];
 
 export const presetBackground = (name: string): Background => (BACKGROUND_PRESETS.find((p) => p.name === name) ?? BACKGROUND_PRESETS[1]).background;
@@ -41,7 +42,7 @@ export const CHURCH_BACKGROUNDS = {
   worship: BG_BLACK,
   cross: BG_BLACK,
   bible: BG_BLACK,
-  nightSky: BG_BLACK,
+  nightSky: BG_NIGHT_SKY,
   prayer: BG_BLACK,
   sanctuary: BG_BLACK,
   thankYou: BG_BLACK,
@@ -164,6 +165,7 @@ export function createSeedLibrary(): Library {
         { id: 'pli_2', presentationId: 'p_doxology' },
       ],
     }],
+    backgroundLibraryReset: true,
     media: [],
     timers: [
       { id: 'timer_service', name: 'Service starts', kind: 'countdownTo', durationMs: 0, target: '11:00', running: true, startedAt: null, accumulatedMs: 0 },

@@ -10,6 +10,9 @@ export function ClassicToolbar({ state, dispatch, cmd, hasSelection }: { state: 
       <div className="brand"><img className="brand-logo" src="/favicon.png" alt="KCCP" /> FreeCast</div>
       <div className="tool-group">
         <button className="tool-btn" onClick={() => cmd.open('sunday')}><span className="ti">⛪</span><span>주일예배</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('activity')}><span className="ti">📋</span><span>사용기록</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('preflight')}><span className="ti">🔎</span><span>예배 시작 전 점검</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('preparation')}><span className="ti">☑</span><span>예배 준비</span></button>
         <button className="tool-btn" onClick={() => cmd.open('retreat')}><span className="ti">⛺</span><span>수련회</span></button>
       </div>
       <div className="tool-group">

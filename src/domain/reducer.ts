@@ -1,7 +1,8 @@
 import type {
   Arrangement, Background, Library, MacroStep, MediaMeta, MessageTemplate, Macro, Playlist, PlaylistItem,
-  Presentation, Prop, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer,
+  Presentation, Prop, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer, DeviceIdentity, DeviceRegistration, ActivityEntry,
 } from './types';
+import { attributeChange, mergeActivity } from './activity';
 import { sequence } from './arrangement';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
@@ -22,7 +23,9 @@ export interface AppState extends NavState {
   lastKey: string | null;
 }
 
-export type Action =
+type DomainAction =
+  | { type: 'device/register'; device: DeviceRegistration }
+  | { type: 'activity/record'; entry: ActivityEntry }
   | { type: 'select'; id: string | null }
   | { type: 'presentation/create'; presentation: Presentation }
   | { type: 'presentation/createMany'; presentations: Presentation[]; playlist?: Playlist }
@@ -95,6 +98,8 @@ export type Action =
   | ExtraAction
   | { type: 'undo' }
   | { type: 'redo' };
+
+export type Action = DomainAction & { actor?: DeviceIdentity; account?: string | null; eventId?: string; occurredAt?: number };
 
 export function createInitialState(library: Library): AppState {
   const pl = library.playlists[0];
@@ -358,6 +363,10 @@ function core(s: AppState, a: Action): AppState {
       return setLib(s, { sunday: { ...lib.sunday, ...a.patch } });
     case 'library/replace':
       return { ...createInitialState(a.library), past: [...s.past, s.library].slice(-60) };
+    case 'device/register':
+      return setLib(s, { devices: [...(lib.devices ?? []).filter((d) => d.id !== a.device.id), a.device] });
+    case 'activity/record':
+      return setLib(s, { activity: mergeActivity(lib.activity, [a.entry]) });
     case 'usage/clear':
       return setLib(s, { usage: [] });
     case 'live/go':
@@ -435,7 +444,7 @@ function core(s: AppState, a: Action): AppState {
 }
 
 /** Actions that change the library but should not be undoable. */
-const NO_HISTORY = new Set<Action['type']>(['timer/op', 'macro/run', 'usage/clear', 'library/replace', 'schedule/ran', 'slide/runActions', 'online/songs', 'songs/dedupe', 'live/videoClock', 'library/merge']);
+const NO_HISTORY = new Set<Action['type']>(['device/register', 'activity/record', 'timer/op', 'macro/run', 'usage/clear', 'library/replace', 'schedule/ran', 'slide/runActions', 'online/songs', 'songs/dedupe', 'live/videoClock', 'library/merge']);
 
 function historyKey(a: Action): string {
   const id = (a as { id?: string }).id ?? (a as { theme?: Theme }).theme?.id ?? (a as { slideId?: string }).slideId ?? '';
@@ -449,7 +458,7 @@ function syncLive(s: AppState): AppState {
   return { ...s, live: { ...l, props: lib.props, timers: lib.timers, screens: lib.screens, themes: lib.themes, stageLayouts: lib.stageLayouts } };
 }
 
-export function reducer(s: AppState, a: Action): AppState {
+function reduceState(s: AppState, a: Action): AppState {
   if (a.type === 'undo' || a.type === 'redo') {
     const from = a.type === 'undo' ? s.past : s.future;
     if (!from.length) return s;
@@ -471,4 +480,8 @@ export function reducer(s: AppState, a: Action): AppState {
     future: [],
     lastKey: key,
   });
+}
+
+export function reducer(s: AppState, a: Action): AppState {
+  return attributeChange(s, reduceState(s, a), a);
 }

@@ -1,3 +1,4 @@
+import { mergeActivity, mergeDevices, newestModification } from './activity';
 // Actions for looks, stage layouts, playback markers, timelines and playlist templates.
 // Kept apart from reducer.ts so each file stays small.
 import type { Library, Look, PlaybackMarker, Playlist, Presentation, StageLayout, Timeline } from './types';
@@ -70,7 +71,7 @@ export function extraReducer(s: AppState, a: ExtraAction): AppState {
       // Cloud sync: take the merged library but keep online songs, selection and what's live.
       const incoming = new Set(a.library.presentations.map((p) => p.id));
       const online = lib.presentations.filter((p) => p.online && !incoming.has(p.id));
-      return { ...s, library: { ...a.library, presentations: [...a.library.presentations, ...online] } };
+      return { ...s, library: { ...a.library, activity: mergeActivity(lib.activity, a.library.activity), devices: mergeDevices(lib.devices, a.library.devices), lastModified: newestModification(lib.lastModified, a.library.lastModified), presentations: [...a.library.presentations, ...online] } };
     }
     case 'live/videoClock':
       return { ...s, live: { ...s.live, video: { ...s.live.video, endsAt: a.endsAt } } };

@@ -21,6 +21,8 @@ import { parsePrayerTopics } from '../../domain/sunday/prayer';
 import { parseAnnouncements } from '../../domain/sunday/announcements';
 import { applyConfessionSong, pickConfessionSong } from '../../domain/templates/confession';
 import { loadTranslations } from '../BibleModal';
+import { saveRestorePoint } from '../../domain/restorePoints';
+import { replaceDeckSlides } from '../../domain/serviceReadiness';
 import { filesToSlides } from '../importFiles';
 
 /** The theme with a fingerprint of its own settings, so a later edit to it can be recognised. */
@@ -173,6 +175,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   const run = async (label: string, job: () => Promise<string | void>) => {
     setBusy(label);
     try {
+      await saveRestorePoint(lib.current, 'import', Date.now(), playlist(activeId.current ?? '')?.name ?? '주일예배 준비');
       const done = await job();
       setBusy(done ? `✓ ${done}` : null);
       if (done) setTimeout(() => setBusy((b) => (b === `✓ ${done}` ? null : b)), 5000);
@@ -292,7 +295,8 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   });
 
   const sermon = (files: File[]) => run('설교 슬라이드 넣는 중…', async () => {
-    const id = await ensure();
+    const active = activeId.current ? playlist(activeId.current) : undefined;
+    const id = active && sectionRange(active, SECTION.sermon) ? active.id : await ensure();
     await tick();
     const pl = playlist(id);
     let sermonId = pl ? sectionPresentations(pl, SECTION.sermon)[0] : undefined;
@@ -303,13 +307,15 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
       sermonId = p.id;
     }
     await show(id, sermonId);
-    const start = lib.current.presentations.find((p) => p.id === sermonId)?.slides ?? [];
+    const original = lib.current.presentations.find((p) => p.id === sermonId);
+    if (!original) throw new Error('설교 프레젠테이션을 찾지 못했습니다');
     const added: Slide[] = [];
     const push = (s: Slide) => {
       added.push(s);
-      dispatch({ type: 'presentation/update', id: sermonId!, patch: { slides: [...start, ...added] } });
+      // Stage all slides first; failed imports must not erase the current sermon.
     };
     for (const file of files) {
+      const beforeCount = added.length;
       const name = file.name.replace(/\.[^.]+$/, '');
       if (/\.pptx$/i.test(file.name)) {
         await pptxSlides(await file.arrayBuffer(), {
@@ -317,7 +323,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
           mediaId: () => uid('m'),
           store: async (mid, blob) => {
             await putMedia(mid, blob);
-            dispatch({ type: 'media/add', media: { id: mid, name: `${name} ${added.length + 1}`, type: 'image' } });
+            dispatch({ type: 'media/add', media: { id: mid, name: `${name} ${added.length + 1}`, type: 'image', backgroundHidden: true } });
           },
           onSlide: (s, n, total) => {
             setBusy(`설교 슬라이드 ${n + 1}/${total}: ${name}`);
@@ -327,8 +333,11 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
       } else {
         for (const s of await filesToSlides([file], (m) => dispatch({ type: 'media/add', media: m }), setBusy)) push(s);
       }
+      if (added.length === beforeCount) throw new Error(`${file.name}: 슬라이드를 읽지 못했습니다. 기존 PPT는 유지됩니다.`);
     }
-    return `설교 슬라이드 ${added.length}장을 넣었습니다`;
+    const replacement = replaceDeckSlides(original, added);
+    dispatch({ type: 'presentation/update', id: sermonId, patch: { slides: replacement.slides } });
+    return `설교 슬라이드 ${added.length}장으로 교체했습니다 (예배 순서·설정 유지)`;
   });
 
   const drop = (files: File[]) => {
@@ -345,6 +354,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   /** The selected playlist when it is a 주일예배 (has a 성경 말씀 section), else this week's. Calls run one after another. */
   const scripture = (info: ScriptureInput) => {
     const job = queue.current.then(async () => {
+      await saveRestorePoint(lib.current, 'import', Date.now(), playlist(activeId.current ?? '')?.name ?? '주일예배 준비');
       const active = activeId.current ? playlist(activeId.current) : undefined;
       const id = active && sectionRange(active, SECTION.bible) ? active.id : await ensure();
       await serviceInfo(id, { scripture: info.refs, sermonTitle: info.sermonTitle, preacher: info.preacher }, await templatesNow(), info);
@@ -359,6 +369,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     const job = queue.current.then(async (): Promise<string[] | null> => {
       const found = findLiveService(lib.current, date);
       if (!found) return null;
+      await saveRestorePoint(lib.current, 'import', Date.now(), playlist(activeId.current ?? '')?.name ?? '주일예배 준비');
       const id = found.id;
       const t = await templatesNow();
       const folder = liveFolder(date);

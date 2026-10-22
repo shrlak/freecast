@@ -484,13 +484,13 @@ body[data-view='multiview'] { overflow: auto; }
 .ppt { display: flex; flex-direction: column; height: 100%; }
 
 /* ribbon */
-.ribbon { background: #fff; border-bottom: 1px solid #d2d0ce; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+.ribbon { flex: 0 0 auto; background: #fff; border-bottom: 1px solid #d2d0ce; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
 .rb-tabs { display: flex; gap: 2px; padding: 0 8px; background: var(--accent); border-bottom: 3px solid transparent; border-image: linear-gradient(90deg, #fde718 50%, #4bc789 50%) 1; }
 .rb-tab { border: none !important; background: transparent !important; color: #fff !important; padding: 7px 14px; border-radius: 4px 4px 0 0; font-size: 13px; }
 .rb-tab:hover { background: rgba(255,255,255,.15) !important; }
 .rb-tab.on { background: #fff !important; color: var(--accent) !important; font-weight: 600; }
 .rb-tab.file { font-weight: 600; }
-.rb-body { display: flex; align-items: stretch; gap: 0; padding: 6px 6px 2px; min-height: 96px; overflow-x: auto; }
+.rb-body { display: flex; align-items: stretch; gap: 0; padding: 6px 6px 2px; height: 128px; min-height: 128px; max-height: 128px; overflow: auto; }
 .rb-group { display: flex; flex-direction: column; padding: 0 8px; border-right: 1px solid #e1dfdd; }
 .rb-items { flex: 1; display: flex; align-items: flex-start; gap: 2px; }
 .rb-group-label { text-align: center; font-size: 11px; color: #605e5c; padding: 3px 0 2px; white-space: nowrap; }
@@ -813,3 +813,18 @@ body[data-view='multiview'] { overflow: auto; }
 .ppt-lock.on { color: #fbbf24; }
 .remote-next { font-size: 14px; opacity: .85; white-space: pre-line; padding: 6px 10px; }
 .remote-next label { display: block; font-size: 11px; opacity: .6; }
+
+/* Keep disconnected remotes readable while preventing commands from being queued. */
+.remote-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
+.remote-connection { padding: 8px 12px; margin: 0; font-size: 13px; }
+.remote-controls:disabled button { opacity: .5; }
+
+.activity-modal { width: min(1000px, 94vw); }
+.activity-table { overflow: auto; }
+.activity-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.activity-table th, .activity-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+
+.cloud-storage { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.cloud-storage-bar { display: flex; height: 16px; overflow: hidden; border-radius: 8px; background: #e1dfdd; margin: 8px 0; }
+.cloud-storage-media { background: #2e9e66; }
+.cloud-storage-library { background: #2b579a; }

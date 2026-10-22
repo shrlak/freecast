@@ -3,12 +3,16 @@ import { createInitialState, reducer, type Action } from '../domain/reducer';
 import { loadLibrary, normalizeLibrary, saveLibrary } from '../domain/persistence';
 import { activePlaylist, findPres, upcomingCursors } from '../domain/live';
 import { sequence } from '../domain/arrangement';
+import { getDevice } from '../domain/device';
+import { loadSession } from '../domain/cloud';
 import { uid } from '../domain/lyrics';
 import { presentationFromSongFile } from '../domain/io/songFormats';
 import { exportBackup, importBackup } from '../domain/io/backup';
 import { exportPptx } from '../domain/io/pptxExport';
 import type { Library, Presentation, Theme } from '../domain/types';
 import { AUTO_INTERVAL, listRestorePoints, saveRestorePoint } from '../domain/restorePoints';
+import { ActivityModal } from '../ui/ActivityModal';
+import { ServicePreparationModal } from '../ui/ServicePreparationModal';
 import { FindPalette } from '../ui/FindPalette';
 import { RestorePointsModal } from '../ui/RestorePointsModal';
 import { useLiveBroadcast, useRelay } from '../ui/hooks';
@@ -98,7 +102,7 @@ export function OperatorView() {
     const macroId = a.type === 'macro/run' ? a.id : a.type === 'schedule/ran' ? schedulesRef.current.find((x) => x.id === a.id)?.macroId : undefined;
     const macro = macroId ? macrosRef.current.find((m) => m.id === macroId) : undefined;
     macro?.steps.forEach(runExternal);
-    dispatchRaw(a);
+    dispatchRaw({ ...a, actor: getDevice(), account: loadSession()?.username ?? null, eventId: crypto.randomUUID(), occurredAt: Date.now() });
   }, []);
   const notifyRef = useRef<(m: string) => void>(() => undefined);
   const notify = (msg: string) => {
@@ -358,12 +362,15 @@ export function OperatorView() {
   const startShow = (fromCurrent: boolean) => {
     const pres = state.library.presentations.find((x) => x.id === state.selectedId);
     if (!pres) return notify('먼저 프레젠테이션을 선택하세요');
+    void saveRestorePoint(state.library, 'show', Date.now(), activePlaylist(state)?.name ?? pres.title).catch(() => notify('발표는 시작했지만 복원 지점을 저장하지 못했습니다. 저장 공간을 확인하세요.'));
+    dispatch({ type: 'activity/record', entry: { id: crypto.randomUUID(), at: Date.now(), action: 'show/start', detail: activePlaylist(state)?.name ?? pres.title, device: getDevice(), account: loadSession()?.username ?? null } });
     const seq = fromCurrent && slideId ? Math.max(0, sequence(pres).findIndex((x) => x.slide.id === slideId)) : 0;
     dispatch({ type: 'live/go', presentationId: pres.id, seq });
     setView('presenter');
     presentOutput();
   };
   const endShow = () => {
+    if (view === 'presenter') dispatch({ type: 'activity/record', entry: { id: crypto.randomUUID(), at: Date.now(), action: 'show/end', detail: activePlaylist(state)?.name ?? '발표', device: getDevice(), account: loadSession()?.username ?? null } });
     dispatch({ type: 'live/clearAll' });
     setView('normal');
     desktop?.endShow();
@@ -389,6 +396,7 @@ export function OperatorView() {
     if (!files.length) return;
     const kind = importKind.current;
     try {
+      await saveRestorePoint(state.library, 'import', Date.now(), activePlaylist(state)?.name ?? '자료 가져오기');
       if (kind === 'backup') {
         notify('Restoring backup…');
         const lib = await importBackup(files[0]);
@@ -412,6 +420,14 @@ export function OperatorView() {
         for (const f of files.filter(isPptx)) {
           const slides = await toSlides([f]);
           const title = f.name.replace(/\.[^.]+$/, '');
+          const existing = state.library.presentations.filter((p) => p.folder === 'Imported' && p.title === title);
+          if (existing.length > 1) throw new Error(`같은 이름의 PPT가 여러 개입니다: ${title}. 프레젠테이션 이름을 구분해 주세요.`);
+          if (!slides.length) throw new Error(`${title}: 슬라이드를 읽지 못했습니다. 기존 PPT를 유지합니다.`);
+          if (existing.length === 1) {
+            dispatch({ type: 'presentation/update', id: existing[0].id, patch: { slides } });
+            total += slides.length;
+            continue;
+          }
           const id = uid('p');
           dispatch({
             type: 'presentation/createMany',
@@ -473,6 +489,7 @@ export function OperatorView() {
     setLayout,
     online,
     relayConnected: relay.connected,
+    remoteCount: remotes,
     view,
     slideId,
     setSlideId,
@@ -509,6 +526,8 @@ export function OperatorView() {
           </div>
         </div>
       )}
+      {(modal === 'preparation' || modal === 'preflight') && <ServicePreparationModal mode={modal} library={state.library} playlistId={state.activePlaylistId} onClose={() => setModal(null)} onSettings={() => setModal('screens')} />}
+      {modal === 'activity' && <ActivityModal library={state.library} onClose={() => setModal(null)} />}
       <UpdateBanner />
       <AudioPlayer state={state} dispatch={dispatch} />
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
@@ -542,7 +561,7 @@ export function OperatorView() {
       )}
       {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}
       {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
-      {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} />}
+      {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} onActivity={() => setModal('activity')} />}
       {(modal === 'song' || modal === 'songNew') && (
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />
       )}

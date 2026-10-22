@@ -145,6 +145,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
           <button key={t} className={`rb-tab ${t === tab ? 'on' : ''} ${t === '파일' ? 'file' : ''}`} onClick={() => setTab(t)}>{t}</button>
         ))}
         <span className="rb-spacer" />
+        <span className="rb-busy" role="status">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}</span>
         {busy && <span className="rb-busy">{busy}</span>}
         <button className="rb-account" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">
           {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : ' ✓'}` : '☁ 로그인'}
@@ -169,9 +170,10 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             <Group label="복원">
               <Big icon="🕘" label="복원 지점" title="라이브러리를 자동으로 저장해 둔 지점으로 되돌리기" onClick={() => cmd.open('restore')} />
             </Group>
-            <Group label="CCLI">
+            <Group label="사용기록">
+              <Big icon="📋" label="사용기록 보기" onClick={() => cmd.open('activity')} />
               <Big icon="📈" label={`사용 기록 (${lib.usage.length})`} onClick={cmd.exportUsage} />
-              <Small icon="🧹" label="기록 지우기" onClick={cmd.clearUsage} />
+              <Small icon="🧹" label="발표 기록 지우기" onClick={cmd.clearUsage} />
             </Group>
             <Group label="계정">
               <Big icon="☁" label={cmd.cloud.session ? `${cmd.cloud.session.username} · 동기화` : '로그인 · 클라우드'} onClick={() => cmd.open('account')} />
@@ -265,7 +267,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
                       : <span className="rb-swatch-fill" style={b.background.kind === 'color' ? { background: b.background.value } : { backgroundImage: (b.background as { value: string }).value }} />}
                   </button>
                 ))}
-                {lib.media.filter((m) => m.type !== 'audio').map((m) => (
+                {lib.media.filter((m) => m.type !== 'audio' && !m.backgroundHidden).map((m) => (
                   <button key={m.id} className="rb-swatch" title={m.name} disabled={!p}
                     onClick={() => applyBackground({ kind: 'media', mediaId: m.id, mediaType: m.type === 'video' ? 'video' : 'image' })}>
                     <MediaSwatch id={m.id} video={m.type === 'video'} />
@@ -328,8 +330,9 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="⛪" label="예배 열기" title="이번 주 주일예배를 교회 템플릿으로 엽니다 — 올리는 자료가 바로 들어갑니다" disabled={working} onClick={service.open} />
               {contiButton}
               <Big icon="🎵" label="가사 올리기" title="가사 파일(.txt/.md 등)을 찬양 순서에 넣습니다" disabled={working} onClick={() => upload('lyrics')} />
-              <Big icon="🎤" label="설교 슬라이드" title="설교 PPTX/PDF/이미지를 설교 순서에 넣습니다 (디자인 그대로)" disabled={working} onClick={() => upload('sermon')} />
+              <Big icon="🎤" label="설교 슬라이드" title="설교 PPTX/PDF/이미지로 기존 설교 슬라이드를 교체합니다. 예배 순서와 설정은 유지됩니다. 여러 파일은 한 번에 선택하세요." disabled={working} onClick={() => upload('sermon')} />
             </Group>
+            <Group label="예배 준비"><Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} /><Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} /><Big icon="🕘" label="복원 지점" onClick={() => cmd.open('restore')} /></Group>
             <Group label="예배 만들기">
               <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
               <Big icon="🙏" label="기도제목" title="이번 주 기도제목 — 주일예배 Front 슬라이드에 들어갑니다" onClick={() => cmd.open('prayer')} />

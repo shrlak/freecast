@@ -1,6 +1,7 @@
 // Client for the church cloud library (Worker /freecast/* via this app's /api/cloud proxy).
 import type { Library } from './types';
 import { deleteMedia as deleteLocalMedia, getMedia, putMedia } from './media';
+import { summarizeCloudStorage } from './cloudStorage';
 import { normalizeLibrary } from './persistence';
 
 const SESSION_KEY = 'freecast.cloud';
@@ -83,18 +84,27 @@ export const saveBase = (lib: Library) => putMedia(BASE_KEY, new Blob([JSON.stri
 
 /** Upload media this computer has that the server lacks, and download the reverse. */
 export async function syncMedia(token: string, lib: Library, onProgress: (msg: string) => void) {
-  const remote = new Set((await cloudApi.listMedia(token)).map((m) => m.id));
+  const items = await cloudApi.listMedia(token);
+  const remote = new Set(items.map((m) => m.id));
   for (const m of lib.media) {
     const local = await getMedia(m.id).catch(() => undefined);
     if (local && !remote.has(m.id)) {
       if (local.size > 50 * 1024 * 1024) continue;
       onProgress(`미디어 올리는 중: ${m.name}`);
       await cloudApi.uploadMedia(token, m.id, local);
+      remote.add(m.id); items.push({ id: m.id, size: local.size });
     } else if (!local && remote.has(m.id)) {
       onProgress(`미디어 받는 중: ${m.name}`);
       await putMedia(m.id, await cloudApi.downloadMedia(token, m.id));
     }
   }
+  return items;
+}
+
+/** Read server data, not this computer's pending edits or media cache. */
+export async function getCloudStorageUsage(token: string) {
+  const [remote, items] = await Promise.all([cloudApi.getLibrary(token), cloudApi.listMedia(token)]);
+  return summarizeCloudStorage(remote?.data ?? null, items);
 }
 
 const DELETES_KEY = 'freecast.cloud.mediaDeletes';

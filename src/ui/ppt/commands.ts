@@ -1,7 +1,7 @@
 import type { CloudStatus } from '../useCloudSync';
 import type { ServiceUploads } from './useServiceUploads';
 
-export type Modal = 'edit' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | null;
+export type Modal = 'edit' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | null;
 export type ImportKind = 'library' | 'slides' | 'lyrics' | 'backup';
 export type PptViewMode = 'normal' | 'sorter' | 'presenter';
 export type Layout = 'ppt' | 'classic';
@@ -29,6 +29,7 @@ export interface Commands {
   setLayout: (l: Layout) => void;
   online: OnlineStatus;
   relayConnected: boolean;
+  remoteCount: number;
   view: PptViewMode;
   /** Slide selected for editing in the PowerPoint layout. */
   slideId: string | null;

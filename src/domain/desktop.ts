@@ -8,6 +8,7 @@ export interface DesktopDisplay {
 export interface DesktopInfo {
   version: string;
   platform: string;
+  computerName?: string;
   displays: DesktopDisplay[];
   outputDisplays: Record<string, number | null>;
   ai: { proxyUrl: string; hasGeminiKey: boolean; hasOpenrouterKey: boolean };
@@ -47,4 +48,4 @@ export interface DesktopBridge {
   onDisplays(cb: (d: DesktopDisplay[]) => void): () => void;
 }
 
-export const desktop: DesktopBridge | undefined = (window as unknown as { freecastDesktop?: DesktopBridge }).freecastDesktop;
+export const desktop: DesktopBridge | undefined = typeof window === 'undefined' ? undefined : (window as unknown as { freecastDesktop?: DesktopBridge }).freecastDesktop;

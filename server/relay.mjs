@@ -52,6 +52,8 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
     for (const c of wss.clients) if (c.readyState === 1 && filter(c)) c.send(data);
   };
 
+  const tellRemotes = () => broadcast(JSON.stringify({ type: 'host-status', connected: [...wss.clients].some((c) => c.readyState === 1 && c.role === 'host') }), (c) => c.role === 'remote');
+
   wss.on('connection', (ws) => {
     ws.role = null;
     ws.on('message', (raw) => {
@@ -61,6 +63,7 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
       } catch {
         return;
       }
+      if (msg?.type === 'ping') { ws.send(JSON.stringify({ type: 'pong' })); return; }
       if (msg?.type === 'hello') {
         const role = ['host', 'viewer', 'remote'].includes(msg.role) ? msg.role : 'viewer';
         const pin = ws.pub ? '' : PIN;
@@ -74,7 +77,7 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
         }
         ws.role = role;
         ws.send(JSON.stringify({ type: 'welcome', pinRequired: Boolean(pin) }));
-        if (role === 'remote' || role === 'host') tellHosts();
+        if (role === 'remote' || role === 'host') { tellHosts(); tellRemotes(); }
         if (role !== 'host') {
           if (lastState) ws.send(lastState);
           if (lastInfo && role === 'remote') ws.send(lastInfo);
@@ -92,7 +95,7 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
       }
     });
   });
-  wss.on('connection', (ws) => ws.on('close', () => ws.role === 'remote' && tellHosts()));
+  wss.on('connection', (ws) => ws.on('close', () => { if (ws.role === 'remote') tellHosts(); if (ws.role === 'host') tellRemotes(); }));
   wss.toHost = (command) => {
     if (!validCommand(command)) return false;
     let sent = false;

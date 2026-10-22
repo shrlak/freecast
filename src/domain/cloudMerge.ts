@@ -1,5 +1,6 @@
-import type { Library, Presentation } from './types';
+import type { Library, Presentation, UsageEntry } from './types';
 import { uid } from './lyrics';
+import { mergeActivity, mergeDevices, newestModification } from './activity';
 import { clearTransitions } from './persistence';
 
 /** The part of the library that is shared through the cloud (online songs come from GitHub instead). */
@@ -67,10 +68,10 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
     conflicts.push(l.title);
     return [l, { ...r, id: uid('p'), title: `${r.title} (다른 기기)` }];
   });
-  const usageKey = (u: { at: number; presentationId: string }) => `${u.at}:${u.presentationId}`;
+  const usageKey = (u: UsageEntry) => `${u.at}:${u.presentationId}:${u.device?.id ?? ''}`;
   const usage = [...local.usage];
   const seen = new Set(usage.map(usageKey));
-  for (const u of remote.usage ?? []) if (!seen.has(usageKey(u))) usage.push(u);
+  for (const u of remote.usage ?? []) if (!seen.has(usageKey(u))) { usage.push(u); seen.add(usageKey(u)); }
   usage.sort((a, b) => a.at - b.at);
   const m = <K extends 'themes' | 'playlists' | 'media' | 'timers' | 'props' | 'messageTemplates' | 'macros' | 'screens' | 'schedules' | 'looks' | 'stageLayouts'>(k: K) =>
     mergeById<{ id: string }>(base?.[k] as { id: string }[] | undefined, (local[k] ?? []) as { id: string }[], (remote[k] ?? []) as { id: string }[], (l, r) => [base ? l : r]) as Library[K];
@@ -80,6 +81,10 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
       version: 1,
       aspect: '4:3',
       transitionsReset: true,
+      backgroundLibraryReset: local.backgroundLibraryReset || remote.backgroundLibraryReset,
+      devices: mergeDevices(local.devices, remote.devices),
+      activity: mergeActivity(local.activity, remote.activity),
+      lastModified: newestModification(local.lastModified, remote.lastModified),
       presentations,
       themes: m('themes'),
       playlists: m('playlists'),
