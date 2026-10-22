@@ -79,6 +79,9 @@ export function RemoteView() {
         <button onClick={() => cmd({ type: 'live/prev' })}>◀</button>
         <button className="primary" onClick={() => cmd({ type: 'live/next' })}>▶</button>
       </div>
+      <button className={`remote-black ${live?.black ? 'active' : ''}`} onClick={() => cmd({ type: 'live/toggleBlack' })}>
+        {live?.black ? '■ Black screen on — tap to show slide' : '■ Black screen'}
+      </button>
       <div className="remote-current">
         {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} /> : <div className="remote-empty">Nothing live</div>}
       </div>
