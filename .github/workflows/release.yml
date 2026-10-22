@@ -72,12 +72,24 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - name: Package and publish
-        run: npx electron-builder ${{ matrix.os == 'macos-latest' && '--mac --arm64 --x64' || '--win --x64' }} --publish always
+      # electron-builder only builds here: its own GitHub publisher races itself (several uploads each try to
+      # create the release; "already_exists" 422) and left v0.2.9 without latest-mac.yml. The files are
+      # uploaded with `gh` instead, to the release the tag job made.
+      - name: Package
+        run: npx electron-builder ${{ matrix.os == 'macos-latest' && '--mac --arm64 --x64' || '--win --x64' }} --publish never
+      - name: Upload to the release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          update="${{ matrix.os == 'macos-latest' && 'latest-mac.yml' || 'latest.yml' }}"
+          [ -f "release/$update" ] || { echo "::error::release/$update was not built"; exit 1; }
+          find release -maxdepth 1 -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print0 \
+            | xargs -0 gh release upload "v$v" --clobber
 
-  # Every release carries all three installers (Apple Silicon Mac, Intel Mac, Windows); fail loudly if one is missing.
+  # Every release carries all three installers (Apple Silicon Mac, Intel Mac, Windows) and the files the
+  # auto-updater reads; fail loudly if one is missing.
   verify:
     needs: [tag, build]
     if: needs.tag.outputs.build == 'true'
@@ -92,7 +104,7 @@ jobs:
           assets="$(gh release view "v$v" --json assets --jq '.assets[].name')"
           echo "$assets"
           missing=0
-          for f in "FreeCast-$v-arm64.dmg" "FreeCast-$v.dmg" "FreeCast-Setup-$v.exe"; do
+          for f in "FreeCast-$v-arm64.dmg" "FreeCast-$v.dmg" "FreeCast-Setup-$v.exe" latest.yml latest-mac.yml; do
             echo "$assets" | grep -qxF "$f" || { echo "::error::Release v$v is missing $f"; missing=1; }
           done
           exit $missing
