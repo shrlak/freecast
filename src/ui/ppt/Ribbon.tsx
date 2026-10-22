@@ -10,6 +10,7 @@ import { openOutput } from '../LivePanel';
 import { useMediaUrl } from '../hooks';
 import { ACCEPT, type Commands } from './commands';
 import { isSong } from '../../domain/templates/fill';
+import { SLIDE_TEMPLATES, type SlideTemplate } from '../../domain/slideTemplates';
 
 interface Props {
   state: AppState;
@@ -32,9 +33,9 @@ function Big({ icon, label, onClick, disabled, active, title }: { icon: ReactNod
   );
 }
 
-function Small({ icon, label, onClick, disabled, active }: { icon: ReactNode; label: string; onClick?: () => void; disabled?: boolean; active?: boolean }) {
+function Small({ icon, label, onClick, disabled, active, title }: { icon: ReactNode; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; title?: string }) {
   return (
-    <button className={`rb-small ${active ? 'on' : ''}`} onClick={onClick} disabled={disabled}>
+    <button className={`rb-small ${active ? 'on' : ''}`} onClick={onClick} disabled={disabled} title={title}>
       <span className="rb-icon-s">{icon}</span>{label}
     </button>
   );
@@ -94,6 +95,15 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
     slides.splice(i + 1, 0, base);
     updatePres({ slides });
     cmd.setSlideId(base.id);
+  };
+  const addFromTemplate = (t: SlideTemplate) => {
+    if (!p) return;
+    const i = slide ? p.slides.findIndex((s) => s.id === slide.id) : p.slides.length - 1;
+    const n = t.make(slide?.group ?? 'Slide');
+    const slides = [...p.slides];
+    slides.splice(i + 1, 0, n);
+    updatePres({ slides });
+    cmd.setSlideId(n.id);
   };
   const deleteSlide = () => {
     if (!p || !slide) return;
@@ -156,6 +166,9 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🗜" label="전체 백업 (.zip)" onClick={cmd.exportBackup} />
               <Big icon="{ }" label="라이브러리만" onClick={cmd.exportLibrary} />
             </Group>
+            <Group label="복원">
+              <Big icon="🕘" label="복원 지점" title="라이브러리를 자동으로 저장해 둔 지점으로 되돌리기" onClick={() => cmd.open('restore')} />
+            </Group>
             <Group label="CCLI">
               <Big icon="📈" label={`사용 기록 (${lib.usage.length})`} onClick={cmd.exportUsage} />
               <Small icon="🧹" label="기록 지우기" onClick={cmd.clearUsage} />
@@ -195,6 +208,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               </div>
             </Group>
             <Group label="편집">
+              <Small icon="⚡" label="빠른 찾기 (⌘/Ctrl+K)" title="가사·성경·광고를 모든 프레젠테이션에서 찾아 바로 표시" onClick={() => cmd.open('find')} />
               <Small icon="🔎" label="찾기 (⌘/Ctrl+F)" onClick={() => { const b = document.getElementById('library-search') as HTMLInputElement | null; b?.focus(); }} />
               <Small icon="⟲" label={p?.loop ? '반복 해제' : '반복 재생'} disabled={!p} active={!!p?.loop} onClick={() => updatePres({ loop: !p?.loop })} />
             </Group>
@@ -210,6 +224,9 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="＋" label="새 슬라이드" disabled={!p} onClick={() => addSlide(false)} />
               <Big icon="🎵" label="찬양 가사" onClick={() => cmd.open('new')} />
               <Big icon="📖" label="성경 구절" onClick={() => cmd.open('bible')} />
+            </Group>
+            <Group label="슬라이드 템플릿">
+              {SLIDE_TEMPLATES.map((t) => <Big key={t.id} icon={t.icon} label={t.name} disabled={!p} onClick={() => addFromTemplate(t)} />)}
             </Group>
             <Group label="개체">
               <Big icon="T" label="텍스트 상자" disabled={!slide} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 320, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />

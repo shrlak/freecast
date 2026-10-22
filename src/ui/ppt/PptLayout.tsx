@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Slide } from '../../domain/types';
 import { blankSlide, uid } from '../../domain/lyrics';
+import { putMedia } from '../../domain/media';
 import { sequence } from '../../domain/arrangement';
 import { activePlaylist } from '../../domain/live';
 import { SlideFormat } from './SlideFormat';
@@ -16,6 +17,8 @@ import { SlidePane, paneSlideId } from './SlidePane';
 import { paneSource, selectedRow, slidePaneRows, type PaneSlide } from './paneRows';
 import { resolveBackground } from '../../domain/autoBackground';
 import { AutoTextarea } from '../AutoTextarea';
+
+const LOCK_MSG = '🔒 화면에 표시 중이라 삭제·추가가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요';
 
 interface Props {
   state: AppState;
@@ -105,14 +108,28 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (!paneSlides.length || t.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('.modal-backdrop')) return;
+      const locked = cmd.locked && !!state.live.slide;
       if ((e.key === 'Backspace' || e.key === 'Delete') && !selEl && selected) {
         e.preventDefault();
-        deleteSlides(picked());
+        if (locked) cmd.notify(LOCK_MSG);
+        else deleteSlides(picked());
+        return;
+      }
+      // ⌘/Ctrl+D duplicates the slide, as in PowerPoint.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'd' && p && slide) {
+        e.preventDefault();
+        const copy = { ...slide, id: uid('s') };
+        const slides = [...p.slides];
+        slides.splice(p.slides.indexOf(slide) + 1, 0, copy);
+        updateSlides(slides);
+        cmd.setSlideId(copy.id);
+        setMulti([]);
         return;
       }
       // Enter adds a blank white slide after the current one (Enter on a focused button still presses it).
       if (e.key === 'Enter' && !selEl && p && slide && !e.metaKey && !e.ctrlKey && !e.altKey && !t.closest('button,a,[role="button"]')) {
         e.preventDefault();
+        if (locked) return cmd.notify(LOCK_MSG);
         const n = blankSlide(slide.group);
         const slides = [...p.slides];
         slides.splice(p.slides.indexOf(slide) + 1, 0, n);
@@ -134,6 +151,30 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  });
+
+  // Paste a screenshot or picture: it becomes a new slide after the current one.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (!p || cmd.view === 'presenter' || t.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('.modal-backdrop')) return;
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
+      if (!file) return;
+      e.preventDefault();
+      const id = uid('m');
+      const at = slide ? p.slides.indexOf(slide) + 1 : p.slides.length;
+      putMedia(id, file).then(() => {
+        dispatch({ type: 'media/add', media: { id, name: file.name || '붙여넣은 그림', type: 'image' } });
+        const n: Slide = { id: uid('s'), group: slide?.group ?? 'Image', text: '', background: { kind: 'media', mediaId: id, mediaType: 'image', fit: 'contain' } };
+        const slides = [...p.slides];
+        slides.splice(at, 0, n);
+        updateSlides(slides);
+        cmd.setSlideId(n.id);
+        cmd.notify('붙여넣은 그림을 새 슬라이드로 추가했습니다');
+      }).catch(() => cmd.notify('그림을 붙여넣지 못했습니다'));
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
   });
 
   const updateSlides = (slides: Slide[]) => p && dispatch({ type: 'presentation/update', id: p.id, patch: { slides } });
@@ -194,6 +235,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
                 <div className="ppt-canvas">
                   <CanvasEditor slide={slide} theme={theme} background={background} bgEffect={p.bgEffect}
                     selectedId={selEl} onSelect={setSelEl}
+                    onLockedDelete={cmd.locked && state.live.slide?.id === slide.id ? () => cmd.notify(LOCK_MSG) : undefined}
                     onChange={(patch) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch })} />
                 </div>
               ) : (
@@ -256,6 +298,8 @@ function StatusBar({ cmd, text }: { cmd: Commands; text: string }) {
       <button className="ppt-cloud" onClick={() => cmd.open('account')} title={cmd.cloud.message ?? ''}>
         {cmd.cloud.session ? `☁ ${cmd.cloud.session.username} · ${cmd.cloud.state === 'syncing' ? '동기화 중' : cmd.cloud.state === 'error' ? '동기화 오류' : '동기화됨'}` : '☁ 로그인 안 됨 (이 컴퓨터에만 저장)'}
       </button>
+      <button className={`ppt-cloud ppt-lock ${cmd.locked ? 'on' : ''}`} onClick={() => cmd.setLocked(!cmd.locked)}
+        title={cmd.locked ? '잠금 켜짐: 화면에 표시 중에는 Enter·Delete로 슬라이드를 추가/삭제하지 않습니다 (클릭하면 해제)' : '잠금 꺼짐 (클릭하면 켜기)'}>{cmd.locked ? '🔒 잠금' : '🔓 잠금 해제됨'}</button>
       <button className="ppt-cloud" onClick={() => cmd.open('feedback')} title="고칠 점·원하는 기능을 개발자에게 보내기">💬 피드백</button>
       <span title={cmd.relayConnected ? '리모컨 연결됨' : '리모컨 오프라인'}><span className={`dot ${cmd.relayConnected ? 'on' : ''}`} /></span>
       <span className="ppt-views">

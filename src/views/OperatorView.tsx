@@ -7,7 +7,10 @@ import { uid } from '../domain/lyrics';
 import { presentationFromSongFile } from '../domain/io/songFormats';
 import { exportBackup, importBackup } from '../domain/io/backup';
 import { exportPptx } from '../domain/io/pptxExport';
-import type { Presentation, Theme } from '../domain/types';
+import type { Library, Presentation, Theme } from '../domain/types';
+import { AUTO_INTERVAL, listRestorePoints, saveRestorePoint } from '../domain/restorePoints';
+import { FindPalette } from '../ui/FindPalette';
+import { RestorePointsModal } from '../ui/RestorePointsModal';
 import { useLiveBroadcast, useRelay } from '../ui/hooks';
 import { LibraryPanel } from '../ui/LibraryPanel';
 import { SlideGrid } from '../ui/SlideGrid';
@@ -79,6 +82,8 @@ export function OperatorView() {
   const [layout, setLayoutState] = useState<Layout>(() => (localStorage.getItem('freecast.layout') as Layout) || 'ppt');
   const [view, setView] = useState<PptViewMode>('normal');
   const [slideId, setSlideId] = useState<string | null>(null);
+  const [locked, setLockedState] = useState(() => localStorage.getItem('freecast.lock') !== '0');
+  const setLocked = (on: boolean) => { localStorage.setItem('freecast.lock', on ? '1' : '0'); setLockedState(on); };
   const setLayout = (l: Layout) => { localStorage.setItem('freecast.layout', l); setLayoutState(l); };
   const fileRef = useRef<HTMLInputElement>(null);
   const importKind = useRef<'library' | 'slides' | 'lyrics' | 'backup'>('slides');
@@ -103,6 +108,29 @@ export function OperatorView() {
   };
 
   useEffect(() => saveLibrary(state.library), [state.library]);
+  // Restore points: a snapshot of the library every 10 minutes while it keeps changing.
+  const snapped = useRef<Library | null>(null);
+  useEffect(() => {
+    let busy = false;
+    const tick = async () => {
+      const lib = latestLib.current;
+      if (busy || snapped.current === lib) return;
+      busy = true;
+      try {
+        const newest = (await listRestorePoints())[0];
+        if (!newest || Date.now() - newest.at >= AUTO_INTERVAL) {
+          await saveRestorePoint(lib, 'auto');
+          snapped.current = lib;
+        }
+      } catch {
+        // IndexedDB blocked: no restore points, the app carries on.
+      }
+      busy = false;
+    };
+    const first = setTimeout(tick, 20_000);
+    const t = setInterval(tick, 60_000);
+    return () => { clearTimeout(first); clearInterval(t); };
+  }, []);
   const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
   // Sunday 5 pm: the finished 주일예배 (playlist + its decks) is removed here and from the church server.
   useEffect(() => {
@@ -289,6 +317,11 @@ export function OperatorView() {
         box?.select();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && (!modal || modal === 'find')) {
+        e.preventDefault();
+        setModal(modal === 'find' ? null : 'find');
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !isTyping(e.target)) {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
@@ -444,6 +477,8 @@ export function OperatorView() {
     slideId,
     setSlideId,
     cloud: cloud.status,
+    locked,
+    setLocked,
     service,
   };
   notifyRef.current = notify;
@@ -526,6 +561,24 @@ export function OperatorView() {
       })()}
       {modal === 'prayer' && <PrayerSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
       {modal === 'aiUsage' && <AiUsage onClose={() => setModal(null)} />}
+      {modal === 'find' && (
+        <FindPalette library={state.library} onClose={() => setModal(null)}
+          onLive={(f) => {
+            dispatch({ type: 'select', id: f.presentationId });
+            dispatch({ type: 'live/go', presentationId: f.presentationId, seq: f.seq });
+            setModal(null);
+          }}
+          onEdit={(f) => {
+            dispatch({ type: 'select', id: f.presentationId });
+            setSlideId(f.slideId);
+            setView('normal');
+            setModal(null);
+          }} />
+      )}
+      {modal === 'restore' && (
+        <RestorePointsModal library={state.library} notify={notify} onClose={() => setModal(null)}
+          onRestore={(lib) => { dispatch({ type: 'library/replace', library: lib }); notify('복원했습니다 (⌘Z로 되돌릴 수 있습니다)'); }} />
+      )}
       {modal === 'feedback' && <FeedbackModal notify={notify} onClose={() => setModal(null)} />}
       {modal === 'confession' && <ConfessionSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
 

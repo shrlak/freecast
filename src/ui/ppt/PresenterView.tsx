@@ -121,6 +121,15 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
             <button className={mode === 'next' ? 'on' : ''} onClick={() => setMode('next')}>다음 슬라이드</button>
             <button className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>모든 슬라이드</button>
           </div>
+          <span className="chord-ctl" title="무대 화면 코드: 키 올림/내림, 카포 (코드가 있는 가사에만 보입니다)">
+            <button onClick={() => dispatch({ type: 'live/chords', shift: (live.chordShift ?? 0) - 1 })}>♭</button>
+            <span>키 {live.chordShift ? `${live.chordShift > 0 ? '+' : ''}${live.chordShift}` : '±0'}</span>
+            <button onClick={() => dispatch({ type: 'live/chords', shift: (live.chordShift ?? 0) + 1 })}>♯</button>
+            <button onClick={() => dispatch({ type: 'live/chords', capo: (live.capo ?? 0) - 1 })} disabled={!live.capo}>−</button>
+            <span>카포 {live.capo ?? 0}</span>
+            <button onClick={() => dispatch({ type: 'live/chords', capo: (live.capo ?? 0) + 1 })}>＋</button>
+            {(!!live.chordShift || !!live.capo) && <button onClick={() => dispatch({ type: 'live/chords', shift: 0, capo: 0 })}>↺</button>}
+          </span>
           <button className={controls ? 'active' : ''} onClick={() => setControls(!controls)} title="매크로 · 메시지 · 타이머 · 화면 지우기">🎛 컨트롤</button>
           <button className="danger" onClick={cmd.endShow}>쇼 마침 (Esc)</button>
         </div>
@@ -172,6 +181,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
             <div className="presenter-edit-canvas">
               <CanvasEditor slide={editSlide} theme={editTheme} background={resolveBackground(editSlide, editPres)} bgEffect={editPres.bgEffect}
                 selectedId={selEl} onSelect={setSelEl}
+                onLockedDelete={cmd.locked && editingLive ? () => cmd.notify('🔒 화면에 표시 중이라 삭제가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요') : undefined}
                 onChange={(patch) => dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch })} />
               <div className="muted small">{editPres.title} · {editSlide.group}</div>
             </div>

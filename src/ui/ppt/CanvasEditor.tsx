@@ -21,6 +21,8 @@ interface Props {
   onSelect: (id: string | null) => void;
   /** Apply a change to the slide (objects moved, resized, retyped, deleted). */
   onChange: (patch: Partial<Slide>) => void;
+  /** Called instead of deleting when 🔒 is on and this slide is on screen. */
+  onLockedDelete?: () => void;
 }
 
 /**
@@ -29,7 +31,7 @@ interface Props {
  * Delete to remove; double-click (or click again) text to type on the slide. Changes apply as you
  * go, so a slide that is live updates on screen.
  */
-export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, selectedId, onSelect, onChange }: Props) {
+export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, selectedId, onSelect, onChange, onLockedDelete }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const k = width / CANVAS_W || 1;
   const [editing, setEditing] = useState<string | null>(null);
@@ -135,6 +137,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     const step = e.shiftKey ? 10 : 1;
     const nudge = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
     if (nudge && el) updateElement(el.id, { x: el.x + nudge[0], y: el.y + nudge[1] });
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && el && onLockedDelete) onLockedDelete();
     else if ((e.key === 'Delete' || e.key === 'Backspace') && el) {
       onChange({ elements: elements.filter((x) => x.id !== el.id) });
       onSelect(null);
