@@ -62,7 +62,7 @@ export const cloudApi = {
   },
   putLibrary: (token: string, baseVersion: number, data: Library) =>
     call<{ version: number; conflict?: boolean; data?: unknown }>('library', { method: 'PUT', token, body: JSON.stringify({ baseVersion, data }) }),
-  listMedia: (token: string) => call<{ items: { id: string; size: number }[] }>('media', { token }).then((r) => r.data.items),
+  listMedia: (token: string) => call<{ items: { id: string; size: number; type?: string }[] }>('media', { token }).then((r) => r.data.items),
   uploadMedia: (token: string, id: string, blob: Blob) =>
     call(`media/${encodeURIComponent(id)}`, { method: 'PUT', token, body: blob, headers: { 'content-type': blob.type || 'application/octet-stream' } }),
   deleteMedia: (token: string, id: string) => call(`media/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
