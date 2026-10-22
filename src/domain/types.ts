@@ -243,6 +243,8 @@ export type PlaylistItem =
   | { id: string; kind: 'header'; title: string };
 
 export interface Playlist {
+  /** Keep this service until the next weekly cleanup, even after its own service ends. */
+  autoDeleteAfter?: number;
   id: string;
   name: string;
   items: PlaylistItem[];

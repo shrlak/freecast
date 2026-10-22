@@ -6,7 +6,7 @@ const SKIP = new Set(['library/merge', 'online/songs', 'songs/dedupe', 'services
 const LABELS: Record<string, string> = {
   'presentation/create': '프레젠테이션 추가', 'presentation/createMany': '자료 가져오기', 'presentation/update': '프레젠테이션 수정', 'presentation/delete': '프레젠테이션 삭제',
   'slide/update': '슬라이드 수정', 'media/add': '미디어 추가', 'media/remove': '미디어 삭제', 'sunday/settings': '예배 설정 수정',
-  'playlist/set': '예배 순서 수정', 'playlist/create': '재생목록 추가', 'playlist/rename': '재생목록 이름 변경', 'playlist/delete': '재생목록 삭제',
+  'playlist/retention': '예배 자동 삭제 설정', 'playlist/set': '예배 순서 수정', 'playlist/create': '재생목록 추가', 'playlist/rename': '재생목록 이름 변경', 'playlist/delete': '재생목록 삭제',
   'theme/upsert': '테마 수정', 'theme/delete': '테마 삭제', 'screen/upsert': '출력 화면 설정', 'screen/delete': '출력 화면 삭제',
   'playlist/addItem': '예배 순서 추가', 'playlist/removeItem': '예배 순서 제거', 'playlist/move': '예배 순서 이동', 'playlist/duplicate': '재생목록 복제',
   'timer/upsert': '타이머 설정', 'timer/delete': '타이머 삭제', 'timer/op': '타이머 조작', 'prop/upsert': '소품 수정', 'prop/delete': '소품 삭제',

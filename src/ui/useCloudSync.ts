@@ -122,6 +122,13 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
         }
         if (res.status !== 200) throw new Error('다른 기기의 수정과 충돌했습니다. 복원 지점은 보관했으며 다음 동기화에서 다시 시도합니다.');
         if (loadSession()?.token !== session.token) return;
+        if (res.data.data) {
+          const canonical = normalizeLibrary(res.data.data);
+          if (!canonical) throw new Error('서버의 미디어 정리 결과가 올바르지 않습니다.');
+          const { library: merged } = mergeLibrary(current, syncable(libRef.current), canonical);
+          dispatch({ type: 'library/merge', library: merged });
+          current = canonical;
+        }
         version = res.data.version;
         await saveBase(current);
         setSession({ ...session, version });
@@ -148,7 +155,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
         setTimeout(() => void sync('push'), PUSH_DELAY);
       }
     }
-  }, [absorb, refreshStorage]);
+  }, [absorb, refreshStorage, dispatch]);
 
   // Start + poll.
   useEffect(() => {

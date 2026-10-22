@@ -40,7 +40,7 @@ import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
 import { UpdateBanner } from '../ui/UpdateBanner';
 import { useCloudSync } from '../ui/useCloudSync';
-import { purgeMedia } from '../domain/cloud';
+import { deleteMedia, forgetMediaUrl } from '../domain/media';
 import { finishedServices } from '../domain/sunday/cleanup';
 import { useServiceUploads } from '../ui/ppt/useServiceUploads';
 import { AccountModal } from '../ui/AccountModal';
@@ -136,12 +136,21 @@ export function OperatorView() {
     return () => { clearTimeout(first); clearInterval(t); };
   }, []);
   const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
+  // The server deletes blobs atomically with the library update; remove this device's cache too.
+  const previousMedia = useRef(state.library.media);
+  useEffect(() => {
+    const remaining = new Set(state.library.media.map((m) => m.id));
+    for (const m of previousMedia.current) if (!remaining.has(m.id)) {
+      forgetMediaUrl(m.id);
+      void deleteMedia(m.id).catch(() => notifyRef.current('이 기기의 미디어 캐시를 정리하지 못했습니다.'));
+    }
+    previousMedia.current = state.library.media;
+  }, [state.library.media]);
   // Sunday 5 pm: the finished 주일예배 (playlist + its decks) is removed here and from the church server.
   useEffect(() => {
     const clear = () => {
       const done = finishedServices(latestLib.current, new Date());
       if (done.playlistIds.length || done.presentationIds.length) dispatch({ type: 'services/finish', ...done });
-      void purgeMedia(done.mediaIds);
     };
     clear();
     const t = setInterval(clear, 60_000);

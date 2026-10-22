@@ -838,3 +838,5 @@ body[data-view='multiview'] { overflow: auto; }
 .name-dialog { width: min(440px, 94vw); }
 .cloud-storage-bar.warning .cloud-storage-media { background: #c67c00; }
 .cloud-storage-bar.critical .cloud-storage-media { background: #c42b1c; }
+
+.playlist-retention { padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 12px; }
