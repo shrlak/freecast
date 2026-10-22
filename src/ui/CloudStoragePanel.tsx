@@ -1,3 +1,4 @@
+import { CloudMediaList } from './CloudMediaList';
 import type { CloudSync } from './useCloudSync';
 import { formatStorageBytes, formatStoragePercent, formatQuotaBytes } from '../domain/cloudStorage';
 
@@ -23,5 +24,6 @@ export function CloudStoragePanel({ cloud }: { cloud: CloudSync }) {
       <p className="muted small">확인: {new Date(usage.checkedAt).toLocaleString()}{error ? ' · 이전 조회 결과' : ''} · 30초마다 자동 갱신</p>
     </> : !error && <p role="status">{loading ? '서버 용량을 확인하고 있습니다…' : '서버 저장공간을 조회합니다.'}</p>}
     {error && <p role="alert">서버 용량 조회 실패: {error}</p>}
+    {cloud.status.session && <CloudMediaList key={cloud.status.session.token} token={cloud.status.session.token} />}
   </section>;
 }
