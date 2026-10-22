@@ -1,6 +1,6 @@
 // Client for the church cloud library (Worker /freecast/* via this app's /api/cloud proxy).
 import type { Library } from './types';
-import { deleteMedia as deleteLocalMedia, getMedia, putMedia } from './media';
+import { getMedia, putMedia } from './media';
 import { summarizeCloudStorage, parseServerStorage } from './cloudStorage';
 import { normalizeLibrary } from './persistence';
 
@@ -112,28 +112,4 @@ export async function getCloudStorageUsage(token: string) {
   }
   const [remote, items] = await Promise.all([cloudApi.getLibrary(token), cloudApi.listMedia(token)]);
   return summarizeCloudStorage(remote?.data ?? null, items);
-}
-
-const DELETES_KEY = 'freecast.cloud.mediaDeletes';
-const pendingDeletes = (): string[] => {
-  try {
-    return JSON.parse(localStorage.getItem(DELETES_KEY) ?? '[]');
-  } catch {
-    return [];
-  }
-};
-
-/** Remove media from this computer and, as soon as signed in, from the server (retried until it works). */
-export async function purgeMedia(ids: string[]) {
-  const queue = [...new Set([...pendingDeletes(), ...ids])];
-  for (const id of ids) await deleteLocalMedia(id).catch(() => undefined);
-  const session = loadSession();
-  const left: string[] = [];
-  for (const id of queue) {
-    if (!session) left.push(id);
-    else await cloudApi.deleteMedia(session.token, id).catch((e: { status?: number }) => { if (e.status !== 404) left.push(id); });
-  }
-  try {
-    localStorage.setItem(DELETES_KEY, JSON.stringify(left));
-  } catch { /* storage unavailable */ }
 }

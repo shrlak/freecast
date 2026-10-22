@@ -126,7 +126,7 @@ export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) 
           <button disabled={busy} title="AI: add an English translation line under each slide" onClick={translate}>{busy ? 'Translating…' : '✨ Translate'}</button>
           <button title="Download as PowerPoint" onClick={() => exportPptx(state.library, { presentation: p }, p.title).catch((e) => notify(String(e)))}>⇩ PPTX</button>
           <button title="Duplicate" onClick={() => dispatch({ type: 'presentation/create', presentation: { ...p, id: uid('p'), title: `${p.title} copy`, slides: p.slides.map((s) => ({ ...s, id: uid('s') })) } })}>⧉</button>
-          <button className="danger" onClick={() => confirm(`Delete “${p.title}”?`) && dispatch({ type: 'presentation/delete', id: p.id })}>Delete</button>
+          <button className="danger" onClick={() => confirm(`“${p.title}” 자료와 전용 미디어를 삭제할까요? 다른 자료에서 사용하는 미디어는 보존됩니다.`) && dispatch({ type: 'presentation/delete', id: p.id })}>Delete</button>
         </div>
       </div>
       <ArrangementBar p={p} dispatch={dispatch} />

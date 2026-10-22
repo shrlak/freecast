@@ -1,3 +1,5 @@
+import { exclusivePresentationMedia } from './mediaCleanup';
+import { deletedServices, isServicePlaylist } from './sunday/cleanup';
 import type {
   Arrangement, Background, Library, MacroStep, MediaMeta, MessageTemplate, Macro, Playlist, PlaylistItem,
   Presentation, Prop, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer, DeviceIdentity, DeviceRegistration, ActivityEntry,
@@ -40,6 +42,7 @@ type DomainAction =
   | { type: 'theme/delete'; id: string }
   | { type: 'playlist/create'; playlist: Playlist }
   | { type: 'playlist/delete'; id: string }
+  | { type: 'playlist/retention'; id: string; until?: number }
   | { type: 'playlist/rename'; id: string; name: string }
   | { type: 'playlist/activate'; id: string }
   | { type: 'playlist/addItem'; item: PlaylistItem }
@@ -227,9 +230,10 @@ function core(s: AppState, a: Action): AppState {
       // Editing an online song makes it this computer's own copy (saved locally from then on).
       return refreshLive(mapPres(s, a.id, (p) => ({ ...p, ...a.patch, online: undefined })), a.id);
     case 'presentation/delete': {
+      const removedMedia = new Set(exclusivePresentationMedia(lib, [a.id]));
       const playlists = lib.playlists.map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || i.presentationId !== a.id) }));
       return {
-        ...setLib(s, { presentations: lib.presentations.filter((p) => p.id !== a.id), playlists }),
+        ...setLib(s, { presentations: lib.presentations.filter((p) => p.id !== a.id), playlists, media: lib.media.filter((m) => !removedMedia.has(m.id)) }),
         selectedId: s.selectedId === a.id ? null : s.selectedId,
         playlistIndex: null,
         cursor: s.cursor?.presentationId === a.id ? null : s.cursor,
@@ -277,10 +281,14 @@ function core(s: AppState, a: Action): AppState {
     case 'playlist/create':
       return { ...setLib(s, { playlists: [...lib.playlists, a.playlist] }), activePlaylistId: a.playlist.id, playlistIndex: null };
     case 'playlist/delete': {
+      const target = lib.playlists.find((p) => p.id === a.id);
+      if (target && isServicePlaylist(target.name)) return core(s, { type: 'services/finish', ...deletedServices(lib, [a.id]) });
       if (lib.playlists.length <= 1) return s;
       const playlists = lib.playlists.filter((p) => p.id !== a.id);
       return { ...setLib(s, { playlists }), activePlaylistId: s.activePlaylistId === a.id ? playlists[0].id : s.activePlaylistId, playlistIndex: null };
     }
+    case 'playlist/retention':
+      return setLib(s, { playlists: lib.playlists.map((p) => p.id === a.id ? { ...p, autoDeleteAfter: a.until } : p) });
     case 'playlist/rename':
       return setLib(s, { playlists: lib.playlists.map((p) => (p.id === a.id ? { ...p, name: a.name } : p)) });
     case 'playlist/activate':
