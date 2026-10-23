@@ -202,6 +202,8 @@ export interface Presentation {
   songSource?: { sections: { label: string; lines: string[] }[]; order?: string[] };
   /** Lyrics already laid out the church's way (each part once, blank-line breaks) at this many lines per slide. */
   lyricsLayout?: { linesPerSlide: number };
+  /** Individual slide content/design was edited; automatic song styling must preserve it. */
+  slidesEdited?: boolean;
   title: string;
   slides: Slide[];
   themeId: string;

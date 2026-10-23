@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import type { Background, BackgroundEffect, Slide, SlideElement, Theme } from '../../domain/types';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
 import { patchElement } from '../../domain/templates/convert';
@@ -34,21 +34,31 @@ interface Props {
 export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, selectedId, onSelect, onChange, onLockedDelete }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const k = width / CANVAS_W || 1;
-  const [editing, setEditing] = useState<string | null>(null);
+  const [session, setSession] = useState<{ slideId: string; id: string } | null>(null);
+  const editing = session?.slideId === slide.id && (session.id === SLIDE_TEXT || slide.elements?.some((el) => el.id === session.id)) ? session.id : null;
   const [draft, setDraft] = useState('');
   const [preview, setPreview] = useState<{ id: string; box: Box } | null>(null);
   const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);
   const drag = useRef<Drag | null>(null);
   const commitTimer = useRef<number | undefined>(undefined);
+  const pendingText = useRef<(() => void) | null>(null);
+  const flushText = useCallback(() => {
+    window.clearTimeout(commitTimer.current);
+    const save = pendingText.current;
+    pendingText.current = null;
+    save?.();
+  }, []);
   const theme = slideTheme(baseTheme, slide);
   const elements = slide.elements ?? [];
   const textBox: Box = { x: theme.padding, y: theme.padding, w: CANVAS_W - theme.padding * 2, h: CANVAS_H - theme.padding * 2 };
 
   // A different slide: stop typing and drop the selection.
   useEffect(() => {
-    setEditing(null);
+    setSession(null);
     setPreview(null);
   }, [slide.id]);
+  // The last keystroke belongs to the old slide, even if it is switched or closed immediately.
+  useEffect(() => flushText, [slide.id, flushText]);
 
   const boxOf = (el: SlideElement): Box => (preview?.id === el.id ? preview.box : { x: el.x, y: el.y, w: el.w, h: el.h });
   const updateElement = (id: string, patch: Partial<SlideElement>) =>
@@ -76,21 +86,19 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     setDraft(text);
     window.clearTimeout(commitTimer.current);
     const id = editing!;
-    commitTimer.current = window.setTimeout(() => commitText(id, text), 250);
+    pendingText.current = () => commitText(id, text);
+    commitTimer.current = window.setTimeout(flushText, 250);
   };
   const startEditing = (id: string) => {
     const el = elements.find((e) => e.id === id);
     if (id !== SLIDE_TEXT && el?.kind !== 'text') return;
     setDraft(id === SLIDE_TEXT ? slide.text : el?.text ?? '');
-    setEditing(id);
+    setSession({ slideId: slide.id, id });
     onSelect(id);
   };
   const stopEditing = () => {
-    if (editing) {
-      window.clearTimeout(commitTimer.current);
-      commitText(editing, draft);
-    }
-    setEditing(null);
+    flushText();
+    setSession(null);
   };
 
   const onPointerDown = (e: RPointerEvent, id: string, mode: Drag['mode']) => {

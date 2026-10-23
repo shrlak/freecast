@@ -220,7 +220,8 @@ const songKey = (tpl: ServiceTemplates, maxLines: number) => `song:${tpl.keys.so
 
 /** A copy of a song in the template's design for this week's service (new id, the service's folder). */
 export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder: string, maxLines = 4): Presentation {
-  return { ...restyleSong(song, tpl, maxLines), id: uid('p'), online: undefined, folder };
+  const styled = song.slidesEdited ? { ...song, slides: song.slides.map((s) => ({ ...s, id: uid('s'), elements: s.elements?.map((e) => ({ ...e, id: uid('e') })) })) } : restyleSong(song, tpl, maxLines);
+  return { ...styled, id: uid('p'), online: undefined, folder };
 }
 
 /** Is this presentation a song (lyrics by part), as opposed to an announcement or a scripture deck? */
@@ -238,7 +239,7 @@ export function songStyleUpdates(presentations: Presentation[], tpl: ServiceTemp
   const key = songKey(tpl, maxLines);
   // (A song in the template design whose 진행 skips its title slide is redone too: the title must open the song.)
   const skipsTitle = (p: Presentation) => !!p.arrangements?.some((a) => !a.groups.includes('Title')) && p.slides.some((s) => s.group === 'Title');
-  return presentations.filter((p) => (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
+  return presentations.filter((p) => !p.slidesEdited && (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
 }
 
 export interface ScriptureFill {

@@ -230,7 +230,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
 
         {cmd.view === 'sorter' ? (
           <div className="ppt-sorter">
-            <SlideGrid state={state} dispatch={dispatch} onEdit={() => cmd.open('edit')} onThemes={() => cmd.open('themes')} notify={cmd.notify} />
+            <SlideGrid state={state} dispatch={dispatch} onEdit={() => cmd.open('edit')} onEditSlide={(id) => { cmd.setSlideId(id); cmd.open('edit'); }} onThemes={() => cmd.open('themes')} notify={cmd.notify} />
           </div>
         ) : (
           <main className="ppt-center">
@@ -272,6 +272,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
       {menu && (
         <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button onClick={() => slideMenu(menu.id, 'live')}>▶ 지금 화면에 표시</button>
+          <button onClick={() => { cmd.setSlideId(menu.id); setMenu(null); cmd.open('edit'); }}>✎ 이 슬라이드 편집</button>
           <button onClick={() => { const ids = picked(); setMenu(null); makeSection(ids); }}>📑 섹션 만들기{multi.length > 1 ? ` (${multi.length}장)` : ''}</button>
           <button onClick={() => { setMenu(null); setDesigning(true); }}>✏️ 개체 편집</button>
           <button onClick={() => slideMenu(menu.id, 'dup')}>⧉ 슬라이드 복제</button>

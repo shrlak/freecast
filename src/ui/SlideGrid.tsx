@@ -15,6 +15,7 @@ interface Props {
   state: AppState;
   dispatch: Dispatch<Action>;
   onEdit: () => void;
+  onEditSlide?: (id: string) => void;
   onThemes: () => void;
   notify: (msg: string) => void;
 }
@@ -78,7 +79,7 @@ function ArrangementBar({ p, dispatch }: { p: Presentation; dispatch: Dispatch<A
   );
 }
 
-export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) {
+export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, notify }: Props) {
   const [inspect, setInspect] = useState<string | null>(null);
   const [design, setDesign] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -142,7 +143,7 @@ export function SlideGrid({ state, dispatch, onEdit, onThemes, notify }: Props) 
             live={i === liveSeq}
             bgEffect={p.bgEffect}
             onClick={() => dispatch({ type: 'live/go', presentationId: p.id, seq: i, now: Date.now() })}
-            onInspect={() => setInspect(slide.id)}
+            onInspect={() => onEditSlide ? onEditSlide(slide.id) : setInspect(slide.id)}
           />
         ))}
         {!seq.length && <div className="empty">No slides yet. Click “Edit” to add some.</div>}

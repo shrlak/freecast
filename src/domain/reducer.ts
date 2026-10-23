@@ -6,6 +6,7 @@ import type {
 } from './types';
 import { attributeChange, mergeActivity } from './activity';
 import { sequence } from './arrangement';
+import { editSlide } from './slideEditing';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
@@ -253,7 +254,7 @@ function core(s: AppState, a: Action): AppState {
       };
     }
     case 'slide/update':
-      return refreshLive(mapPres(s, a.presentationId, (p) => ({ ...p, online: undefined, slides: p.slides.map((sl) => (sl.id === a.slideId ? { ...sl, ...a.patch } : sl)) })), a.presentationId);
+      return refreshLive(mapPres(s, a.presentationId, (p) => editSlide(p, a.slideId, a.patch, a.occurredAt ?? Date.now())), a.presentationId);
     case 'online/songs': {
       const local = lib.presentations.filter((p) => !p.online);
       const localIds = new Set(local.map((p) => p.id));
@@ -474,7 +475,7 @@ function reduceState(s: AppState, a: Action): AppState {
     const rest = from.slice(0, -1);
     const other = [...(a.type === 'undo' ? s.future : s.past), s.library].slice(-60);
     const next = { ...s, library, lastKey: null, ...(a.type === 'undo' ? { past: rest, future: other } : { past: other, future: rest }) };
-    return syncLive(next);
+    return syncLive(next.cursor ? refreshLive(next, next.cursor.presentationId) : next);
   }
   const next = core(s, a);
   if (next === s) return s;
