@@ -10,8 +10,8 @@ import { checkForUpdates, installUpdate, startUpdater, updateState } from './upd
 import { PUBLISH } from './publish.mjs';
 import { setAiConfigProvider } from '../server/ai.mjs';
 import { startTunnel } from '../server/tunnel.mjs';
-import { aiConfig } from '../server/aiProviders.mjs';
-import { linkAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
+import { aiConfig, DEFAULT_PROXY } from '../server/aiProviders.mjs';
+import { linkAddress, remoteWebAppAddress, remotePairingAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
 import { pptxToPdf } from './pptxToPdf.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -64,7 +64,9 @@ let linkState = { status: 'off', error: null };
 let linkTimer = null;
 let publishedFor = null;
 
-const linkOpts = () => ({ proxy: aiConfig().proxyUrl, origin: aiConfig().proxyOrigin, id: settings.remoteLinkId, secret: settings.remoteLinkSecret });
+// Remote registration is independent of the editable AI proxy setting.
+const REMOTE_PROXY = DEFAULT_PROXY;
+const linkOpts = () => ({ proxy: REMOTE_PROXY, origin: aiConfig().proxyOrigin, id: settings.remoteLinkId, secret: settings.remoteLinkSecret });
 
 /** Tell the Worker where the tunnel is now (retries until it hears us). */
 async function publishLink() {
@@ -324,7 +326,8 @@ ipcMain.handle('desktop:info', (e) => {
     networkRemote: settings.networkRemote,
     lanUrls: settings.networkRemote ? lanAddresses().map((ip) => `http://${ip}:${PORT}`) : [],
     internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null,
-      link: settings.internetRemote && settings.remoteLinkId ? linkAddress(aiConfig().proxyUrl, settings.remoteLinkId) : null, linkStatus: linkState.status, linkError: linkState.error },
+      webAppUrl: remoteWebAppAddress(REMOTE_PROXY), pairingUrl: settings.remoteLinkId ? remotePairingAddress(REMOTE_PROXY, settings.remoteLinkId) : null,
+      link: settings.internetRemote && settings.remoteLinkId ? linkAddress(REMOTE_PROXY, settings.remoteLinkId) : null, linkStatus: linkState.status, linkError: linkState.error },
   };
 });
 ipcMain.handle('desktop:pptxToPdf', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptxToPdf(bytes) : null));

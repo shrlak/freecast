@@ -16,6 +16,7 @@ export interface DesktopInfo {
   lanUrls: string[];
   internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; note: string | null;
     /** The permanent address phones open (via the church Worker); null while the internet remote is off. */
+    webAppUrl?: string; pairingUrl?: string | null;
     link: string | null; linkStatus: 'off' | 'pending' | 'ok' | 'unavailable' | 'error'; linkError: string | null };
 }
 

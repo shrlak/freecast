@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS modules
-import { linkAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
+import { linkAddress, remoteWebAppAddress, remotePairingAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
 // @ts-expect-error plain JS modules
 import { handleRemoteLink } from '../worker/remote-link.js';
 
@@ -15,6 +15,8 @@ describe('remote link (app side)', () => {
   });
   it('builds the permanent address on the Worker', () => {
     expect(linkAddress('https://w.example.workers.dev/', 'abc')).toBe('https://w.example.workers.dev/freecast/remote/abc');
+    expect(remoteWebAppAddress('https://w.example.workers.dev/')).toBe('https://w.example.workers.dev/freecast/remote/');
+    expect(remotePairingAddress('https://w.example.workers.dev/', 'abc12345')).toBe('https://w.example.workers.dev/freecast/remote/#abc12345');
   });
   it('PUTs the tunnel address with the Worker origin', async () => {
     let seen: { url: string; init: RequestInit } | null = null;
@@ -53,10 +55,11 @@ describe('remote link (Worker side)', () => {
     expect((await handleRemoteLink(req('PUT', 'link12345', { secret, url: 'https://one.trycloudflare.com' }), env)).status).toBe(200);
     const go = await handleRemoteLink(req('GET', 'link12345'), env);
     expect(go.status).toBe(302);
-    expect(go.headers.get('location')).toBe('https://one.trycloudflare.com/?view=remote');
+    expect(go.headers.get('location')).toBe('/freecast/remote/#link12345');
     // Same secret moves it to the new tunnel; another secret is refused.
     expect((await handleRemoteLink(req('PUT', 'link12345', { secret, url: 'https://two.trycloudflare.com' }), env)).status).toBe(200);
-    expect((await handleRemoteLink(req('GET', 'link12345'), env)).headers.get('location')).toContain('two.trycloudflare.com');
+    expect((await handleRemoteLink(req('GET', 'link12345'), env)).headers.get('location')).toBe('/freecast/remote/#link12345');
+    expect((await env.REMOTE_LINKS.get('remote:link12345')).url).toBe('https://two.trycloudflare.com');
     expect((await handleRemoteLink(req('PUT', 'link12345', { secret: 'b'.repeat(24), url: 'https://evil.trycloudflare.com' }), env)).status).toBe(403);
     expect((await handleRemoteLink(req('DELETE', 'link12345', { secret: 'b'.repeat(24) }), env)).status).toBe(403);
   });
