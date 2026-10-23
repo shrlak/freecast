@@ -30,7 +30,8 @@ function validCommand(c) {
 export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   let lastState = null;
-  let lastInfo = null;
+  let lastInfo = [];
+  let pendingInfo = null;
 
   httpServer.on('upgrade', (req, socket, head) => {
     if (!req.url?.startsWith('/freecast-ws')) return;
@@ -80,7 +81,10 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
         if (role === 'remote' || role === 'host') { tellHosts(); tellRemotes(); }
         if (role !== 'host') {
           if (lastState) ws.send(lastState);
-          if (lastInfo && role === 'remote') ws.send(lastInfo);
+          if (role === 'remote') {
+            for (const packet of lastInfo) ws.send(packet);
+            for (const packet of pendingInfo?.packets ?? []) ws.send(packet);
+          }
         }
         return;
       }
@@ -88,14 +92,23 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
         lastState = String(raw);
         broadcast(lastState, (c) => c.role === 'viewer' || c.role === 'remote');
       } else if (ws.role === 'host' && msg?.type === 'info') {
-        lastInfo = String(raw);
-        broadcast(lastInfo, (c) => c.role === 'remote');
+        pendingInfo = null;
+        lastInfo = [String(raw)];
+        broadcast(lastInfo[0], (c) => c.role === 'remote');
+      } else if (ws.role === 'host' && msg?.type === 'info-chunk') {
+        if (typeof msg.id !== 'string' || msg.id.length > 100 || typeof msg.data !== 'string' || !Number.isInteger(msg.total) || msg.total < 1 || !Number.isInteger(msg.index) || msg.index < 0 || msg.index >= msg.total) return;
+        if (msg.index === 0) pendingInfo = { owner: ws, id: msg.id, total: msg.total, packets: [] };
+        if (!pendingInfo || pendingInfo.owner !== ws || pendingInfo.id !== msg.id || pendingInfo.total !== msg.total || pendingInfo.packets.length !== msg.index) return;
+        const packet = String(raw);
+        pendingInfo.packets.push(packet);
+        broadcast(packet, (c) => c.role === 'remote');
+        if (pendingInfo.packets.length === pendingInfo.total) { lastInfo = pendingInfo.packets; pendingInfo = null; }
       } else if (ws.role === 'remote' && msg?.type === 'command' && validCommand(msg.command)) {
         broadcast(JSON.stringify({ type: 'command', command: msg.command }), (c) => c.role === 'host');
       }
     });
   });
-  wss.on('connection', (ws) => ws.on('close', () => { if (ws.role === 'remote') tellHosts(); if (ws.role === 'host') tellRemotes(); }));
+  wss.on('connection', (ws) => ws.on('close', () => { if (ws.role === 'remote') tellHosts(); if (ws.role === 'host') { if (pendingInfo?.owner === ws) pendingInfo = null; tellRemotes(); } }));
   wss.toHost = (command) => {
     if (!validCommand(command)) return false;
     let sent = false;

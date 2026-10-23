@@ -1,25 +1,11 @@
-import { Fragment, useEffect, useState } from 'react';
-import type { Background, LiveState, Slide, Theme } from '../domain/types';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import type { LiveState } from '../domain/types';
 import { SlideCanvas } from '../ui/SlideCanvas';
 import { liveCanvasProps } from '../ui/liveProps';
 import { useRelay } from '../ui/hooks';
 
-/** What the operator shares with remotes: every slide still to come (across the playlist), with what it needs to be drawn. */
-export interface RemoteInfo {
-  upcoming: {
-    presentationId: string;
-    seq: number;
-    playlistIndex: number | null;
-    title: string;
-    /** First slide of a presentation other than the live one: start of a new section. */
-    heading: boolean;
-    themeId: string;
-    bgEffect: { dim: number; blur: number } | null;
-    slide: Slide;
-    background: Background | null;
-  }[];
-  themes: Record<string, Theme>;
-}
+import { RemoteInfoReader, remoteSlideKey, type RemoteInfo } from '../domain/remoteSlides';
+export type { RemoteInfo } from '../domain/remoteSlides';
 
 /** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network, or the internet address from Settings. */
 export function RemoteView() {
@@ -52,12 +38,15 @@ export function RemoteView() {
   });
   const [live, setLive] = useState<LiveState | null>(null);
   const [info, setInfo] = useState<RemoteInfo | null>(null);
+  const reader = useRef(new RemoteInfoReader());
+  const [slideTab, setSlideTab] = useState<'all' | 'next'>('all');
+  const list = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [hostConnected, setHostConnected] = useState(false);
   const { send, connected, status } = useRelay({ type: 'hello', role: 'remote', pin }, (m) => {
     if (m.type === 'host-status') setHostConnected(m.connected === true);
     if (m.type === 'state') setLive(m.state as LiveState);
-    if (m.type === 'info') setInfo(m.info as RemoteInfo);
+    if (m.type === 'info' || m.type === 'info-chunk') { const updated = reader.current.accept(m); if (updated) setInfo(updated); }
     if (m.type === 'error') setError(String(m.error));
   });
   useEffect(() => {
@@ -67,6 +56,21 @@ export function RemoteView() {
   const embedded = window.self !== window.top;
   const cmd = (command: Record<string, unknown>) => { if (ready) send({ type: 'command', command }); };
   const connectionLabel = status === 'offline' ? '인터넷 연결 끊김 · 네트워크를 확인하세요' : status === 'reconnecting' ? '연결 끊김 · 자동 재연결 중…' : !connected ? '연결 중…' : !hostConnected ? '서버 연결됨 · 컴퓨터에서 FreeCast를 열어 주세요' : '컴퓨터 연결됨';
+
+  const all = info?.all ?? info?.upcoming ?? [];
+  const slides = slideTab === 'all' ? all : info?.upcoming ?? [];
+  const isCurrent = (item: typeof all[number]) => info?.current
+    ? item.presentationId === info.current.presentationId && item.seq === info.current.seq && (item.playlistIndex === null || item.playlistIndex === (info.current.playlistIndex ?? null))
+    : info?.current === undefined && !!live?.slide && item.slide.id === live.slide.id;
+  const hasCurrent = all.some(isCurrent);
+  const locateCurrent = () => {
+    setSlideTab('all');
+    requestAnimationFrame(() => {
+      const region = list.current, current = region?.querySelector<HTMLElement>('[aria-current="true"]');
+      if (region && current) region.scrollTo({ top: region.scrollTop + current.getBoundingClientRect().top - region.getBoundingClientRect().top - (region.clientHeight - current.offsetHeight) / 2, behavior: 'auto' });
+    });
+  };
+  useEffect(() => { if (list.current) list.current.scrollTop = 0; }, [slideTab]);
 
   if (error) {
     const submit = (v: string) => {
@@ -137,21 +141,30 @@ export function RemoteView() {
         </div>
       )}
       </div>
-        <section className="remote-upcoming" aria-label="Up next">
-          <h3>Up next</h3>
-          <div className="remote-upcoming-scroll" tabIndex={0} role="region" aria-label="Upcoming slides">
+        <section className="remote-upcoming" aria-label="슬라이드 목록">
+          <div className="remote-slide-toolbar">
+            <div role="tablist" aria-label="표시할 슬라이드">
+              <button role="tab" id="remote-all-tab" aria-selected={slideTab === 'all'} aria-controls="remote-slide-list" className={slideTab === 'all' ? 'active' : ''} onClick={() => setSlideTab('all')}>전체 슬라이드 <span>{all.length}</span></button>
+              <button role="tab" id="remote-next-tab" aria-selected={slideTab === 'next'} aria-controls="remote-slide-list" className={slideTab === 'next' ? 'active' : ''} onClick={() => setSlideTab('next')}>Up next</button>
+            </div>
+            <button className="remote-locate" disabled={!hasCurrent} aria-label="현재 슬라이드로 스크롤" onClick={locateCurrent}>현재</button>
+          </div>
+          <div id="remote-slide-list" ref={list} className="remote-upcoming-scroll" tabIndex={0} role="tabpanel" aria-labelledby={slideTab === 'all' ? 'remote-all-tab' : 'remote-next-tab'}>
+          {info?.name && <div className="remote-list-name">{info.name}</div>}
           <div className="remote-slides">
-            {info?.upcoming.map((u) => (
-              <Fragment key={`${u.presentationId}:${u.seq}:${u.playlistIndex}`}>
-                {u.heading && <div className="remote-section">{u.title}</div>}
-                <button onClick={() => cmd({ type: 'live/go', presentationId: u.presentationId, seq: u.seq, playlistIndex: u.playlistIndex })}>
-                  <SlideCanvas slide={u.slide} theme={info.themes[u.themeId]} background={u.background} bgEffect={u.bgEffect} />
+            {slides.map((u) => (
+              <Fragment key={remoteSlideKey(u)}>
+                {u.heading && <div className="remote-section">{u.section ? u.section + ' · ' : ''}{u.title}</div>}
+                <button aria-label={`${u.title} · 슬라이드 ${u.seq + 1}${u.slide.disabled ? ' · 숨김' : ''}`} aria-current={isCurrent(u) ? 'true' : undefined}
+                  onClick={() => cmd({ type: 'live/go', presentationId: u.presentationId, seq: u.seq, playlistIndex: u.playlistIndex })}>
+                  <SlideCanvas slide={u.slide} theme={info!.themes[u.themeId]} background={u.background} bgEffect={u.bgEffect} />
                   <span className="remote-slide-num">{u.seq + 1}</span>
+                  {isCurrent(u) ? <span className="remote-slide-state">현재</span> : u.slide.disabled && <span className="remote-slide-state hidden-slide">숨김</span>}
                 </button>
               </Fragment>
             ))}
           </div>
-          {!info?.upcoming.length && <p className="muted small">No upcoming slides</p>}
+          {!slides.length && <p className="muted small">{slideTab === 'all' ? '컴퓨터에서 재생목록이나 프레젠테이션을 선택해 주세요.' : '다음 슬라이드가 없습니다.'}</p>}
           </div>
         </section>
       </fieldset>
