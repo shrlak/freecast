@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
 /** Electron does not implement window.prompt; use the same accessible form in desktop and web. */
-export function NameDialog({ title, initialValue, onSave, onClose }: {
+export function NameDialog({ title, initialValue, onSave, onClose, description, inputLabel = '이름', saveLabel = '저장', maxLength = 120 }: {
   title: string; initialValue: string; onSave: (name: string) => string | void; onClose: () => void;
+  description?: string; inputLabel?: string; saveLabel?: string; maxLength?: number;
 }) {
   const [value, setValue] = useState(initialValue);
   const [error, setError] = useState('');
@@ -34,9 +35,9 @@ export function NameDialog({ title, initialValue, onSave, onClose }: {
         if (message) setError(message); else onClose();
       }}>
       <header className="modal-head"><h2>{title}</h2><button type="button" onClick={onClose} aria-label="닫기">✕</button></header>
-      <div className="wizard-body stack"><label className="stack">이름<input ref={input} maxLength={120} value={value} onChange={(e) => { setValue(e.target.value); setError(''); }} /></label>
+      <div className="wizard-body stack">{description && <p>{description}</p>}<label className="stack">{inputLabel}<input ref={input} maxLength={maxLength} value={value} onChange={(e) => { setValue(e.target.value); setError(''); }} /></label>
         {error && <p role="alert">{error}</p>}
-        <div className="row"><button type="button" onClick={onClose}>취소</button><button className="primary" type="submit" disabled={!value.trim()}>저장</button></div>
+        <div className="row"><button type="button" onClick={onClose}>취소</button><button className="primary" type="submit" disabled={!value.trim()}>{saveLabel}</button></div>
       </div>
     </form>
   </div>;

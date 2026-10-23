@@ -10,12 +10,13 @@ import { SlideInspector } from './SlideInspector';
 import { SlideDesigner } from './SlideDesigner';
 import { TimelineBar } from './TimelineBar';
 import { resolveBackground } from '../domain/autoBackground';
+import { NameDialog } from './NameDialog';
 
 interface Props {
   state: AppState;
   dispatch: Dispatch<Action>;
   onEdit: () => void;
-  onEditSlide?: (id: string) => void;
+  onEditSlide?: (id: string, seq: number) => void;
   onThemes: () => void;
   notify: (msg: string) => void;
 }
@@ -72,7 +73,7 @@ function ArrangementBar({ p, dispatch }: { p: Presentation; dispatch: Dispatch<A
       ) : (
         <>
           <button onClick={() => setEditing([])}>New…</button>
-          {p.arrangementId && <button className="danger" onClick={() => dispatch({ type: 'arrangement/delete', presentationId: p.id, id: p.arrangementId! })}>Delete</button>}
+          {p.arrangementId && <button className="danger" onClick={() => dispatch({ type: 'arrangement/delete', presentationId: p.id, id: p.arrangementId! })}>진행 구성 삭제</button>}
         </>
       )}
     </div>
@@ -83,6 +84,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
   const [inspect, setInspect] = useState<string | null>(null);
   const [design, setDesign] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const p = state.library.presentations.find((x) => x.id === state.selectedId);
   if (!p) {
     return <main className="panel center-empty"><p>Select a presentation from the library, or create a new one.</p></main>;
@@ -127,7 +129,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
           <button disabled={busy} title="AI: add an English translation line under each slide" onClick={translate}>{busy ? 'Translating…' : '✨ Translate'}</button>
           <button title="Download as PowerPoint" onClick={() => exportPptx(state.library, { presentation: p }, p.title).catch((e) => notify(String(e)))}>⇩ PPTX</button>
           <button title="Duplicate" onClick={() => dispatch({ type: 'presentation/create', presentation: { ...p, id: uid('p'), title: `${p.title} copy`, slides: p.slides.map((s) => ({ ...s, id: uid('s') })) } })}>⧉</button>
-          <button className="danger" onClick={() => confirm(`“${p.title}” 자료와 전용 미디어를 삭제할까요? 다른 자료에서 사용하는 미디어는 보존됩니다.`) && dispatch({ type: 'presentation/delete', id: p.id })}>Delete</button>
+          <button className="danger" onClick={() => setDeleting(true)}>자료 전체 삭제…</button>
         </div>
       </div>
       <ArrangementBar p={p} dispatch={dispatch} />
@@ -143,11 +145,17 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
             live={i === liveSeq}
             bgEffect={p.bgEffect}
             onClick={() => dispatch({ type: 'live/go', presentationId: p.id, seq: i, now: Date.now() })}
-            onInspect={() => onEditSlide ? onEditSlide(slide.id) : setInspect(slide.id)}
+            onInspect={() => onEditSlide ? onEditSlide(slide.id, i) : setInspect(slide.id)}
           />
         ))}
         {!seq.length && <div className="empty">No slides yet. Click “Edit” to add some.</div>}
       </div>
+      {deleting && <NameDialog title="자료 전체 삭제 확인" initialValue="" inputLabel="삭제할 자료 제목" saveLabel="자료 전체 삭제" maxLength={Math.max(120, p.title.length)}
+        description={`“${p.title}”의 모든 슬라이드를 삭제합니다. 한 장만 삭제하려면 취소 후 해당 슬라이드의 편집 버튼을 사용하세요. 전체 삭제하려면 제목을 직접 입력하세요.`}
+        onClose={() => setDeleting(false)} onSave={(name) => {
+          if (name !== p.title.trim()) return '자료 제목이 일치하지 않습니다.';
+          dispatch({ type: 'presentation/delete', id: p.id });
+        }} />}
       {inspected && (
         <SlideInspector
           slide={inspected}

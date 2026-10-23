@@ -35,7 +35,8 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
   const [ref, width] = useWidth<HTMLDivElement>();
   const k = width / CANVAS_W || 1;
   const [session, setSession] = useState<{ slideId: string; id: string } | null>(null);
-  const editing = session?.slideId === slide.id && (session.id === SLIDE_TEXT || slide.elements?.some((el) => el.id === session.id)) ? session.id : null;
+  const identity = slide.sourceSlideId ?? slide.id;
+  const editing = session?.slideId === identity && (session.id === SLIDE_TEXT || slide.elements?.some((el) => el.id === session.id)) ? session.id : null;
   const [draft, setDraft] = useState('');
   const [preview, setPreview] = useState<{ id: string; box: Box } | null>(null);
   const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);
@@ -56,9 +57,9 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
   useEffect(() => {
     setSession(null);
     setPreview(null);
-  }, [slide.id]);
+  }, [identity]);
   // The last keystroke belongs to the old slide, even if it is switched or closed immediately.
-  useEffect(() => flushText, [slide.id, flushText]);
+  useEffect(() => flushText, [identity, flushText]);
 
   const boxOf = (el: SlideElement): Box => (preview?.id === el.id ? preview.box : { x: el.x, y: el.y, w: el.w, h: el.h });
   const updateElement = (id: string, patch: Partial<SlideElement>) =>
@@ -93,7 +94,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     const el = elements.find((e) => e.id === id);
     if (id !== SLIDE_TEXT && el?.kind !== 'text') return;
     setDraft(id === SLIDE_TEXT ? slide.text : el?.text ?? '');
-    setSession({ slideId: slide.id, id });
+    setSession({ slideId: identity, id });
     onSelect(id);
   };
   const stopEditing = () => {

@@ -86,7 +86,9 @@ export function OperatorView() {
   const [online, setOnline] = useState<{ status: 'loading' | 'ok' | 'error'; count: number; error?: string }>({ status: 'loading', count: 0 });
   const [layout, setLayoutState] = useState<Layout>(() => (localStorage.getItem('freecast.layout') as Layout) || 'ppt');
   const [view, setView] = useState<PptViewMode>('normal');
-  const [slideId, setSlideId] = useState<string | null>(null);
+  const [slideId, setSlideIdState] = useState<string | null>(null);
+  const [slideSeq, setSlideSeq] = useState<number | null>(null);
+  const setSlideId = (id: string | null, seq?: number) => { setSlideIdState(id); setSlideSeq(seq ?? null); };
   const [locked, setLockedState] = useState(() => localStorage.getItem('freecast.lock') !== '0');
   const setLocked = (on: boolean) => { localStorage.setItem('freecast.lock', on ? '1' : '0'); setLockedState(on); };
   const setLayout = (l: Layout) => { localStorage.setItem('freecast.layout', l); setLayoutState(l); };
@@ -358,7 +360,7 @@ export function OperatorView() {
     if (!pres) return notify('먼저 프레젠테이션을 선택하세요');
     void saveRestorePoint(state.library, 'show', Date.now(), activePlaylist(state)?.name ?? pres.title).catch(() => notify('발표는 시작했지만 복원 지점을 저장하지 못했습니다. 저장 공간을 확인하세요.'));
     dispatch({ type: 'activity/record', entry: { id: crypto.randomUUID(), at: Date.now(), action: 'show/start', detail: activePlaylist(state)?.name ?? pres.title, device: getDevice(), account: loadSession()?.username ?? null } });
-    const seq = fromCurrent && slideId ? Math.max(0, sequence(pres).findIndex((x) => x.slide.id === slideId)) : 0;
+    const seq = fromCurrent && slideId ? slideSeq ?? Math.max(0, sequence(pres).findIndex((x) => x.slide.id === slideId)) : 0;
     dispatch({ type: 'live/go', presentationId: pres.id, seq });
     setView('presenter');
     presentOutput();
@@ -486,6 +488,7 @@ export function OperatorView() {
     remoteCount: remotes,
     view,
     slideId,
+    slideSeq,
     setSlideId,
     cloud: cloud.status,
     locked,
@@ -505,7 +508,7 @@ export function OperatorView() {
           <div className="workspace">
             <LibraryPanel state={state} dispatch={dispatch} onNew={() => setModal('new')} online={online} onReloadOnline={loadOnline} />
             <div className="center-col">
-              <SlideGrid state={state} dispatch={dispatch} onEdit={() => selected && setModal('edit')} onEditSlide={(id) => { setSlideId(id); setModal('edit'); }} onThemes={() => setModal('themes')} notify={notify} />
+              <SlideGrid state={state} dispatch={dispatch} onEdit={() => selected && setModal('edit')} onEditSlide={(id, seq) => { setSlideId(id, seq); setModal('edit'); }} onThemes={() => setModal('themes')} notify={notify} />
               <MediaBin state={state} dispatch={dispatch} />
             </div>
             <LivePanel state={state} dispatch={dispatch} />
@@ -526,7 +529,7 @@ export function OperatorView() {
       <AudioPlayer state={state} dispatch={dispatch} />
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
 
-      {modal === 'edit' && selected && <SlideEditorModal key={selected.id} state={state} dispatch={dispatch} presentation={selected} slideId={slideId}
+      {modal === 'edit' && selected && <SlideEditorModal key={selected.id} state={state} dispatch={dispatch} presentation={selected} slideId={slideId} slideSeq={slideSeq}
         onSelect={setSlideId} onClose={() => setModal(null)} onSource={() => setModal(isSong(selected) ? 'song' : 'source')} />}
       {(modal === 'source' || modal === 'new') && (
         <EditorModal

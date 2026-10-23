@@ -21,7 +21,7 @@ interface Props {
 }
 
 /** Every slide of the service (playlist), or of the current presentation, as clickable thumbnails. */
-function AllSlides({ state, dispatch, onEdit }: { state: AppState; dispatch: Dispatch<Action>; onEdit: (presId: string, slideId: string) => void }) {
+function AllSlides({ state, dispatch, onEdit }: { state: AppState; dispatch: Dispatch<Action>; onEdit: (presId: string, slideId: string, seq: number) => void }) {
   const lib = state.library;
   const items = activePlaylist(state)?.items ?? [];
   const inPlaylist = !!state.cursor && items.some((i) => i.kind !== 'header' && i.presentationId === state.cursor!.presentationId);
@@ -50,7 +50,7 @@ function AllSlides({ state, dispatch, onEdit }: { state: AppState; dispatch: Dis
                       if (sec.index != null) dispatch({ type: 'playlist/select', index: sec.index });
                       dispatch({ type: 'live/go', presentationId: p.id, seq });
                     }}
-                    onContextMenu={(e) => { e.preventDefault(); onEdit(p.id, slide.id); }}>
+                    onContextMenu={(e) => { e.preventDefault(); onEdit(p.id, slide.id, seq); }}>
                     <SlideCanvas slide={slide} theme={theme} background={resolveBackground(slide, p)} bgEffect={p.bgEffect} />
                     <span className="all-label" style={{ background: groupColor(slide.group) }}>{seq + 1} {slide.label || slide.group}</span>
                   </button>
@@ -75,7 +75,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
   const [started] = useState(() => Date.now());
   const [mode, setMode] = useState<'next' | 'all'>('next');
   const [controls, setControls] = useState(false);
-  const [edit, setEdit] = useState<{ presId: string; slideId: string } | null>(null);
+  const [edit, setEdit] = useState<{ presId: string; slideId: string; seq: number } | null>(null);
   const [follow, setFollow] = useState(true);
   const [designing, setDesigning] = useState(false);
   const [selEl, setSelEl] = useState<string | null>(null);
@@ -90,10 +90,11 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
   const elapsed = Math.floor((now - started) / 1000);
 
   // The editor follows the live slide unless the operator picked another slide to edit.
-  const liveTarget = cursor && live.slide ? { presId: cursor.presentationId, slideId: live.slide.id } : null;
+  const liveTarget = cursor && live.slide ? { presId: cursor.presentationId, slideId: live.slide.id, seq: cursor.seq } : null;
   const target = follow ? liveTarget ?? edit : edit ?? liveTarget;
   const editPres = target ? lib.presentations.find((x) => x.id === target.presId) : null;
-  const editSlide = editPres?.slides.find((s) => s.id === target!.slideId) ?? null;
+  const editSlide = editPres && target ? sequence(editPres)[target.seq]?.slide ?? null : null;
+  const editDispatch: Dispatch<Action> = (a) => dispatch(a.type === 'slide/update' && a.presentationId === editPres?.id && a.slideId === editSlide?.id ? { ...a, seq: target?.seq, sequenceLength: editPres ? sequence(editPres).length : 0 } : a);
   const editTheme = (editPres && lib.themes.find((t) => t.id === editPres.themeId)) || lib.themes[0];
   const editingLive = !!editSlide && editSlide.id === live.slide?.id;
 
@@ -105,8 +106,8 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [cmd]);
 
-  const pickToEdit = (presId: string, slideId: string) => {
-    setEdit({ presId, slideId });
+  const pickToEdit = (presId: string, slideId: string, seq: number) => {
+    setEdit({ presId, slideId, seq });
     setFollow(false);
   };
 
@@ -179,14 +180,14 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
         {editPres && editSlide ? (
           <div className="presenter-edit-body">
             <div className="presenter-edit-canvas">
-              <CanvasEditor slide={editSlide} theme={editTheme} background={resolveBackground(editSlide, editPres)} bgEffect={editPres.bgEffect}
+              <CanvasEditor key={`${editPres.id}:${target?.seq}`} slide={editSlide} theme={editTheme} background={resolveBackground(editSlide, editPres)} bgEffect={editPres.bgEffect}
                 selectedId={selEl} onSelect={setSelEl}
                 onLockedDelete={cmd.locked && editingLive ? () => cmd.notify('🔒 화면에 표시 중이라 삭제가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요') : undefined}
-                onChange={(patch) => dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch })} />
+                onChange={(patch) => dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, seq: target?.seq, sequenceLength: sequence(editPres).length, patch })} />
               <div className="muted small">{editPres.title} · {editSlide.group}</div>
             </div>
             <div className="presenter-format">
-              <SlideFormat state={state} dispatch={dispatch} presentation={editPres} slide={editSlide} onDesign={() => setDesigning(true)} selectedId={selEl} onSelect={setSelEl} />
+              <SlideFormat state={state} dispatch={editDispatch} presentation={editPres} slide={editSlide} onDesign={() => setDesigning(true)} selectedId={selEl} onSelect={setSelEl} />
             </div>
           </div>
         ) : (
@@ -201,7 +202,7 @@ export function PresenterView({ state, dispatch, cmd }: Props) {
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
           onClose={() => setDesigning(false)}
           onSave={(elements, text) => {
-            dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, patch: { elements: elements.length ? elements : undefined, text } });
+            dispatch({ type: 'slide/update', presentationId: editPres.id, slideId: editSlide.id, seq: target?.seq, sequenceLength: sequence(editPres).length, patch: { elements: elements.length ? elements : undefined, text } });
           }} />
       )}
     </div>
