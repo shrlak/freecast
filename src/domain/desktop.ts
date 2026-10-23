@@ -17,6 +17,8 @@ export interface DesktopInfo {
   internet: { on: boolean; status: 'off' | 'connecting' | 'on' | 'error'; url: string | null; error: string | null; note: string | null;
     /** The permanent address phones open (via the church Worker); null while the internet remote is off. */
     webAppUrl?: string; pairingUrl?: string | null;
+    /** The code phones enter in the web app; never the registration secret. */
+    connectionCode?: string | null;
     link: string | null; linkStatus: 'off' | 'pending' | 'ok' | 'unavailable' | 'error'; linkError: string | null };
 }
 
@@ -29,6 +31,7 @@ export interface UpdateState {
 
 export interface DesktopBridge {
   info(): Promise<DesktopInfo>;
+  copyRemoteCode(): Promise<boolean>;
   /** A .pptx drawn by PowerPoint / LibreOffice on this computer, as a PDF; null when neither can. */
   pptxToPdf(bytes: Uint8Array): Promise<Uint8Array | null>;
   openView(url: string, displayId?: number | null): Promise<void>;

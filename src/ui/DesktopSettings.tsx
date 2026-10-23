@@ -11,7 +11,10 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
   const [key, setKey] = useState('');
   const [orKey, setOrKey] = useState('');
   const [busy, setBusy] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('');
   const refresh = () => desktop?.info().then(setInfo);
+
+  useEffect(() => { setCopyStatus(''); }, [info?.internet.connectionCode]);
 
   useEffect(() => {
     refresh();
@@ -103,6 +106,21 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
         <p className="hint">Windows·Mac 어느 컴퓨터를 사용하든 웹앱 주소는 같습니다. iPhone Safari에서 열고 공유 → 홈 화면에 추가를 선택하세요.</p>
         {info.internet.on && info.internet.linkStatus === 'ok' && info.internet.link && <>
           <h4>이 컴퓨터 연결</h4>
+          {info.internet.connectionCode && <>
+            <label className="stack small">연결 코드
+              <input className="selectable" readOnly value={info.internet.connectionCode} onFocus={(e) => e.currentTarget.select()} spellCheck={false} />
+            </label>
+            <button onClick={async () => {
+              try {
+                if (!await desktop!.copyRemoteCode()) throw new Error('Code unavailable');
+                setCopyStatus('연결 코드를 복사했습니다.');
+              } catch {
+                setCopyStatus('복사하지 못했습니다. 위 연결 코드를 선택한 뒤 직접 복사해 주세요.');
+              }
+            }}>연결 코드 복사</button>
+            <p className="hint">웹앱에서 ‘컴퓨터 변경’ → ‘연결 코드’에 붙여 넣으세요. QR 코드 대신 텍스트로 연결할 수 있습니다.</p>
+            <p className="hint" role="status">{copyStatus}</p>
+          </>}
           <img src={qrDataUrl(info.internet.pairingUrl ?? info.internet.link)} alt="FreeCast Remote 컴퓨터 연결 QR 코드" width={160} height={160} />
           <code className="small selectable">{info.internet.pairingUrl ?? info.internet.link}</code>
           <p className="hint">QR 코드를 한 번 스캔하면 이 컴퓨터가 웹앱에 저장됩니다. 이후 고정 웹앱 주소에서 저장한 컴퓨터를 선택하세요. 컴퓨터에서 FreeCast와 인터넷 리모컨이 켜져 있어야 합니다.</p>
