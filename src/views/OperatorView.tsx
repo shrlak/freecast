@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createInitialState, reducer, type Action } from '../domain/reducer';
 import { loadLibrary, normalizeLibrary, saveLibrary } from '../domain/persistence';
-import { activePlaylist, findPres, upcomingCursors } from '../domain/live';
+import { activePlaylist } from '../domain/live';
 import { sequence } from '../domain/arrangement';
 import { getDevice } from '../domain/device';
 import { loadSession } from '../domain/cloud';
@@ -9,7 +9,7 @@ import { uid } from '../domain/lyrics';
 import { presentationFromSongFile } from '../domain/io/songFormats';
 import { exportBackup, importBackup } from '../domain/io/backup';
 import { exportPptx } from '../domain/io/pptxExport';
-import type { Library, Presentation, Theme } from '../domain/types';
+import type { Library, Presentation } from '../domain/types';
 import { AUTO_INTERVAL, listRestorePoints, saveRestorePoint } from '../domain/restorePoints';
 import { ActivityModal } from '../ui/ActivityModal';
 import { ServicePreparationModal } from '../ui/ServicePreparationModal';
@@ -35,8 +35,7 @@ import { runExternal } from '../domain/effects';
 import type { Macro, SlideAction } from '../domain/types';
 import { AudioPlayer } from '../ui/AudioPanel';
 import { filesToSlides } from '../ui/importFiles';
-import type { RemoteInfo } from './RemoteView';
-import { resolveBackground } from '../domain/autoBackground';
+import { remoteInfoMessages, remoteSlideInfo } from '../domain/remoteSlides';
 import { mediaIdsFor, resetSentMedia, sendMediaToRemotes } from '../domain/remoteMedia';
 import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
@@ -236,38 +235,22 @@ export function OperatorView() {
   });
   useLiveBroadcast(state.live, relay.send);
 
-  // Share the selected presentation's slides with remotes.
+  // Share the complete running order and the upcoming slides with remotes.
   const selected = state.library.presentations.find((p) => p.id === state.selectedId) ?? null;
 
   const playlist = activePlaylist(state);
   useEffect(() => {
     let cancelled = false;
-    const themes: Record<string, Theme> = {};
-    const upcoming: RemoteInfo['upcoming'] = [];
-    let lastPres = state.cursor?.presentationId ?? null;
-    for (const c of upcomingCursors(state, state.selectedId)) {
-      const p = findPres(state.library, c.presentationId);
-      const slide = p ? sequence(p)[c.seq]?.slide : undefined;
-      if (!p || !slide) continue;
-      themes[p.themeId] ??= state.library.themes.find((t) => t.id === p.themeId) ?? state.library.themes[0];
-      upcoming.push({
-        presentationId: p.id, seq: c.seq, playlistIndex: c.playlistIndex ?? state.playlistIndex ?? null,
-        title: p.title, heading: p.id !== lastPres, themeId: p.themeId, bgEffect: p.bgEffect ?? null,
-        slide, background: resolveBackground(slide, p),
-      });
-      lastPres = p.id;
-    }
-    const info: RemoteInfo = { upcoming, themes };
-    // One message may not exceed the relay's 4 MB limit: a very long show sends the nearest slides only.
-    while (upcoming.length > 1 && JSON.stringify(info).length > 3_000_000) upcoming.length = Math.ceil(upcoming.length / 2);
-    // The slide list goes out at once (right away when only the live slide moved, a moment after an edit);
-    // pictures follow in the background, nearest slides first, and appear on the phone as they arrive.
-    const ids = mediaIdsFor({ slides: upcoming.map((x) => x.slide), backgrounds: upcoming.map((x) => x.background) });
+    const info = remoteSlideInfo(state, state.selectedId);
+    const messages = remoteInfoMessages(info);
+    // Current/next previews arrive first; earlier slides also need their media for browsing.
+    const previews = [...info.upcoming, ...(info.all ?? [])];
+    const ids = mediaIdsFor({ slides: previews.map((x) => x.slide), backgrounds: previews.map((x) => x.background) });
     const edited = lastLibrary.current !== state.library;
     lastLibrary.current = state.library;
     const t = setTimeout(() => {
       if (cancelled) return;
-      relay.send({ type: 'info', info });
+      for (const message of messages) relay.send(message);
       if (remotes > 0) sendMediaToRemotes(ids);
     }, edited ? 300 : 0);
     return () => {
