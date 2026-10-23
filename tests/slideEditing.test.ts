@@ -197,6 +197,25 @@ describe('independent repeated occurrences', () => {
     state = reducer(state, { type: 'redo' });
     expect(state.cursor?.seq).toBe(4); expect(state.live.slide?.text).toBe('두 번째 반복만 수정');
   });
+  it('restores the exact live repeat when undoing deletion of an earlier identical occurrence', () => {
+    const lib = createSeedLibrary(); const p = song();
+    p.arrangements![0].groups = ['Title', 'Chorus', 'Chorus']; lib.presentations = [p];
+    let state = reducer(createInitialState(lib), { type: 'live/go', presentationId: p.id, seq: 2 });
+    state = reducer(state, { type: 'slide/delete', presentationId: p.id, slideIds: ['c'], seqs: [1] });
+    expect(state.cursor?.seq).toBe(1); expect(state.live.slide?.text).toBe('후렴');
+    state = reducer(state, { type: 'undo' });
+    expect(state.cursor?.seq).toBe(2); expect(state.live.slide?.text).toBe('후렴');
+    state = reducer(state, { type: 'redo' });
+    expect(state.cursor?.seq).toBe(1); expect(state.live.slide?.text).toBe('후렴');
+  });
+  it('does not pull the operator back to the edited repeat after they navigate elsewhere', () => {
+    const lib = createSeedLibrary(); lib.presentations = [song()];
+    let state = reducer(createInitialState(lib), { type: 'live/go', presentationId: 'online:song', seq: 4 });
+    state = reducer(state, { type: 'slide/update', presentationId: 'online:song', slideId: 'v1a', seq: 4, patch: { text: '반복 수정' } });
+    state = reducer(state, { type: 'live/go', presentationId: 'online:song', seq: 3 });
+    state = reducer(state, { type: 'undo' });
+    expect(state.cursor?.seq).toBe(3); expect(state.live.slide?.text).toBe('후렴');
+  });
   it('retains edits and deletions after serialization and an online song refresh', () => {
     let p = editSlideAt(song(), 4, { text: '두 번째 반복 저장' }, 3000);
     p = deleteSlidesAt(p, [2], 4000);

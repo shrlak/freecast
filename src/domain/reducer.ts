@@ -15,6 +15,7 @@ import { dedupeSongs } from './sunday/dedupe';
 import { resetTimer, startTimer, stopTimer } from './timers';
 
 export type { Cursor } from './live';
+interface HistoryPosition { before: Cursor | null; after: Cursor | null }
 
 export interface AppState extends NavState {
   selectedId: string | null;
@@ -23,6 +24,8 @@ export interface AppState extends NavState {
   announce: { presentationId: string; seq: number } | null;
   past: Library[];
   future: Library[];
+  pastPositions: HistoryPosition[];
+  futurePositions: HistoryPosition[];
   lastKey: string | null;
 }
 
@@ -120,6 +123,8 @@ export function createInitialState(library: Library): AppState {
     announce: null,
     past: [],
     future: [],
+    pastPositions: [],
+    futurePositions: [],
     lastKey: null,
   };
 }
@@ -429,7 +434,7 @@ function core(s: AppState, a: Action): AppState {
     case 'sunday/settings':
       return setLib(s, { sunday: { ...lib.sunday, ...a.patch } });
     case 'library/replace':
-      return { ...createInitialState(a.library), past: [...s.past, s.library].slice(-60) };
+      return { ...createInitialState(a.library), past: [...s.past, s.library].slice(-60), pastPositions: [...s.pastPositions, { before: s.cursor, after: null }].slice(-60) };
     case 'device/register':
       return setLib(s, { devices: [...(lib.devices ?? []).filter((d) => d.id !== a.device.id), a.device] });
     case 'activity/record':
@@ -532,8 +537,21 @@ function reduceState(s: AppState, a: Action): AppState {
     const library = from[from.length - 1];
     const rest = from.slice(0, -1);
     const other = [...(a.type === 'undo' ? s.future : s.past), s.library].slice(-60);
-    const next = { ...s, library, lastKey: null, ...(a.type === 'undo' ? { past: rest, future: other } : { past: other, future: rest }) };
-    return syncLive(reconcileLive(s, next));
+    const positions = a.type === 'undo' ? s.pastPositions : s.futurePositions;
+    const position = positions.at(-1);
+    const otherPositions = [...(a.type === 'undo' ? s.futurePositions : s.pastPositions), position ?? { before: s.cursor, after: s.cursor }].slice(-60);
+    const next = { ...s, library, lastKey: null, ...(a.type === 'undo'
+      ? { past: rest, future: other, pastPositions: positions.slice(0, -1), futurePositions: otherPositions }
+      : { past: other, future: rest, pastPositions: otherPositions, futurePositions: positions.slice(0, -1) }) };
+    const expected = a.type === 'undo' ? position?.after : position?.before;
+    const restore = a.type === 'undo' ? position?.before : position?.after;
+    // Restore the recorded occurrence only while still at the edit's resulting position.
+    // If the operator has navigated elsewhere, keep following the slide they are showing.
+    const same = (a: Cursor | null | undefined, b: Cursor | null) => a === b || (!!a && !!b && a.presentationId === b.presentationId && a.seq === b.seq && a.playlistIndex === b.playlistIndex);
+    if (!position || !same(expected, s.cursor)) return syncLive(reconcileLive(s, next));
+    return syncLive(restore ? refreshLive({ ...next, cursor: restore }, restore.presentationId) : {
+      ...next, cursor: null, live: { ...next.live, slide: null, title: null, nextText: null, background: null, copyright: null, bgEffect: null },
+    });
   }
   const next = core(s, a);
   if (next === s) return s;
@@ -544,7 +562,9 @@ function reduceState(s: AppState, a: Action): AppState {
   return syncLive({
     ...next,
     past: coalesce ? s.past : [...s.past, s.library].slice(-60),
+    pastPositions: coalesce ? s.pastPositions.map((p, i, all) => i === all.length - 1 ? { ...p, after: next.cursor } : p) : [...s.pastPositions, { before: s.cursor, after: next.cursor }].slice(-60),
     future: [],
+    futurePositions: [],
     lastKey: key,
   });
 }
