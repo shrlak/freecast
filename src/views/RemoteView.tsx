@@ -47,6 +47,7 @@ export function RemoteView() {
     document.title = 'FreeCast Remote';
   }, []);
   const ready = connected && hostConnected;
+  const embedded = window.self !== window.top;
   const cmd = (command: Record<string, unknown>) => { if (ready) send({ type: 'command', command }); };
   const connectionLabel = status === 'offline' ? '인터넷 연결 끊김 · 네트워크를 확인하세요' : status === 'reconnecting' ? '연결 끊김 · 자동 재연결 중…' : !connected ? '연결 중…' : !hostConnected ? '서버 연결됨 · 컴퓨터에서 FreeCast를 열어 주세요' : '컴퓨터 연결됨';
 
@@ -69,13 +70,15 @@ export function RemoteView() {
   }
 
   return (
-    <div className="remote-root remote-console">
+    <div className={`remote-root remote-console${embedded ? ' remote-embedded' : ''}`}>
       <header className="remote-head">
         <strong>FreeCast</strong>
-        <span className={`dot ${ready ? 'on' : ''}`} />
         <span className="muted small truncate">{live?.title ?? 'Nothing live'}</span>
+        <span className={`remote-connection ${ready ? 'connected' : 'disconnected'}`} role="status" aria-live="polite" aria-label={connectionLabel} title={connectionLabel}>
+          <span className="remote-connection-dot" aria-hidden="true" />
+          <span className="remote-connection-text">{connectionLabel}</span>
+        </span>
       </header>
-      <p className="remote-connection" role="status" aria-live="polite">{connectionLabel}</p>
       <fieldset disabled={!ready} className="remote-controls">
       <div className="remote-main">
       <div className="remote-show">
