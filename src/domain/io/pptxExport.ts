@@ -79,6 +79,7 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       s.background = { color: firstColor(bg) };
     }
     const pad = theme.padding * PX;
+    const horizontalPad = slide.lyricBody && slide.qr?.length ? Math.max(pad, 2.1) : pad;
     const color = theme.color.replace('#', '');
     const valign = theme.vAlign === 'middle' ? 'middle' : theme.vAlign;
     const runs: PptxGenJS.TextProps[] = [];
@@ -91,8 +92,11 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
         runs.push({ text: line, options: { fontSize: theme.fontSize * (theme.subScale ?? 0.62) * 0.5, color: (theme.subColor ?? theme.color).replace('#', ''), breakLine: true } });
       }
     }
+    // A trailing paragraph would put an empty line below the lyrics and shift the
+    // visible words above the middle of an otherwise centered PowerPoint box.
+    if (p.lyricsCentered && slide.group !== 'Title' && runs.length) runs[runs.length - 1].options = { ...runs[runs.length - 1].options, breakLine: false };
     s.addText(runs, {
-      x: pad, y: pad, w: W - pad * 2 - (slide.qr?.length ? 2 : 0), h: H - pad * 2,
+      x: horizontalPad, y: pad, w: W - horizontalPad * 2 - (slide.qr?.length && !slide.lyricBody ? 2 : 0), h: H - pad * 2,
       fontFace: fontFace(theme), fontSize: theme.fontSize * 0.5, color, italic: theme.italic, underline: theme.underline ? { style: 'sng' } : undefined,
       ...textOptions(theme),
       align: theme.align, valign, lineSpacingMultiple: theme.lineHeight,

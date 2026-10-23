@@ -506,7 +506,7 @@ describe('every song in the church template design', async () => {
       ['Title', ''], ['Verse 1', 'v1\nv2\nv3'], ['Verse 1', 'v4\nv5\nv6'], ['Chorus', 'c1\nc2'], ['Bridge', '한국어'],
     ]);
     expect(out.slides[0].elements![0].text).toBe('좋으신 하나님');
-    expect(out.slides[1].style).toBeUndefined(); // per-slide overrides cleared
+    expect(out.slides[1].style).toEqual({ align: 'center', vAlign: 'middle', indent: 0 }); // centered lyrics, other overrides cleared
     expect(out.slides[1].elements!.map((e) => e.text)).toEqual(['좋으신 하나님']); // corner title (no lyrics box)
     expect(out.slides[4].subtext).toBe('English');
     expect(out.arrangements![0].groups).toEqual(['Title', 'Verse 1', 'Chorus', 'Verse 1']);

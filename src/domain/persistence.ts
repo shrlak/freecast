@@ -2,6 +2,7 @@ import type { Library, LiveState, MediaMeta, Playlist, DeviceRegistration } from
 import { isActivityEntry, isDeviceIdentity } from './activity';
 import { createSeedLibrary, DEFAULT_THEMES } from './defaults';
 import { CANVAS_W, LEGACY_CANVAS_W } from './canvas';
+import { centerSongLyrics } from './songCentering';
 
 const LIBRARY_KEY = 'freecast.library.v1';
 const LIVE_KEY = 'freecast.live.v2';
@@ -49,7 +50,7 @@ export function normalizeLibrary(value: unknown): Library | null {
     devices: arr<DeviceRegistration>(value.devices, []).filter((d) => isDeviceIdentity(d) && Number.isFinite(d.lastSeen) && (d.account === null || typeof d.account === 'string')),
     activity: arr<unknown>(value.activity, []).filter(isActivityEntry).slice(-2000),
     lastModified: isActivityEntry(value.lastModified) ? value.lastModified : undefined,
-    presentations: [...own, ...templates],
+    presentations: [...own.map(centerSongLyrics), ...templates],
     // Themes added in later versions (광고, scripture) are appended if missing.
     themes: [...(themes as Library['themes']), ...DEFAULT_THEMES.filter((t) => !themes.some((x) => isObj(x) && x.id === t.id))],
     playlists,

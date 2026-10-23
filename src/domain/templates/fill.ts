@@ -14,6 +14,7 @@ import { splitEvenly } from '../sunday/songs';
 import { fillSlide, fillTokens, withElementText } from './convert';
 import { CANVAS_H, CANVAS_W } from '../canvas';
 import type { ServiceTemplates } from './serviceTemplates';
+import { centerSongLyrics } from '../songCentering';
 
 export const TEMPLATE_LYRICS_THEME = 'theme_tpl_lyrics';
 
@@ -151,7 +152,7 @@ export function templateLyricsTheme(tpl: ServiceTemplates): Theme {
     id: TEMPLATE_LYRICS_THEME, name: '주일 템플릿 (가사)',
     fontFamily: lyrics?.fontFamily ?? '"Arial", Arimo, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
     fontSize: p?.fontSize ?? lyrics?.fontSize ?? 82, fontWeight: p?.bold ? 700 : 400,
-    color: p?.color ?? lyrics?.color ?? '#000000', align: 'center', vAlign: lyrics?.vAlign ?? 'middle',
+    color: p?.color ?? lyrics?.color ?? '#000000', align: 'center', vAlign: 'middle',
     // The ppt program sets lyric lines to 125% spacing; PowerPoint's single spacing for Arial is ~1.15 em.
     lineHeight: 1.44, padding: Math.round(lyrics ? Math.max(lyrics.x, CANVAS_W - lyrics.x - lyrics.w, 120) : 260),
     shadow: false, uppercase: false, subColor: '#555555', subScale: 0.62,
@@ -202,8 +203,8 @@ export function restyleSong(song: Presentation, tpl: ServiceTemplates, maxLines:
     }
     i = j;
   }
-  return {
-    ...song,
+  return centerSongLyrics({
+    ...song, lyricsCentered: undefined,
     themeId: TEMPLATE_LYRICS_THEME,
     background: tpl.songLyrics.background,
     slides: [{ ...fillSlide(tpl.songTitle, () => title), group: 'Title' }, ...lyrics],
@@ -212,7 +213,7 @@ export function restyleSong(song: Presentation, tpl: ServiceTemplates, maxLines:
     arrangementId: song.arrangementId ?? song.arrangements?.[0]?.id,
     lyricsLayout: { linesPerSlide: maxLines },
     templateKey: songKey(tpl, maxLines),
-  };
+  });
 }
 
 /** Marks a song restyled to this template at this many lines (v2: plays its 진행). */
@@ -221,7 +222,7 @@ const songKey = (tpl: ServiceTemplates, maxLines: number) => `song:${tpl.keys.so
 /** A copy of a song in the template's design for this week's service (new id, the service's folder). */
 export function songInTemplate(song: Presentation, tpl: ServiceTemplates, folder: string, maxLines = 4): Presentation {
   const styled = song.slidesEdited ? { ...song, slides: song.slides.map((s) => ({ ...s, id: uid('s'), elements: s.elements?.map((e) => ({ ...e, id: uid('e') })) })) } : restyleSong(song, tpl, maxLines);
-  return { ...styled, id: uid('p'), online: undefined, folder };
+  return centerSongLyrics({ ...styled, id: uid('p'), online: undefined, folder });
 }
 
 /** Is this presentation a song (lyrics by part), as opposed to an announcement or a scripture deck? */
