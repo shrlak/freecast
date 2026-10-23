@@ -138,8 +138,8 @@ export interface SlideElement {
   indent?: number;
   columns?: number;
   vertical?: boolean;
-  /** What a template text box is for, so weekly updates can find it after edits ('prayer' = 기도제목 box). */
-  role?: 'prayer';
+  /** Text-box purpose, retained when editing or filling a template. */
+  role?: 'prayer' | 'lyrics';
 }
 
 /** Things a slide does when it goes live (ProPresenter "slide actions"). */
@@ -149,6 +149,8 @@ export interface Slide {
   id: string;
   /** Original slide identity when a repeated arrangement occurrence is made independent. */
   sourceSlideId?: string;
+  /** Main text is song lyrics; corner QR codes must leave equal space on both sides. */
+  lyricBody?: boolean;
   group: string;
   text: string;
   /** Bold heading above the text (announcement title, prayer topic, scripture reference). */
@@ -206,6 +208,8 @@ export interface Presentation {
   lyricsLayout?: { linesPerSlide: number };
   /** Individual slide content/design was edited; automatic song styling must preserve it. */
   slidesEdited?: boolean;
+  /** Existing lyric boxes have received the centered default; later individual edits are kept. */
+  lyricsCentered?: boolean;
   title: string;
   slides: Slide[];
   themeId: string;

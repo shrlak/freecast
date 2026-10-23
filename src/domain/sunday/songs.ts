@@ -2,6 +2,7 @@ import type { Presentation, Slide } from '../types';
 import { uid } from '../lyrics';
 import { expandCode, groupsOf } from '../arrangement';
 import { planSectionSlides } from './slidePlanner';
+import { centerSongLyrics } from '../songCentering';
 
 export interface SongSection {
   /** Code or name as printed: "V1", "C", "Bridge". */
@@ -102,7 +103,7 @@ export function songToPresentation(song: SongDraft, opts: { themeId: string; lin
     p.arrangements = [{ id: uid('arr'), name: song.progression!.join('-'), groups: resolved }];
     p.arrangementId = p.arrangements[0].id;
   }
-  return p;
+  return centerSongLyrics(p);
 }
 
 /** Apply a progression to an existing library song as a new (active) arrangement. */

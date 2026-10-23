@@ -271,6 +271,8 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const theme = slideTheme(base, slide);
   const fontEpoch = useFontEpoch();
   const hasQr = !!slide.qr?.length;
+  const horizontalPad = slide.lyricBody && hasQr ? Math.max(theme.padding, 300) : theme.padding;
+  const qrSpace = hasQr && !slide.lyricBody ? 300 : 0;
   const inner = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   // Lyric lines never wrap (a long line would leave one word alone on the next line): the text shrinks instead.
@@ -287,7 +289,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
     const el = inner.current;
     if (!el || theme.autoFit === false) return;
     const availH = CANVAS_H - theme.padding * 2;
-    const availW = CANVAS_W - theme.padding * 2 - (hasQr ? 300 : 0);
+    const availW = CANVAS_W - horizontalPad * 2 - qrSpace;
     const k = Math.min(availH / el.scrollHeight, availW / el.scrollWidth);
     if (noWrap && scale * k < 0.6 && availW / el.scrollWidth < 0.99) {
       setScale(1);
@@ -295,13 +297,13 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
       return;
     }
     if (k < 0.99 && scale > 0.25) setScale((v) => Math.max(0.25, v * k * 0.98));
-  }, [scale, content, hasQr, theme.autoFit, theme.padding, noWrap]);
+  }, [scale, content, horizontalPad, qrSpace, theme.autoFit, theme.padding, noWrap]);
   const t = scale === 1 ? theme : { ...theme, fontSize: theme.fontSize * scale, letterSpacing: theme.letterSpacing && theme.letterSpacing * scale };
   return (
     <>
       <div
         className="layer text-layer"
-        style={{ padding: theme.padding, paddingRight: hasQr ? theme.padding + 300 : theme.padding, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
+        style={{ padding: theme.padding, paddingLeft: horizontalPad, paddingRight: horizontalPad + qrSpace, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
       >
         <div ref={inner} style={{ ...textStyle(t), whiteSpace: noWrap ? 'pre' : undefined, marginLeft: theme.indent ? theme.indent * INDENT_PX * scale : undefined, alignSelf: theme.align === 'justify' ? 'stretch' : undefined }}>
           {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}

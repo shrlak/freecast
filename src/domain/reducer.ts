@@ -7,6 +7,7 @@ import type {
 import { attributeChange, mergeActivity } from './activity';
 import { sequence } from './arrangement';
 import { deleteSlides, deleteSlidesAt, editSlide, editSlideAt } from './slideEditing';
+import { centerAddedLyricSlides, centerSongLyrics } from './songCentering';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
@@ -257,17 +258,20 @@ function core(s: AppState, a: Action): AppState {
     case 'select':
       return { ...s, selectedId: a.id, playlistIndex: null };
     case 'presentation/create':
-      return { ...setLib(s, { presentations: [...lib.presentations, a.presentation] }), selectedId: a.presentation.id, playlistIndex: null };
+      return { ...setLib(s, { presentations: [...lib.presentations, centerSongLyrics(a.presentation)] }), selectedId: a.presentation.id, playlistIndex: null };
     case 'presentation/createMany': {
       const next = setLib(s, {
-        presentations: [...lib.presentations, ...a.presentations],
+        presentations: [...lib.presentations, ...a.presentations.map(centerSongLyrics)],
         playlists: a.playlist ? [...lib.playlists, a.playlist] : lib.playlists,
       });
       return a.playlist ? { ...next, activePlaylistId: a.playlist.id, playlistIndex: null } : next;
     }
     case 'presentation/update':
       // Editing an online song makes it this computer's own copy (saved locally from then on).
-      return refreshLive(mapPres(s, a.id, (p) => ({ ...p, ...a.patch, online: undefined })), a.id);
+      return refreshLive(mapPres(s, a.id, (p) => {
+        const next = { ...p, ...a.patch, online: undefined };
+        return a.patch.slides ? centerAddedLyricSlides(p, next) : next;
+      }), a.id);
     case 'presentation/delete': {
       const removedMedia = new Set(exclusivePresentationMedia(lib, [a.id]));
       const playlists = lib.playlists.map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || i.presentationId !== a.id) }));
@@ -321,7 +325,7 @@ function core(s: AppState, a: Action): AppState {
     case 'online/songs': {
       const local = lib.presentations.filter((p) => !p.online);
       const localIds = new Set(local.map((p) => p.id));
-      return dedupeLibrarySongs(setLib(s, { presentations: [...local, ...a.presentations.filter((p) => !localIds.has(p.id))] }));
+      return dedupeLibrarySongs(setLib(s, { presentations: [...local, ...a.presentations.filter((p) => !localIds.has(p.id)).map(centerSongLyrics)] }));
     }
     case 'songs/dedupe':
       return dedupeLibrarySongs(s);
