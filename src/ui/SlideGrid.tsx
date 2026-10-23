@@ -1,4 +1,4 @@
-import { memo, useState, type Dispatch } from 'react';
+import { memo, useRef, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../domain/reducer';
 import type { Presentation, Slide, Theme } from '../domain/types';
 import { groupColor, uid } from '../domain/lyrics';
@@ -19,15 +19,22 @@ interface Props {
   onEditSlide?: (id: string, seq: number) => void;
   onThemes: () => void;
   notify: (msg: string) => void;
+  locked?: boolean;
 }
 
 const Thumb = memo(function Thumb(props: {
-  slide: Slide; num: number; theme: Theme; pres: Presentation; live: boolean; onClick: () => void; onInspect: () => void;
+  slide: Slide; num: number; theme: Theme; pres: Presentation; live: boolean; onClick: () => void; onInspect: () => void; onDelete: () => void;
   bgEffect?: { dim: number; blur: number };
 }) {
   const { slide } = props;
   return (
-    <div className={`thumb ${props.live ? 'live' : ''} ${slide.disabled ? 'disabled' : ''}`} style={{ ['--group' as string]: groupColor(slide.group) }}>
+    <div data-slide-seq={props.num - 1} className={`thumb ${props.live ? 'live' : ''} ${slide.disabled ? 'disabled' : ''}`} style={{ ['--group' as string]: groupColor(slide.group) }} onKeyDown={(e) => {
+      if (e.defaultPrevented || e.nativeEvent.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault(); e.stopPropagation();
+        if (!e.repeat) props.onDelete();
+      }
+    }}>
       <button className="thumb-main" onClick={props.onClick} onContextMenu={(e) => { e.preventDefault(); props.onInspect(); }} title="Click: go live · Right-click: quick edit">
         <SlideCanvas slide={slide} theme={props.theme} background={resolveBackground(slide, props.pres)} bgEffect={props.bgEffect} />
         <span className="thumb-label">
@@ -80,11 +87,12 @@ function ArrangementBar({ p, dispatch }: { p: Presentation; dispatch: Dispatch<A
   );
 }
 
-export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, notify }: Props) {
+export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, notify, locked }: Props) {
   const [inspect, setInspect] = useState<string | null>(null);
   const [design, setDesign] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const gridRef = useRef<HTMLDivElement>(null);
   const p = state.library.presentations.find((x) => x.id === state.selectedId);
   if (!p) {
     return <main className="panel center-empty"><p>Select a presentation from the library, or create a new one.</p></main>;
@@ -134,7 +142,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
       </div>
       <ArrangementBar p={p} dispatch={dispatch} />
       <TimelineBar key={p.id} p={p} state={state} dispatch={dispatch} />
-      <div className="grid">
+      <div ref={gridRef} className="grid">
         {seq.map(({ slide }, i) => (
           <Thumb
             key={`${slide.id}-${i}`}
@@ -146,6 +154,12 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
             bgEffect={p.bgEffect}
             onClick={() => dispatch({ type: 'live/go', presentationId: p.id, seq: i, now: Date.now() })}
             onInspect={() => onEditSlide ? onEditSlide(slide.id, i) : setInspect(slide.id)}
+            onDelete={() => {
+              if (locked && state.live.slide) return notify('🔒 화면에 표시 중이라 삭제가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요');
+              dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: [slide.id], seqs: [i] });
+              const next = Math.min(i, seq.length - 2);
+              requestAnimationFrame(() => gridRef.current?.querySelector<HTMLButtonElement>(`[data-slide-seq="${next}"] .thumb-main`)?.focus());
+            }}
           />
         ))}
         {!seq.length && <div className="empty">No slides yet. Click “Edit” to add some.</div>}

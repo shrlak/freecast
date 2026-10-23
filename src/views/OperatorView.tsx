@@ -508,7 +508,7 @@ export function OperatorView() {
           <div className="workspace">
             <LibraryPanel state={state} dispatch={dispatch} onNew={() => setModal('new')} online={online} onReloadOnline={loadOnline} />
             <div className="center-col">
-              <SlideGrid state={state} dispatch={dispatch} onEdit={() => selected && setModal('edit')} onEditSlide={(id, seq) => { setSlideId(id, seq); setModal('edit'); }} onThemes={() => setModal('themes')} notify={notify} />
+              <SlideGrid state={state} dispatch={dispatch} locked={locked} onEdit={() => selected && setModal('edit')} onEditSlide={(id, seq) => { setSlideId(id, seq); setModal('edit'); }} onThemes={() => setModal('themes')} notify={notify} />
               <MediaBin state={state} dispatch={dispatch} />
             </div>
             <LivePanel state={state} dispatch={dispatch} />

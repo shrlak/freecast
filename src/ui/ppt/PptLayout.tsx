@@ -68,6 +68,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   useEffect(() => { setMulti([]); setSelEl(null); }, [p?.id, state.activePlaylistId, item]);
   const sameBlock = (r: PaneSlide) => !!selected && r.presentation.id === selected.presentation.id && r.itemIndex === selected.itemIndex;
   const onClickSlide = (r: PaneSlide, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
+    setSelEl(null);
     if (selected && sameBlock(r) && e.shiftKey) {
       const a = paneSlides.indexOf(selected), b = paneSlides.indexOf(r);
       setMulti(paneSlides.slice(Math.min(a, b), Math.max(a, b) + 1).filter(sameBlock).map((x) => x.key));
@@ -98,6 +99,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     setSectionRequest({ presentationId: p.id, ids, initialValue: slide?.label || '새 섹션' });
   };
   const pick = (r: PaneSlide) => {
+    setSelEl(null);
     if (r.itemIndex !== null && r.itemIndex !== state.playlistIndex) dispatch({ type: 'playlist/select', index: r.itemIndex });
     cmd.setSlideId(r.slide.id, r.seq);
     setPaneKey(r.key);
@@ -117,10 +119,13 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     if (cmd.view === 'presenter') return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (!paneSlides.length || t.matches('input,textarea,select,[contenteditable="true"]') || document.querySelector('.modal-backdrop')) return;
+      if (e.defaultPrevented || e.isComposing || !paneSlides.length || t.isContentEditable || t.closest('input,textarea,select') || document.querySelector('.modal-backdrop')) return;
+      if (cmd.view === 'sorter' && t.closest('.slides-panel')) return;
       const locked = cmd.locked && !!state.live.slide;
       if ((e.key === 'Backspace' || e.key === 'Delete') && !selEl && selected) {
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
         e.preventDefault();
+        if (e.repeat) return;
         if (locked) cmd.notify(LOCK_MSG);
         else deleteSlides(picked());
         return;
@@ -242,7 +247,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
 
         {cmd.view === 'sorter' ? (
           <div className="ppt-sorter">
-            <SlideGrid state={state} dispatch={dispatch} onEdit={() => cmd.open('edit')} onEditSlide={(id, seq) => { cmd.setSlideId(id, seq); cmd.open('edit'); }} onThemes={() => cmd.open('themes')} notify={cmd.notify} />
+            <SlideGrid state={state} dispatch={dispatch} locked={cmd.locked} onEdit={() => cmd.open('edit')} onEditSlide={(id, seq) => { cmd.setSlideId(id, seq); cmd.open('edit'); }} onThemes={() => cmd.open('themes')} notify={cmd.notify} />
           </div>
         ) : (
           <main className="ppt-center">
