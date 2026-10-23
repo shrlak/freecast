@@ -89,63 +89,92 @@ export function isPublicHost(host) {
  * Open the tunnel to `port` and keep it open (reconnects after a drop). `dir` is where cloudflared is kept.
  * `onChange({ status: 'connecting' | 'on' | 'error', url, error, note })` reports progress.
  */
-export function startTunnel(port, onChange, { dir }) {
+export function startTunnel(port, onChange, { dir, ensureBinary = ensureCloudflared, spawnFn = spawn, fetchFn = fetch }) {
   let child = null;
   let stopped = false;
-  let retry;
+  let generation = 0;
+  let retry, quiet, healthTimer, healthAbort;
   let state = { status: 'connecting', url: null, error: null, note: null };
   const set = (next) => {
     state = { ...state, ...next };
     onChange?.(state);
   };
+  const clearAttempt = () => {
+    clearTimeout(retry); clearTimeout(quiet); clearTimeout(healthTimer);
+    healthAbort?.abort(); healthAbort = null;
+    const previous = child; child = null;
+    previous?.kill();
+  };
 
   const connect = async () => {
+    const attempt = ++generation;
+    clearAttempt();
     set({ status: 'connecting', url: null, error: null, note: null });
     let bin;
     try {
-      bin = await ensureCloudflared(dir, (note) => set({ note }));
+      bin = await ensureBinary(dir, (note) => { if (!stopped && attempt === generation) set({ note }); });
     } catch (e) {
-      if (stopped) return;
+      if (stopped || attempt !== generation) return;
       set({ status: 'error', error: `준비 실패: ${e.message}`, note: null });
       retry = setTimeout(connect, 30_000);
       return;
     }
-    if (stopped) return;
+    if (stopped || attempt !== generation) return;
     set({ note: null });
     let out = '';
     let gotUrl = false;
     let pending = null;
+    let failures = 0;
     // http2 (plain TCP) goes through firewalls that block the faster QUIC/UDP.
-    child = spawn(bin, ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', `http://127.0.0.1:${port}`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const process = spawnFn(bin, ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', `http://127.0.0.1:${port}`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    child = process;
+    const active = () => !stopped && attempt === generation && child === process;
+    const health = async () => {
+      if (!active()) return;
+      const controller = new AbortController(); healthAbort = controller;
+      const timeout = setTimeout(() => controller.abort(), 10_000);
+      let healthy = false;
+      try {
+        const response = await fetchFn(pending + '/?view=remote', { cache: 'no-store', redirect: 'manual', signal: controller.signal });
+        const body = await response.text();
+        healthy = response.ok && /id=["']root["']/.test(body);
+      } catch { /* a running cloudflared process can still have a dead tunnel */ }
+      finally { clearTimeout(timeout); if (healthAbort === controller) healthAbort = null; }
+      if (!active()) return;
+      failures = healthy ? 0 : failures + 1;
+      // Allow DNS propagation and brief network drops before replacing the quick tunnel.
+      if (failures >= 2) { connect(); return; }
+      healthTimer = setTimeout(health, 30_000);
+    };
     const read = (chunk) => {
+      if (!active()) return;
       out = (out + chunk).slice(-4000);
       pending = parseTunnelUrl(out) ?? pending;
       // The address is printed before the tunnel is reachable: show it once the connection is registered.
-      if (pending && /Registered tunnel connection/.test(out) && state.url !== pending) {
+      if (!gotUrl && pending && /Registered tunnel connection/.test(out)) {
         gotUrl = true;
+        clearTimeout(quiet);
         set({ status: 'on', url: pending, error: null });
+        healthTimer = setTimeout(health, 30_000);
       }
     };
-    // No working connection after a while: say what cloudflared reported, then try again.
-    const quiet = setTimeout(() => {
-      if (gotUrl || stopped) return;
-      child?.kill();
-    }, 45_000);
-    child.stdout.on('data', read);
-    child.stderr.on('data', read);
-    child.on('error', (e) => {
+    // No working connection after a while: try another tunnel.
+    quiet = setTimeout(() => { if (active() && !gotUrl) process.kill(); }, 45_000);
+    process.stdout.on('data', read);
+    process.stderr.on('data', read);
+    process.on('error', (e) => {
+      if (!active()) return;
       child = null;
-      if (stopped) return;
+      clearTimeout(quiet); clearTimeout(healthTimer); healthAbort?.abort();
       set({ status: 'error', url: null, error: `실행 실패: ${e.message}` });
       // A broken download is removed so the next try fetches it again.
       fs.rmSync(bin, { force: true });
       retry = setTimeout(connect, 15_000);
     });
-    child.on('close', () => {
-      clearTimeout(quiet);
-      if (!child) return;
+    process.on('close', () => {
+      if (!active()) return;
       child = null;
-      if (stopped) return;
+      clearTimeout(quiet); clearTimeout(healthTimer); healthAbort?.abort();
       if (gotUrl) set({ status: 'connecting', url: null });
       else {
         const said = cleanOutput(out).trim().split('\n').filter(Boolean).filter((l) => /ERR|WRN|failed|error/i.test(l)).slice(-2).join(' ').replace(/\d{4}-\d\d-\d\dT[\d:]+Z /g, '');
@@ -158,10 +187,10 @@ export function startTunnel(port, onChange, { dir }) {
   connect();
   return {
     state: () => state,
+    restart() { if (!stopped) connect(); },
     stop() {
-      stopped = true;
-      clearTimeout(retry);
-      child?.kill();
+      stopped = true; generation++;
+      clearAttempt();
     },
   };
 }
