@@ -23,6 +23,23 @@ export interface RemoteInfo {
 
 /** Phone/tablet remote: tap slides, next/prev, clear layers, run macros. Open /?view=remote on the same network, or the internet address from Settings. */
 export function RemoteView() {
+  const [appearance, setAppearance] = useState<'light' | 'dark'>(() => {
+    try { return localStorage.getItem('freecast.remote.appearance') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+  });
+  useEffect(() => {
+    document.body.dataset.remoteAppearance = appearance;
+    return () => { delete document.body.dataset.remoteAppearance; };
+  }, [appearance]);
+  useEffect(() => {
+    const apply = (value: unknown) => { if (value === 'light' || value === 'dark') setAppearance(value); };
+    const storage = (e: StorageEvent) => { if (e.key === 'freecast.remote.appearance') apply(e.newValue ?? 'dark'); };
+    const message = (e: MessageEvent) => {
+      if (e.source === window.parent && e.origin === location.origin && e.data?.type === 'freecast:remote-appearance') apply(e.data.appearance);
+    };
+    window.addEventListener('storage', storage);
+    window.addEventListener('message', message);
+    return () => { window.removeEventListener('storage', storage); window.removeEventListener('message', message); };
+  }, []);
   const [pin, setPin] = useState(() => {
     // A scanned QR link carries the PIN: keep it, then take it out of the address bar.
     const fromLink = new URLSearchParams(location.search).get('pin');
@@ -74,6 +91,11 @@ export function RemoteView() {
       <header className="remote-head">
         <strong>FreeCast</strong>
         <span className="muted small truncate">{live?.title ?? 'Nothing live'}</span>
+        {!embedded && <button className="remote-appearance-toggle" aria-label={appearance === 'dark' ? '밝은 화면으로 전환' : '어두운 화면으로 전환'} onClick={() => {
+          const next = appearance === 'dark' ? 'light' : 'dark';
+          setAppearance(next);
+          try { localStorage.setItem('freecast.remote.appearance', next); } catch { /* usable for this session */ }
+        }}>{appearance === 'dark' ? '☀ 밝게' : '☾ 어둡게'}</button>}
         <span className={`remote-connection ${ready ? 'connected' : 'disconnected'}`} role="status" aria-live="polite" aria-label={connectionLabel} title={connectionLabel}>
           <span className="remote-connection-dot" aria-hidden="true" />
           <span className="remote-connection-text">{connectionLabel}</span>
