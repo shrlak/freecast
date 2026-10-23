@@ -113,6 +113,10 @@ export function RemoteView() {
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
           <span>End</span>
         </button>
+      <button className={`remote-black ${live?.black ? 'active' : ''}`} aria-label="Black screen" aria-pressed={live?.black ?? false} title={live?.black ? 'Show slide' : 'Black screen'} onClick={() => cmd({ type: 'live/toggleBlack' })}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>
+        <span>{live?.black ? 'Show' : 'Black'}</span>
+      </button>
       </div>
       <div className="remote-nav">
         <button aria-label="Previous slide" title="Previous slide" onClick={() => cmd({ type: 'live/prev' })}>
@@ -122,10 +126,6 @@ export function RemoteView() {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
         </button>
       </div>
-      <button className={`remote-black ${live?.black ? 'active' : ''}`} aria-label="Black screen" aria-pressed={live?.black ?? false} title={live?.black ? 'Show slide' : 'Black screen'} onClick={() => cmd({ type: 'live/toggleBlack' })}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>
-        <span>{live?.black ? 'Show' : 'Black'}</span>
-      </button>
       </section>
       <div className="remote-current">
         {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} /> : <div className="remote-empty">Nothing live</div>}
