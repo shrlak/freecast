@@ -9,7 +9,11 @@ export function newLinkCredentials() {
   return { id: crypto.randomBytes(12).toString('base64url'), secret: crypto.randomBytes(24).toString('base64url') };
 }
 
-/** The permanent address phones open. */
+/** One installable web-app address, independent of the computer or tunnel. */
+export const remoteWebAppAddress = (proxy) => `${String(proxy).replace(/\/+$/, '')}/freecast/remote/`;
+export const remotePairingAddress = (proxy, id) => `${remoteWebAppAddress(proxy)}#${id}`;
+
+/** The private-id registration endpoint (older saved links also open the web app). */
 export const linkAddress = (proxy, id) => `${String(proxy).replace(/\/+$/, '')}/freecast/remote/${id}`;
 
 async function call(method, { proxy, origin, id, secret, url }, fetchFn) {

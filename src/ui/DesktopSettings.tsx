@@ -97,29 +97,21 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
       </label>
       {info.internet.on && info.internet.status === 'connecting' && <p className="hint">{info.internet.note ?? 'Connecting…'}</p>}
       {info.internet.on && info.internet.status === 'error' && <p className="hint">{info.internet.error}</p>}
-      {info.internet.on && info.internet.url && (
-        <div className="stack">
-          {/* The permanent link once the church Worker has it; until then the tunnel's own (temporary) address. */}
-          {(() => {
-            const fixed = info.internet.linkStatus === 'ok' && info.internet.link;
-            const shown = fixed ? info.internet.link! : `${info.internet.url}/?view=remote`;
-            return (
-              <>
-                <code className="small selectable">{shown}</code>
-                <div className="row gap-xs">
-                  <button onClick={async () => { if (!confirm('Make a new link? Phones using the old link will stop working.')) return; await desktop!.newRemoteLink(); refresh(); }}>New Link</button>
-                </div>
-                <img src={qrDataUrl(shown)} alt="Remote link" width={160} height={160} />
-                {fixed
-                  ? <p className="hint">This link stays the same every time FreeCast starts — save it on the phone. Anyone with the link can control FreeCast, so only share it with the media team. Press New Link to replace it.</p>
-                  : info.internet.linkStatus === 'pending'
-                    ? <p className="hint">Setting up the permanent link…</p>
-                    : <p className="hint">Temporary link (it changes each time FreeCast starts). {info.internet.linkError ?? ''} The permanent link appears here once the church server (Worker) has the remote-link update — see worker/remote-link.js.</p>}
-              </>
-            );
-          })()}
-        </div>
-      )}
+      <div className="stack">
+        <h3>FreeCast Remote 웹앱 · 고정 주소</h3>
+        <code className="small selectable">{info.internet.webAppUrl ?? `${info.ai.proxyUrl.replace(/\/+$/, '')}/freecast/remote/`}</code>
+        <p className="hint">Windows·Mac 어느 컴퓨터를 사용하든 웹앱 주소는 같습니다. iPhone Safari에서 열고 공유 → 홈 화면에 추가를 선택하세요.</p>
+        {info.internet.on && info.internet.linkStatus === 'ok' && info.internet.link && <>
+          <h4>이 컴퓨터 연결</h4>
+          <img src={qrDataUrl(info.internet.pairingUrl ?? info.internet.link)} alt="FreeCast Remote 컴퓨터 연결 QR 코드" width={160} height={160} />
+          <code className="small selectable">{info.internet.pairingUrl ?? info.internet.link}</code>
+          <p className="hint">QR 코드를 한 번 스캔하면 이 컴퓨터가 웹앱에 저장됩니다. 이후 고정 웹앱 주소에서 저장한 컴퓨터를 선택하세요. 컴퓨터에서 FreeCast와 인터넷 리모컨이 켜져 있어야 합니다.</p>
+          <button onClick={async () => { if (!confirm('연결 키를 재발급할까요? 기존에 연결한 휴대폰은 새 QR 코드를 스캔해야 합니다. 웹앱 주소는 그대로 유지됩니다.')) return; await desktop!.newRemoteLink(); refresh(); }}>연결 키 재발급</button>
+        </>}
+        {info.internet.on && info.internet.linkStatus === 'pending' && <p className="hint">이 컴퓨터의 고정 연결을 등록하고 있습니다…</p>}
+        {info.internet.on && (info.internet.linkStatus === 'error' || info.internet.linkStatus === 'unavailable') && <p className="hint">{info.internet.linkError ?? '연결 등록을 다시 시도하고 있습니다.'}</p>}
+        <p className="hint">연결 QR 코드는 컴퓨터를 조작할 수 있는 개인 연결 정보입니다. 미디어팀에만 공유하세요.</p>
+      </div>
     </div>
   );
 }
