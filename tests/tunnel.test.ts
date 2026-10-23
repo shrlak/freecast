@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'node:events';
 // @ts-expect-error plain .mjs server module
-import { cleanOutput, cloudflaredAsset, isPublicHost, parseTunnelUrl } from '../server/tunnel.mjs';
+import { cleanOutput, cloudflaredAsset, isPublicHost, parseTunnelUrl, startTunnel } from '../server/tunnel.mjs';
 
 describe('parseTunnelUrl', () => {
   it('finds the address in cloudflared\'s log', () => {
@@ -35,5 +36,81 @@ describe('isPublicHost', () => {
     for (const h of ['abc123.lhr.life', 'abc123.lhr.life:443', '8.8.8.8:47317', '172.32.0.1', undefined, '']) {
       expect(isPublicHost(h), String(h)).toBe(true);
     }
+  });
+});
+
+describe('tunnel recovery', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  async function running(fetchFn = vi.fn(async () => new Response('<div id="root"></div>'))) {
+    vi.useFakeTimers();
+    const processes: any[] = [];
+    const changes: any[] = [];
+    const spawnFn = vi.fn(() => {
+      const proc = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: vi.fn() });
+      proc.kill.mockImplementation(() => { proc.emit('close', 0); });
+      processes.push(proc);
+      return proc;
+    });
+    const tunnel = startTunnel(47317, (state: unknown) => changes.push(state), { dir: '/unused', ensureBinary: async () => '/unused/cloudflared', spawnFn, fetchFn });
+    await vi.advanceTimersByTimeAsync(0);
+    const ready = (index: number, name = 'one') => processes[index].stdout.emit('data', `https://${name}.trycloudflare.com\nRegistered tunnel connection`);
+    ready(0);
+    return { tunnel, fetchFn, spawnFn, processes, changes, ready };
+  }
+
+  it('replaces a live process whose tunnel repeatedly returns HTTP 530', async () => {
+    const state = await running(vi.fn(async () => new Response('tunnel disconnected', { status: 530 })));
+    try {
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(state.spawnFn).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(state.processes[0].kill).toHaveBeenCalledOnce();
+      expect(state.spawnFn).toHaveBeenCalledTimes(2);
+      state.ready(1, 'two');
+      expect(state.tunnel.state()).toMatchObject({ status: 'on', url: 'https://two.trycloudflare.com' });
+      // Old process events must not close or replace the new tunnel.
+      state.processes[0].emit('close', 0);
+      expect(state.tunnel.state().url).toBe('https://two.trycloudflare.com');
+    } finally { state.tunnel.stop(); }
+  });
+
+  it('keeps a healthy tunnel and tolerates isolated network failures', async () => {
+    const fetchFn = vi.fn(async () => new Response('<div id="root"></div>'));
+    fetchFn.mockRejectedValueOnce(new Error('temporary network drop'));
+    const state = await running(fetchFn);
+    try {
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(fetchFn).toHaveBeenCalledTimes(3);
+      expect(state.spawnFn).toHaveBeenCalledTimes(1);
+      expect(state.processes[0].kill).not.toHaveBeenCalled();
+    } finally { state.tunnel.stop(); }
+  });
+
+  it('reconnects on resume and cancels all recovery when turned off', async () => {
+    const state = await running();
+    state.tunnel.restart();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.processes[0].kill).toHaveBeenCalledOnce();
+    expect(state.spawnFn).toHaveBeenCalledTimes(2);
+    state.ready(1, 'resumed');
+    state.tunnel.stop();
+    state.tunnel.restart();
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(state.spawnFn).toHaveBeenCalledTimes(2);
+    expect(state.fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('starts only the latest attempt when resumed during the binary download', async () => {
+    vi.useFakeTimers();
+    const pending: ((binary: string) => void)[] = [];
+    const spawnFn = vi.fn(() => Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter(), kill: vi.fn() }));
+    const tunnel = startTunnel(47317, () => {}, { dir: '/unused', spawnFn, ensureBinary: () => new Promise(resolve => pending.push(resolve)) });
+    try {
+      tunnel.restart();
+      pending[1]('/unused/cloudflared'); await vi.advanceTimersByTimeAsync(0);
+      pending[0]('/unused/cloudflared'); await vi.advanceTimersByTimeAsync(0);
+      expect(spawnFn).toHaveBeenCalledTimes(1);
+    } finally { tunnel.stop(); }
   });
 });
