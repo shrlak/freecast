@@ -10,6 +10,7 @@ import { SlideInspector } from '../SlideInspector';
 import { patchElement } from '../../domain/templates/convert';
 import { CLEAR_TEXT_FORMAT, ElementFormat, elementPatch, sizeOf, textValue } from './ElementFormat';
 import { TextFormatPanel } from './TextFormatPanel';
+import { SlideContentEditor } from '../SlideContentEditor';
 import { changeCase } from '../../domain/textFormat';
 
 interface Props {
@@ -18,6 +19,8 @@ interface Props {
   presentation: Presentation;
   slide: Slide;
   onDesign: () => void;
+  /** The full slide editor already displays its content fields. */
+  showContent?: boolean;
   /** The object selected on the slide (CanvasEditor); its settings show first. */
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
@@ -44,7 +47,7 @@ function MediaThumb({ id, video }: { id: string; video: boolean }) {
  * size, colour, bold/italic/underline, alignment, spacing and background — for this slide
  * only, with "apply to all slides".
  */
-export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign, selectedId, onSelect }: Props) {
+export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign, selectedId, onSelect, showContent = true }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [applied, setApplied] = useState<string | null>(null);
   const base: Theme = state.library.themes.find((t) => t.id === p.themeId) ?? state.library.themes[0];
@@ -89,6 +92,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
     upd({ elements: elements.map((e) => (e.kind === 'text' ? patchElement(e, fn(e)) : e)) });
   return (
     <div className="slide-format">
+      {showContent && <Section title="내용 · 이 슬라이드만"><SlideContentEditor slide={slide} onChange={upd} /></Section>}
       {applied && <div className="fmt-flash">✓ {applied}</div>}
       {selected ? (
         <ElementFormat

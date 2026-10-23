@@ -20,6 +20,8 @@ import { LibraryPanel } from '../ui/LibraryPanel';
 import { SlideGrid } from '../ui/SlideGrid';
 import { LivePanel } from '../ui/LivePanel';
 import { MediaBin } from '../ui/MediaBin';
+import { SlideEditorModal } from '../ui/SlideEditorModal';
+import { isSong } from '../domain/templates/fill';
 import { EditorModal } from '../ui/EditorModal';
 import { ThemeModal } from '../ui/ThemeModal';
 import { BibleModal } from '../ui/BibleModal';
@@ -520,7 +522,7 @@ export function OperatorView() {
           <div className="workspace">
             <LibraryPanel state={state} dispatch={dispatch} onNew={() => setModal('new')} online={online} onReloadOnline={loadOnline} />
             <div className="center-col">
-              <SlideGrid state={state} dispatch={dispatch} onEdit={() => selected && setModal('edit')} onThemes={() => setModal('themes')} notify={notify} />
+              <SlideGrid state={state} dispatch={dispatch} onEdit={() => selected && setModal('edit')} onEditSlide={(id) => { setSlideId(id); setModal('edit'); }} onThemes={() => setModal('themes')} notify={notify} />
               <MediaBin state={state} dispatch={dispatch} />
             </div>
             <LivePanel state={state} dispatch={dispatch} />
@@ -541,7 +543,9 @@ export function OperatorView() {
       <AudioPlayer state={state} dispatch={dispatch} />
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
 
-      {(modal === 'edit' || modal === 'new') && (
+      {modal === 'edit' && selected && <SlideEditorModal key={selected.id} state={state} dispatch={dispatch} presentation={selected} slideId={slideId}
+        onSelect={setSlideId} onClose={() => setModal(null)} onSource={() => setModal(isSong(selected) ? 'song' : 'source')} />}
+      {(modal === 'source' || modal === 'new') && (
         <EditorModal
           presentation={modal === 'new' ? null : selected}
           themes={state.library.themes}
@@ -576,7 +580,7 @@ export function OperatorView() {
       )}
       {modal === 'songLibrary' && (
         <SongLibraryModal songs={state.library.presentations} dispatch={dispatch} reloadOnline={loadOnline} notify={notify} onClose={() => setModal(null)}
-          onEdit={(id) => { dispatch({ type: 'select', id }); setModal('song'); }} />
+          onEdit={(id) => { dispatch({ type: 'select', id }); setSlideId(null); setModal('edit'); }} />
       )}
       {service.review && (() => {
         const r = service.review;

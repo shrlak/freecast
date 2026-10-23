@@ -205,7 +205,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             <Group label="프레젠테이션">
               <Big icon="📄" label="새로 만들기" onClick={() => cmd.open('new')} />
               <div className="rb-col">
-                <Small icon="✎" label="텍스트 편집" disabled={!p} onClick={() => cmd.open('edit')} />
+                <Small icon="✎" label="슬라이드별 편집" disabled={!p} onClick={() => cmd.open('edit')} />
                 <Small icon="✏️" label="개체 편집" disabled={!slide} onClick={onDesign} />
                 <Small icon="📋" label="재생목록에 추가" disabled={!p} onClick={() => p && dispatch({ type: 'playlist/addItem', item: { id: uid('pli'), presentationId: p.id } })} />
               </div>
@@ -342,7 +342,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             </Group>
             <Group label="말씀 · 찬양">
               <Big icon="🎵" label="새 찬양" title="찬양 등록 — 제목·진행·파트별 가사 (주일예배 생성기와 같은 방식)" onClick={() => cmd.open('songNew')} />
-              <Big icon="✎" label="찬양 편집" title="선택한 찬양의 가사·진행 편집, 교회 찬양 라이브러리에 등록" disabled={!p || !isSong(p)} onClick={() => cmd.open('song')} />
+              <Big icon="✎" label="찬양 편집" title="선택한 찬양의 가사·진행 편집, 교회 찬양 라이브러리에 등록" disabled={!p || !isSong(p)} onClick={() => cmd.open('edit')} />
               <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
               <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="찬양 라이브러리 보기 · 편집 · 삭제" onClick={() => cmd.open('songLibrary')} />
               <Big icon="✨" label="AI" onClick={() => cmd.open('ai')} />

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Library, Presentation, Slide, SlideElement } from '../src/domain/types';
 import type { RenderedSlide } from '../src/domain/io/pptxRender';
 import { fillTokens, frameFor, patchElement, slideFromRendered, withElementText } from '../src/domain/templates/convert';
-import { announcementSlides, fillFront, scriptureSlides, sermonTitleSlide, songInTemplate, templateLyricsTheme, TEMPLATE_LYRICS_THEME } from '../src/domain/templates/fill';
+import { announcementSlides, fillFront, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme, TEMPLATE_LYRICS_THEME } from '../src/domain/templates/fill';
 import type { ServiceTemplates } from '../src/domain/templates/serviceTemplates';
 import { createLiveService, ensureServiceSection, insertIntoSection, SECTION, sectionPresentations } from '../src/domain/sunday/liveDeck';
 import { createSeedLibrary } from '../src/domain/defaults';
@@ -127,6 +127,19 @@ describe('church template filling', () => {
     expect(out.slides[1].caption).toBeUndefined();
     expect(els(out.slides[1])).toEqual(['은혜']); // small title in the corner
     expect(out.arrangements![0].groups).toEqual(['Title', 'Verse 1', 'Chorus']); // the title slide opens it
+  });
+
+  it('preserves individual song edits on automatic template refresh and service copies', () => {
+    const song: Presentation = {
+      id: 'edited', title: '편집한 찬양', themeId: TEMPLATE_LYRICS_THEME, folder: 'Songs', slidesEdited: true,
+      slides: [{ id: 'kept', group: 'Verse 1', text: '수정한 가사', style: { fontSize: 99 }, background: { kind: 'color', value: '#112233' } }],
+    };
+    expect(songStyleUpdates([song], TPL, 2)).toEqual([]);
+    const copy = songInTemplate(song, TPL, '1025 주일예배');
+    expect(copy.slides).toHaveLength(1);
+    expect(copy.slides[0]).toMatchObject({ text: '수정한 가사', style: { fontSize: 99 }, background: { kind: 'color', value: '#112233' } });
+    expect(copy.slides[0].id).not.toBe('kept');
+    expect(copy.folder).toBe('1025 주일예배');
   });
 
   it('derives the lyrics theme from the template’s lyric box', () => {
