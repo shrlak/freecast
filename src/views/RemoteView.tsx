@@ -103,17 +103,30 @@ export function RemoteView() {
       </header>
       <fieldset disabled={!ready} className="remote-controls">
       <div className="remote-main">
+      <section className="remote-handset" aria-label="Presentation controls">
       <div className="remote-show">
-        <button className="primary" onClick={() => cmd({ type: 'show/start' })}>▶ Start slideshow</button>
-        <button className="danger" onClick={() => cmd({ type: 'show/end' })}>■ End slideshow</button>
+        <button className="remote-start" aria-label="Start slideshow" title="Start slideshow" onClick={() => cmd({ type: 'show/start' })}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M7 5.5a8 8 0 1 0 10 0" /></svg>
+          <span>Start</span>
+        </button>
+        <button className="remote-end" aria-label="End slideshow" title="End slideshow" onClick={() => cmd({ type: 'show/end' })}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          <span>End</span>
+        </button>
       </div>
       <div className="remote-nav">
-        <button aria-label="Previous slide" onClick={() => cmd({ type: 'live/prev' })}>◀</button>
-        <button className="primary" aria-label="Next slide" onClick={() => cmd({ type: 'live/next' })}>▶</button>
+        <button aria-label="Previous slide" title="Previous slide" onClick={() => cmd({ type: 'live/prev' })}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+        </button>
+        <button aria-label="Next slide" title="Next slide" onClick={() => cmd({ type: 'live/next' })}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+        </button>
       </div>
-      <button className={`remote-black ${live?.black ? 'active' : ''}`} onClick={() => cmd({ type: 'live/toggleBlack' })}>
-        {live?.black ? '■ Black screen on — tap to show slide' : '■ Black screen'}
+      <button className={`remote-black ${live?.black ? 'active' : ''}`} aria-label="Black screen" aria-pressed={live?.black ?? false} title={live?.black ? 'Show slide' : 'Black screen'} onClick={() => cmd({ type: 'live/toggleBlack' })}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>
+        <span>{live?.black ? 'Show' : 'Black'}</span>
       </button>
+      </section>
       <div className="remote-current">
         {live?.slide ? <SlideCanvas {...liveCanvasProps(live)} /> : <div className="remote-empty">Nothing live</div>}
       </div>
