@@ -1,6 +1,6 @@
 // FreeCast desktop app: runs the FreeCast server inside the app and shows the console,
 // audience outputs and stage displays as native windows placed on your displays.
-import { app, BrowserWindow, desktopCapturer, ipcMain, Menu, safeStorage, screen, session, shell, dialog } from 'electron';
+import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, safeStorage, screen, session, shell, dialog } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -327,8 +327,14 @@ ipcMain.handle('desktop:info', (e) => {
     lanUrls: settings.networkRemote ? lanAddresses().map((ip) => `http://${ip}:${PORT}`) : [],
     internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null,
       webAppUrl: remoteWebAppAddress(REMOTE_PROXY), pairingUrl: settings.remoteLinkId ? remotePairingAddress(REMOTE_PROXY, settings.remoteLinkId) : null,
+      connectionCode: settings.remoteLinkId ?? null,
       link: settings.internetRemote && settings.remoteLinkId ? linkAddress(REMOTE_PROXY, settings.remoteLinkId) : null, linkStatus: linkState.status, linkError: linkState.error },
   };
+});
+ipcMain.handle('desktop:copyRemoteCode', (e) => {
+  if (!fromMain(e) || !settings.remoteLinkId) return false;
+  clipboard.writeText(settings.remoteLinkId);
+  return true;
 });
 ipcMain.handle('desktop:pptxToPdf', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptxToPdf(bytes) : null));
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
