@@ -14,7 +14,7 @@ import { uid } from '../../domain/lyrics';
 import { loadServiceTemplates, pptxSlides, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
 import { templateDeckUpdates } from '../../domain/templates/register';
 import { announcementSlides, refreshFront, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
-import { createLiveService, findLiveService, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
+import { createLiveService, findLiveService, ensureServiceSection, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { withSharedSongs } from '../../domain/online';
 import { parsePrayerTopics } from '../../domain/sunday/prayer';
@@ -145,7 +145,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   const ensure = useCallback(async (date = upcomingSunday(new Date())): Promise<string> => {
     const existing = findLiveService(lib.current, date);
     if (existing) {
-      dispatch({ type: 'playlist/set', playlist: existing, activate: true });
+      dispatch({ type: 'playlist/set', playlist: ensureServiceSection(existing, SECTION.songs, lib.current.presentations), activate: true });
       return existing.id;
     }
     const built = createLiveService(lib.current, await templatesNow().catch(() => null), date);
@@ -157,7 +157,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   const place = async (id: string, section: SectionTitle, ids: string[], replace = false) => {
     await tick();
     const pl = playlist(id);
-    if (pl) dispatch({ type: 'playlist/set', playlist: insertIntoSection(pl, section, ids, { replace }) });
+    if (pl) dispatch({ type: 'playlist/set', playlist: insertIntoSection(pl, section, ids, { replace, presentations: lib.current.presentations }) });
   };
 
   /** Select a presentation of the service so its slides show (and fill in) in the slide pane. */
@@ -201,7 +201,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     if (!t || (!info.scripture.trim() && !info.sermonTitle.trim())) return;
     const refs = parseRefs(info.scripture).refs;
     const pl = playlist(id);
-    const sermonId = pl && sectionPresentations(pl, SECTION.sermon)[0];
+    const sermonId = pl && sectionPresentations(pl, SECTION.sermon, lib.current.presentations)[0];
     const sermon = sermonId && lib.current.presentations.find((p) => p.id === sermonId);
     if (sermon && (refs.length || info.sermonTitle.trim() || info.preacher.trim())) {
       const title = sermonTitleSlide(t, { refs, sermonTitle: info.sermonTitle, preacher: info.preacher });
@@ -216,7 +216,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     const chunks = await loadScriptureChunks(refs, { translations, versesPerSlide: opts.versesPerSlide ?? sunday.versesPerSlide });
     const slides = scriptureSlides(t, { refs, chunks, sermonTitle: info.sermonTitle, preacher: info.preacher });
     if (!slides.length) return;
-    const bibleId = (pl && sectionPresentations(pl, SECTION.bible)[0]) || undefined;
+    const bibleId = (pl && sectionPresentations(pl, SECTION.bible, lib.current.presentations)[0]) || undefined;
     if (bibleId && lib.current.presentations.some((p) => p.id === bibleId)) {
       dispatch({ type: 'presentation/update', id: bibleId, patch: { slides } });
       return;
@@ -299,7 +299,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     const id = active && sectionRange(active, SECTION.sermon) ? active.id : await ensure();
     await tick();
     const pl = playlist(id);
-    let sermonId = pl ? sectionPresentations(pl, SECTION.sermon)[0] : undefined;
+    let sermonId = pl ? sectionPresentations(pl, SECTION.sermon, lib.current.presentations)[0] : undefined;
     if (!sermonId) {
       const p: Presentation = { id: uid('p'), title: `${mmdd(upcomingSunday(new Date()))} 설교`, slides: [], themeId: 'theme_classic', folder: liveFolder(upcomingSunday(new Date())), background: { kind: 'color', value: '#000000' } };
       await add(p);
@@ -376,7 +376,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
       const warnings: string[] = [];
       const deckOf = (section: SectionTitle) => {
         const pl = playlist(id);
-        const pid = pl && sectionPresentations(pl, section)[0];
+        const pid = pl && sectionPresentations(pl, section, lib.current.presentations)[0];
         return pid ? lib.current.presentations.find((p) => p.id === pid) : undefined;
       };
       /** Drop service decks that left the playlist (library songs and shared decks stay). */
@@ -405,7 +405,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
         if (part === 'songs') {
           for (const [section, postSermon] of [[SECTION.songs, false], [SECTION.after, true]] as const) {
             const pl = playlist(id);
-            const old = pl ? sectionPresentations(pl, section) : [];
+            const old = pl ? sectionPresentations(pl, section, lib.current.presentations) : [];
             const made: string[] = [];
             for (const song of d.songs.filter((x) => !!x.postSermon === postSermon)) {
               const { pres, isNew } = songFor(song, folder, t);
@@ -467,7 +467,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   const open = () => run('예배 여는 중…', async () => {
     const id = await ensure();
     const pl = playlist(id);
-    await show(id, pl && sectionPresentations(pl, SECTION.front)[0]);
+    await show(id, pl && sectionPresentations(pl, SECTION.front, lib.current.presentations)[0]);
   });
 
   return { templates, busy, open, conti, review, answerReview, cancelReview: () => setReview(null), lyrics, sermon, drop, scripture, syncWizard, needTemplates: templatesNow };

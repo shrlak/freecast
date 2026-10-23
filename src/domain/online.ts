@@ -121,12 +121,12 @@ export async function fetchOnlineSongs(linesPerSlide: number): Promise<Presentat
 
 /**
  * Register (or update) a song in the shared 찬양 라이브러리, as the ppt site's 라이브러리 저장 does;
- * needs the 관리자 password.
+ * registration does not need the administrator password.
  */
-export async function registerSharedSong(song: LibrarySong, adminPassword: string): Promise<void> {
+export async function registerSharedSong(song: LibrarySong): Promise<void> {
   const r = await fetch('/api/songs', {
     method: 'PUT',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${adminPassword}` },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ entry: { ...song, verification: 'verified', updatedAt: new Date().toISOString() } }),
   });
   if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error ?? `등록하지 못했습니다 (${r.status})`);

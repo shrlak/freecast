@@ -1,7 +1,7 @@
 // /api/cloud/* → the church Worker's /freecast/* routes (accounts + shared slide library).
 // /api/cloud/feedback → saved by the Worker, then emailed from here (see sendFeedback).
 // /api/songs   → the Worker's /libraries/lyrics: the 찬양 라이브러리 the ppt site reads and registers
-//                songs into (GET for everyone; PUT / DELETE with the 관리자 password as a Bearer token).
+//                songs into (registration needs no password; DELETE requires the administrator token).
 // Going through this local server means the Worker sees its allowed origin and the browser
 // never deals with CORS. FREECAST_CLOUD_URL overrides the Worker address (e.g. wrangler dev).
 import { aiConfig } from './aiProviders.mjs';

@@ -4,7 +4,7 @@ import type { RenderedSlide } from '../src/domain/io/pptxRender';
 import { fillTokens, frameFor, patchElement, slideFromRendered, withElementText } from '../src/domain/templates/convert';
 import { announcementSlides, fillFront, scriptureSlides, sermonTitleSlide, songInTemplate, templateLyricsTheme, TEMPLATE_LYRICS_THEME } from '../src/domain/templates/fill';
 import type { ServiceTemplates } from '../src/domain/templates/serviceTemplates';
-import { createLiveService, insertIntoSection, SECTION, sectionPresentations } from '../src/domain/sunday/liveDeck';
+import { createLiveService, ensureServiceSection, insertIntoSection, SECTION, sectionPresentations } from '../src/domain/sunday/liveDeck';
 import { createSeedLibrary } from '../src/domain/defaults';
 import { parseRefs } from '../src/domain/bible/refs';
 
@@ -178,6 +178,42 @@ describe('live 주일예배 playlist', () => {
     expect(outline(pl.items).slice(i, i + 3)).toEqual(['# 설교 후 찬양', 'late', '1018 기도']);
     pl = insertIntoSection(pl, SECTION.after, [], { replace: true });
     expect(outline(pl.items).slice(i, i + 2)).toEqual(['# 설교 후 찬양', '# 광고']);
+  });
+
+  it('creates a missing song section before the Bible and retains registration order without a prayer', () => {
+    let pl = { ...live.playlist, items: live.playlist.items.filter((i) => i.kind !== 'header' && title(i.presentationId).endsWith('기도') ? false : !(i.kind === 'header' && i.title === SECTION.songs)) };
+    pl = insertIntoSection(pl, SECTION.songs, ['z-song']);
+    pl = insertIntoSection(pl, SECTION.songs, ['a-song']);
+    pl = insertIntoSection(pl, SECTION.songs, ['m-song']);
+    const list = outline(pl.items);
+    expect(list.indexOf('# 찬양')).toBeGreaterThan(list.indexOf('# Front'));
+    expect(list.indexOf('# 찬양')).toBeLessThan(list.indexOf('# 성경 말씀'));
+    expect(sectionPresentations(pl, SECTION.songs)).toEqual(['z-song', 'a-song', 'm-song']);
+    pl = insertIntoSection(pl, SECTION.songs, ['new-song'], { replace: true });
+    expect(sectionPresentations(pl, SECTION.songs)).toEqual(['new-song']);
+    expect(outline(pl.items)).not.toContain('m-song');
+  });
+
+  it('repairs misplaced songs without sorting them and recognizes FRONT/Bible header variants', () => {
+    const items = live.playlist.items.filter((i) => i.kind !== 'header' || i.title !== SECTION.songs).map((i) => i.kind === 'header' && i.title === SECTION.front ? { ...i, title: 'FRONT' } : i.kind === 'header' && i.title === SECTION.bible ? { ...i, title: '성경말씀' } : i);
+    const pl = ensureServiceSection({ ...live.playlist, items: [...items, { id: 'late-h', kind: 'header', title: SECTION.songs }, { id: 'z', presentationId: 'z-song' }, { id: 'a', presentationId: 'a-song' }] }, SECTION.songs, [...lib.presentations, ...live.presentations]);
+    expect(outline(pl.items).indexOf('# 찬양')).toBeLessThan(outline(pl.items).indexOf('# 성경말씀'));
+    expect(sectionPresentations(pl, SECTION.songs, [...lib.presentations, ...live.presentations])).toEqual(['z-song', 'a-song']);
+    expect(ensureServiceSection(pl, SECTION.songs)).toBe(pl);
+  });
+
+  it('recognizes a closing prayer used only once without mistaking the last song for it', () => {
+    const prayer = live.presentations.find((p) => p.title.endsWith('기도'))!;
+    const pl = { ...live.playlist, items: [
+      { id: 'h', kind: 'header' as const, title: SECTION.songs },
+      { id: 'p', presentationId: prayer.id },
+      { id: 'b', kind: 'header' as const, title: SECTION.bible },
+    ] };
+    const opts = { presentations: [...lib.presentations, ...live.presentations] };
+    const first = insertIntoSection(pl, SECTION.songs, ['first'], opts);
+    const second = insertIntoSection(first, SECTION.songs, ['second'], opts);
+    expect(second.items.slice(1, 4).map((i) => i.kind === 'header' ? i.title : i.presentationId)).toEqual(['first', 'second', prayer.id]);
+    expect(sectionPresentations(second, SECTION.songs, opts.presentations)).toEqual(['first', 'second']);
   });
 });
 
