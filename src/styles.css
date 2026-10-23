@@ -820,6 +820,14 @@ body[data-view='multiview'] { overflow: auto; }
 .remote-connection-dot { display: block; width: 10px; height: 10px; border-radius: 50%; background: #ff453a; }
 .remote-connection.connected .remote-connection-dot { background: #34c759; }
 .remote-connection-text { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.remote-appearance-toggle { flex: none; font-size: 12px; padding: 5px 8px; }
+body[data-view='remote'][data-remote-appearance='light'] { --bg: #f5f6f8; --panel: #fff; --panel-2: #e9edf2; --line: #cbd2dc; --text: #202b3a; --muted: #566477; color-scheme: light; }
+body[data-remote-appearance='light'] .remote-root button:not(.primary):not(.active):not(.remote-slides button) { background: #fff; border-color: var(--line); color: var(--text); }
+body[data-remote-appearance='light'] .remote-root button:not(.primary):not(.active):not(.remote-slides button):hover { background: #e9edf2; }
+body[data-remote-appearance='light'] .remote-root input { background: #fff; color: var(--text); border-color: var(--line); }
+body[data-remote-appearance='light'] .remote-root h3 { color: var(--muted); }
+body[data-remote-appearance='light'] .remote-section { color: #795500; }
+body[data-remote-appearance='light'] .remote-empty { color: #c4c9d1; }
 .remote-controls:disabled button { opacity: .5; }
 
 .activity-modal { width: min(1000px, 94vw); }
