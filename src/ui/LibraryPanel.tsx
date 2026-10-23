@@ -102,12 +102,12 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
             <button className="mini-btn" title="Add section header" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'header', playlistId: playlist.id, initialValue: 'Section', title: '헤더 이름' })}>H</button>
             <button className="mini-btn" title="Duplicate as template (e.g. next week's service)" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'duplicate', playlistId: playlist.id, initialValue: `${playlist.name} copy`, title: '템플릿으로 복제' })}>⧉</button>
             <button className="mini-btn" title="Rename playlist" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'rename', playlistId: playlist.id, initialValue: playlist.name, title: '재생목록 이름 변경' })}>✎</button>
-            <button className="mini-btn" title="Delete playlist" disabled={playlists.length <= 1 && !isServicePlaylist(playlist?.name ?? "")} onClick={() => playlist && confirm(isServicePlaylist(playlist.name) ? `“${playlist.name}” 예배 자료와 전용 미디어를 삭제할까요? 찬양 목록·라이브러리와 공유 미디어는 보존됩니다.` : `Delete playlist “${playlist.name}”?`) && dispatch({ type: 'playlist/delete', id: playlist.id })}>🗑</button>
+            <button className="mini-btn" title="Delete playlist" disabled={playlists.length <= 1 && !isServicePlaylist(playlist?.name ?? "")} onClick={() => playlist && confirm(isServicePlaylist(playlist.name) ? `“${playlist.name}” 예배 자료를 휴지통으로 옮길까요? 전용 미디어는 30일 후 삭제되며 찬양 목록·라이브러리와 공유 미디어는 보존됩니다.` : `Delete playlist “${playlist.name}”?`) && dispatch({ type: 'playlist/delete', id: playlist.id })}>🗑</button>
           </div>
         </div>
         {playlist && isServicePlaylist(playlist.name) && <div className="playlist-retention">
           <label><input type="checkbox" checked={!!playlist.autoDeleteAfter && playlist.autoDeleteAfter > Date.now()} onChange={(e) => dispatch({ type: 'playlist/retention', id: playlist.id, until: e.target.checked ? nextServiceCleanup(playlist.name, new Date()) : undefined })} /> 다음 자동 삭제까지 보관</label>
-          <p className="hint">{playlist.autoDeleteAfter && playlist.autoDeleteAfter > Date.now() ? `${new Date(playlist.autoDeleteAfter).toLocaleString()}까지 예배 자료와 미디어를 보관합니다.` : '예배 종료 후 자료와 전용 미디어가 자동 삭제됩니다.'}</p>
+          <p className="hint">{playlist.autoDeleteAfter && playlist.autoDeleteAfter > Date.now() ? `${new Date(playlist.autoDeleteAfter).toLocaleString()}까지 예배 자료와 미디어를 보관합니다.` : '예배 종료 후 자료는 휴지통으로 옮기고, 전용 미디어는 30일 후 삭제합니다.'}</p>
         </div>}
         <ol className="list">
           {playlist?.items.map((item, i) => {

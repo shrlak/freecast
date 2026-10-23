@@ -149,11 +149,12 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
           <button key={t} className={`rb-tab ${t === tab ? 'on' : ''} ${t === '파일' ? 'file' : ''}`} onClick={() => setTab(t)}>{t}</button>
         ))}
         <span className="rb-spacer" />
-        <span className="rb-busy" role="status">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}</span>
+        <button className="rb-busy" onClick={() => cmd.open('remoteControl')} title="리모컨 조작권 관리">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}{cmd.remoteRequests > 0 && <strong className="remote-request-badge"> · 조작권 요청 {cmd.remoteRequests}</strong>}</button>
         {busy && <span className="rb-busy">{busy}</span>}
         <button className="rb-account" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">
           {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : ' ✓'}` : '☁ 로그인'}{cmd.cloud.session && (cmd.cloud.storageError ? ' · 서버 용량 확인 필요' : cmd.cloud.storageUsage?.server ? ` · 서버 ${formatStoragePercent(cmd.cloud.storageUsage.server.usedPercent)}%` : '')}
         </button>
+        <button className="rb-account" disabled={!p} onClick={() => cmd.open('rehearsal')}>리허설</button>
         <button className="rb-present" disabled={!p} title="지금 편집 중인 슬라이드부터 발표 (Shift+F5) — 처음부터는 F5" onClick={() => cmd.startShow(true)}>▶ 발표</button>
         <input ref={uploadRef} type="file" hidden onChange={(e) => { onUpload(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
       </div>
@@ -172,6 +173,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="{ }" label="라이브러리만" onClick={cmd.exportLibrary} />
             </Group>
             <Group label="복원">
+              <Big icon="🗑" label="휴지통" onClick={() => cmd.open('trash')} />
               <Big icon="🕘" label="복원 지점" title="라이브러리를 자동으로 저장해 둔 지점으로 되돌리기" onClick={() => cmd.open('restore')} />
             </Group>
             <Group label="사용기록">
@@ -336,7 +338,8 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🎵" label="가사 올리기" title="가사 파일(.txt/.md 등)을 찬양 순서에 넣습니다" disabled={working} onClick={() => upload('lyrics')} />
               <Big icon="🎤" label="설교 슬라이드" title="설교 PPTX/PDF/이미지로 기존 설교 슬라이드를 교체합니다. 예배 순서와 설정은 유지됩니다. 여러 파일은 한 번에 선택하세요." disabled={working} onClick={() => upload('sermon')} />
             </Group>
-            <Group label="예배 준비"><Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} /><Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} /><Big icon="🕘" label="복원 지점" onClick={() => cmd.open('restore')} /></Group>
+            <Group label="예배 준비"><Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} /><Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} /><Big icon="🗑" label="휴지통" onClick={() => cmd.open('trash')} />
+              <Big icon="🕘" label="복원 지점" onClick={() => cmd.open('restore')} /></Group>
             <Group label="예배 만들기">
               <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
               <Big icon="🙏" label="기도제목" title="이번 주 기도제목 — 주일예배 Front 슬라이드에 들어갑니다" onClick={() => cmd.open('prayer')} />

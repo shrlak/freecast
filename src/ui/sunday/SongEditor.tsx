@@ -169,7 +169,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     if (!song || !confirm(`교회 찬양 라이브러리에서 “${song.title}”을(를) 삭제할까요? 모든 컴퓨터와 주일예배 생성기에서 사라집니다.`)) return;
     save('삭제 중…', async () => {
       await deleteSharedSong(song.title, admin);
-      for (const p of library.presentations) if (!p.online && titleKey(p.title) === titleKey(song.title)) dispatch({ type: 'presentation/delete', id: p.id });
+      for (const p of library.presentations) if (titleKey(p.title) === titleKey(song.title)) dispatch({ type: 'presentation/delete', id: p.id });
       notify(`“${song.title}”을(를) 교회 찬양 라이브러리에서 삭제했습니다`);
     }, true);
   };

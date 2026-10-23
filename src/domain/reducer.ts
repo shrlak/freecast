@@ -1,3 +1,4 @@
+import { trashPresentation, trashSlides, restoreTrash, purgeTrash } from './trash';
 import { exclusivePresentationMedia } from './mediaCleanup';
 import { deletedServices, isServicePlaylist } from './sunday/cleanup';
 import type {
@@ -33,6 +34,9 @@ export interface AppState extends NavState {
 type DomainAction =
   | { type: 'device/register'; device: DeviceRegistration }
   | { type: 'activity/record'; entry: ActivityEntry }
+  | { type: 'trash/restore'; id: string; seq?: number }
+  | { type: 'trash/purge'; ids: string[] }
+  | { type: 'trash/expire'; now: number }
   | { type: 'select'; id: string | null }
   | { type: 'presentation/create'; presentation: Presentation }
   | { type: 'presentation/createMany'; presentations: Presentation[]; playlist?: Playlist }
@@ -272,11 +276,20 @@ function core(s: AppState, a: Action): AppState {
         const next = { ...p, ...a.patch, online: undefined };
         return a.patch.slides ? centerAddedLyricSlides(p, next) : next;
       }), a.id);
+    case 'trash/restore':
+      return reconcileLive(s, { ...s, library: restoreTrash(lib, a.id, a.occurredAt ?? Date.now(), a.seq) });
+    case 'trash/purge':
+      return { ...s, library: purgeTrash(lib, a.ids) };
+    case 'trash/expire':
+      return { ...s, library: purgeTrash(lib, (lib.trash ?? []).filter((e) => e.expiresAt <= a.now).map((e) => e.id)) };
     case 'presentation/delete': {
-      const removedMedia = new Set(exclusivePresentationMedia(lib, [a.id]));
+      const p = findPres(lib, a.id);
+      if (!p) return s;
+      const trash = [...(lib.trash ?? []), trashPresentation(lib, p, a.occurredAt ?? Date.now())];
+      const removedMedia = new Set(exclusivePresentationMedia({ ...lib, trash }, [a.id]));
       const playlists = lib.playlists.map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || i.presentationId !== a.id) }));
       return {
-        ...setLib(s, { presentations: lib.presentations.filter((p) => p.id !== a.id), playlists, media: lib.media.filter((m) => !removedMedia.has(m.id)) }),
+        ...setLib(s, { presentations: lib.presentations.filter((p) => p.id !== a.id), playlists, trash, media: lib.media.filter((m) => !removedMedia.has(m.id)) }),
         selectedId: s.selectedId === a.id ? null : s.selectedId,
         playlistIndex: null,
         cursor: s.cursor?.presentationId === a.id ? null : s.cursor,
@@ -285,10 +298,12 @@ function core(s: AppState, a: Action): AppState {
     case 'services/finish': {
       const gone = new Set(a.presentationIds);
       const drop = new Set(a.playlistIds);
+      const trash = [...(lib.trash ?? []), ...lib.presentations.filter((p) => gone.has(p.id)).map((p) => trashPresentation(lib, p, a.occurredAt ?? Date.now()))];
+      const removedMedia = new Set(exclusivePresentationMedia({ ...lib, trash }, a.presentationIds));
       let playlists = lib.playlists.filter((p) => !drop.has(p.id)).map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || !gone.has(i.presentationId)) }));
       if (!playlists.length) playlists = [{ id: uid('pl'), name: '재생목록', items: [] }];
       return {
-        ...setLib(s, { presentations: lib.presentations.filter((p) => !gone.has(p.id)), playlists, media: lib.media.filter((m) => !a.mediaIds.includes(m.id)) }),
+        ...setLib(s, { presentations: lib.presentations.filter((p) => !gone.has(p.id)), playlists, trash, media: lib.media.filter((m) => !removedMedia.has(m.id)) }),
         activePlaylistId: playlists.some((p) => p.id === s.activePlaylistId) ? s.activePlaylistId : playlists[0].id,
         selectedId: s.selectedId && gone.has(s.selectedId) ? null : s.selectedId,
         playlistIndex: null,
@@ -306,7 +321,13 @@ function core(s: AppState, a: Action): AppState {
       return refreshLive(mapPres(s, a.presentationId, (p) => a.seq == null ? editSlide(p, a.slideId, a.patch, a.occurredAt ?? Date.now()) : editSlideAt(p, a.seq, a.patch, a.occurredAt ?? Date.now())), a.presentationId);
     }
     case 'slide/delete': {
-      const next = mapPres(s, a.presentationId, (p) => a.seqs ? deleteSlidesAt(p, a.seqs, a.occurredAt ?? Date.now()) : deleteSlides(p, a.slideIds, a.occurredAt ?? Date.now()));
+      let next = mapPres(s, a.presentationId, (p) => a.seqs ? deleteSlidesAt(p, a.seqs, a.occurredAt ?? Date.now()) : deleteSlides(p, a.slideIds, a.occurredAt ?? Date.now()));
+      const original = findPres(lib, a.presentationId), changed = findPres(next.library, a.presentationId);
+      if (original && changed) {
+        const seqs = a.seqs ?? sequence(original).flatMap((x, i) => a.slideIds.includes(x.slide.id) ? [i] : []);
+        const entry = trashSlides(original, changed, seqs, a.occurredAt ?? Date.now());
+        if (entry) next = setLib(next, { trash: [...(lib.trash ?? []), entry] });
+      }
       if (!a.seqs || s.cursor?.presentationId !== a.presentationId) return reconcileLive(s, next);
       const before = findPres(lib, a.presentationId);
       const length = before ? sequence(before).length : 0;
@@ -324,7 +345,7 @@ function core(s: AppState, a: Action): AppState {
     }
     case 'online/songs': {
       const local = lib.presentations.filter((p) => !p.online);
-      const localIds = new Set(local.map((p) => p.id));
+      const localIds = new Set([...local.map((p) => p.id), ...(lib.trash ?? []).filter((e) => e.kind === 'presentation').map((e) => e.presentation.id)]);
       return dedupeLibrarySongs(setLib(s, { presentations: [...local, ...a.presentations.filter((p) => !localIds.has(p.id)).map(centerSongLyrics)] }));
     }
     case 'songs/dedupe':
@@ -520,7 +541,7 @@ function core(s: AppState, a: Action): AppState {
 }
 
 /** Actions that change the library but should not be undoable. */
-const NO_HISTORY = new Set<Action['type']>(['device/register', 'activity/record', 'timer/op', 'macro/run', 'usage/clear', 'library/replace', 'schedule/ran', 'slide/runActions', 'online/songs', 'songs/dedupe', 'live/videoClock', 'library/merge']);
+const NO_HISTORY = new Set<Action['type']>(['trash/expire', 'trash/purge', 'device/register', 'activity/record', 'timer/op', 'macro/run', 'usage/clear', 'library/replace', 'schedule/ran', 'slide/runActions', 'online/songs', 'songs/dedupe', 'live/videoClock', 'library/merge']);
 
 function historyKey(a: Action): string {
   const id = (a as { id?: string }).id ?? (a as { theme?: Theme }).theme?.id ?? (a as { slideId?: string }).slideId ?? '';
@@ -559,6 +580,7 @@ function reduceState(s: AppState, a: Action): AppState {
   }
   const next = core(s, a);
   if (next === s) return s;
+  if ((a.type === 'trash/purge' || a.type === 'trash/expire') && next.library !== s.library) return syncLive({ ...next, past: [], future: [], pastPositions: [], futurePositions: [], lastKey: null });
   if (next.library === s.library || a.type.startsWith('live/') || NO_HISTORY.has(a.type)) return syncLive(next);
   const key = historyKey(a);
   const slideList = a.type === 'presentation/update' && 'slides' in a.patch;

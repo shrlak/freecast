@@ -47,6 +47,7 @@ export function normalizeLibrary(value: unknown): Library | null {
     version: 1,
     aspect: '4:3',
     transitionsReset: true,
+    trash: arr<import('./types').TrashEntry>(value.trash, []).filter((e) => !!e && typeof e.id === 'string' && typeof e.presentation?.title === 'string' && (e.slides == null || (Array.isArray(e.slides) && e.slides.every((s) => !!s?.slide && typeof s.slide.id === 'string' && Number.isInteger(s.seq) && s.seq >= 0))) && (e.placements == null || Array.isArray(e.placements)) && Number.isFinite(e.deletedAt) && Number.isFinite(e.expiresAt) && !!e.presentation?.id && Array.isArray(e.presentation.slides) && ['presentation', 'slides'].includes(e.kind)),
     devices: arr<DeviceRegistration>(value.devices, []).filter((d) => isDeviceIdentity(d) && Number.isFinite(d.lastSeen) && (d.account === null || typeof d.account === 'string')),
     activity: arr<unknown>(value.activity, []).filter(isActivityEntry).slice(-2000),
     lastModified: isActivityEntry(value.lastModified) ? value.lastModified : undefined,

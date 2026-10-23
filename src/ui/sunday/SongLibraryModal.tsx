@@ -49,7 +49,7 @@ export function SongLibraryModal({ songs, dispatch, onEdit, reloadOnline, notify
     }
     setBusy(null);
     setPicked(new Set());
-    for (const s of chosen.slice(0, done)) if (!s.online) dispatch({ type: 'presentation/delete', id: s.id });
+    for (const s of chosen.slice(0, done)) dispatch({ type: 'presentation/delete', id: s.id });
     if (done) {
       notify(`${done}곡을 교회 찬양 라이브러리에서 삭제했습니다`);
       reloadOnline();
