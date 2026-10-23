@@ -7,7 +7,7 @@ const groupKey = (group: string) => expandCode(group.replace(/\s+/g, '')).replac
 const groupCode = (g: string) => g.replace(/Pre-Chorus/i, 'PC').replace(/Chorus/i, 'C').replace(/Verse/i, 'V').replace(/Bridge/i, 'B').replace(/Intro/i, 'I').replace(/Interlude/i, 'INT').replace(/Ending/i, 'E').replace(/Tag/i, 'T').replace(/\s+/g, '');
 
 /** A repeated part gets its own pages only when this particular occurrence is changed. */
-function independentPartAt(p: Presentation, seq: number): Presentation {
+export function independentPartAt(p: Presentation, seq: number): Presentation {
   const arr = activeArrangement(p);
   if (!arr || !Number.isInteger(seq) || seq < 0) return p;
   let offset = 0;
@@ -30,6 +30,42 @@ function independentPartAt(p: Presentation, seq: number): Presentation {
   const order = groups.filter((g) => g !== 'Title').map(groupCode);
   const next: Presentation = { ...p, slidesEdited: true, slides: [...p.slides, ...copies], arrangements: p.arrangements?.map((a) => a.id === arr.id ? { ...a, groups } : a), meta: { ...p.meta, order } };
   if (p.songSource || p.lyricsLayout) next.songSource = { ...songSourceFromSlides(next), order };
+  return next;
+}
+
+/** Insert a restored page at a playback position without rebuilding its surviving neighbors. */
+export function insertSlideAt(p: Presentation, restored: Slide, position: number): Presentation {
+  const at = Math.max(0, Math.min(position, sequence(p).length));
+  let next = p;
+  const arr = activeArrangement(p);
+  let part = 0, offset = 0;
+  if (arr) {
+    for (; part < arr.groups.length; part++) {
+      const size = p.slides.filter((s) => s.group === arr.groups[part]).length;
+      if (at < offset + size) break;
+      offset += size;
+    }
+    if (at > offset && part < arr.groups.length) next = independentPartAt(p, at);
+  }
+  const active = activeArrangement(next);
+  let group = restored.group;
+  const slides = [...next.slides];
+  if (active && at > offset && part < active.groups.length) {
+    group = active.groups[part];
+    const target = sequence(next)[at]?.index ?? slides.length;
+    slides.splice(target, 0, { ...restored, id: uid('s'), group, label: restored.label ?? restored.group });
+  } else if (active) {
+    const taken = new Set(slides.map((s) => groupKey(s.group)));
+    let n = 2;
+    while (taken.has(groupKey(group))) group = `${restored.group.replace(/\s*\d+$/, '').trim()} ${n++}`;
+    slides.push({ ...restored, id: uid('s'), group, label: restored.label ?? restored.group });
+    const groups = [...active.groups]; groups.splice(part, 0, group);
+    next = { ...next, arrangements: next.arrangements?.map((a) => a.id === active.id ? { ...a, groups } : a) };
+  } else slides.splice(at, 0, { ...restored, id: uid('s') });
+  next = { ...next, slides, online: undefined, folder: p.online ? 'Songs' : p.folder, slidesEdited: true };
+  const order = activeArrangement(next)?.groups.filter((g) => g !== 'Title').map(groupCode);
+  if (p.songSource || p.lyricsLayout) next.songSource = { ...songSourceFromSlides(next), ...(order ? { order } : {}) };
+  if (order) next.meta = { ...next.meta, order };
   return next;
 }
 

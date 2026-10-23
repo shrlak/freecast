@@ -86,6 +86,7 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
       activity: mergeActivity(local.activity, remote.activity),
       lastModified: newestModification(local.lastModified, remote.lastModified),
       presentations,
+      trash: mergeById(base?.trash, local.trash ?? [], remote.trash ?? []),
       themes: m('themes'),
       playlists: m('playlists'),
       media: m('media'),

@@ -426,11 +426,19 @@ export interface SundaySettings {
   styleVersion?: number;
 }
 
+export interface TrashEntry {
+  id: string; kind: 'presentation' | 'slides'; deletedAt: number; expiresAt: number;
+  presentation: Presentation;
+  placements?: { playlistId: string; index: number; item: PlaylistItem }[];
+  slides?: { slide: Slide; seq: number; previous?: { id: string; occurrence: number }; next?: { id: string; occurrence: number } }[];
+}
+
 export interface Library {
   version: 1;
   devices?: DeviceRegistration[];
   activity?: ActivityEntry[];
   lastModified?: ActivityEntry;
+  trash?: TrashEntry[];
   /** '4:3' once slides use the 1440×1080 canvas (libraries without it were laid out at 1920×1080). */
   aspect?: '4:3';
   /** Set once every presentation's and slide's own transition has been cleared (default is 없음, 1 ms). */

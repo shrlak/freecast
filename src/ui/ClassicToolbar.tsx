@@ -13,6 +13,9 @@ export function ClassicToolbar({ state, dispatch, cmd, hasSelection }: { state: 
         <button className="tool-btn" onClick={() => cmd.open('activity')}><span className="ti">📋</span><span>사용기록</span></button>
         <button className="tool-btn" onClick={() => cmd.open('preflight')}><span className="ti">🔎</span><span>예배 시작 전 점검</span></button>
         <button className="tool-btn" onClick={() => cmd.open('preparation')}><span className="ti">☑</span><span>예배 준비</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('trash')}><span className="ti">♲</span><span>휴지통</span></button>
+        <button className="tool-btn" disabled={!hasSelection} onClick={() => cmd.open('rehearsal')}><span className="ti">▷</span><span>리허설</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('remoteControl')}><span className="ti">⌁</span><span>리모컨 조작권{cmd.remoteRequests > 0 ? ` · 요청 ${cmd.remoteRequests}` : ''}</span></button>
         <button className="tool-btn" onClick={() => cmd.open('retreat')}><span className="ti">⛺</span><span>수련회</span></button>
       </div>
       <div className="tool-group">

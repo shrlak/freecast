@@ -931,3 +931,45 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
 .remote-slides > button[aria-current='true'] { border-color: #34c759; box-shadow: 0 0 0 1px #34c759; }
 .remote-slide-state { position: absolute; top: 4px; right: 4px; background: #167744; color: #fff; border-radius: 4px; padding: 2px 5px; font-size: 11px; }
 .remote-slide-state.hidden-slide { background: #555; }
+
+/* Recover deleted pages, practice privately, and share a single remote controller. */
+.trash-modal, .control-modal { width: min(900px, 94vw); max-height: 85dvh; }
+.trash-modal > p, .control-modal > p, .trash-modal > input { margin: 12px 16px; }
+.feature-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 12px 16px; }
+.trash-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--line); padding: 14px 0; }
+.trash-row > .grow { min-width: 200px; overflow-wrap: anywhere; }
+.trash-row p { white-space: pre-line; margin: 6px 0; }
+.trash-pages { flex-basis: 100%; order: 2; padding: 6px; }
+.trash-pages > div { padding: 6px; border-bottom: 1px solid var(--line); }
+.rehearsal-modal { width: min(1250px, 96vw); height: min(880px, 92dvh); }
+.rehearsal-banner { margin: 10px 16px; padding: 10px; border: 1px solid #b47a00; border-radius: 6px; background: #b47a0015; }
+.rehearsal-modal > label { padding: 0 16px 10px; }
+.rehearsal-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr); gap: 16px; padding: 0 16px; overflow: hidden; }
+.rehearsal-main { min-height: 0; overflow: auto; }
+.rehearsal-main > .row { margin-top: 10px; }
+.rehearsal-list { padding: 0; display: grid; grid-template-columns: 1fr 1fr; align-content: start; gap: 8px; }
+.rehearsal-list > button { padding: 3px; min-width: 0; overflow: hidden; }
+.rehearsal-list > button[aria-current='true'] { outline: 3px solid var(--accent); outline-offset: -3px; }
+.rehearsal-list > button > span { font-size: 11px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-access { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11px; flex: none; }
+.remote-access label { display: flex; align-items: center; gap: 4px; }
+.remote-access input { width: 100px; min-width: 0; padding: 3px 5px; font-size: 11px; }
+.remote-access select, .remote-access button { padding: 4px 6px; max-width: 130px; font-size: 11px; }
+.remote-access > [role='status'] { flex: 1; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-rehearsal-label { flex-basis: 100%; color: #b47a00; }
+.remote-command-keys { display: contents; border: 0; margin: 0; padding: 0; min-width: 0; }
+.remote-console .remote-command-keys:disabled button { opacity: .5; }
+.remote-console .remote-slides > button:disabled { opacity: 1; cursor: default; }
+@media (max-width: 700px) {
+  .rehearsal-body { grid-template-columns: 1fr; overflow: auto; }
+  .rehearsal-list { overflow: visible; }
+  .rehearsal-main { overflow: visible; }
+}
+.remote-identity { position: relative; flex: none; }
+.remote-identity > summary { cursor: pointer; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.remote-identity > label { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 250px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px #0004; }
+.remote-identity input { width: 170px; font-size: 16px; }
+.remote-request-badge { color: #b47a00; }
+@media (orientation: portrait) and (max-height: 650px) {
+  .remote-console .remote-controls { grid-template-rows: minmax(0, 2.7fr) minmax(80px, 1fr); }
+}

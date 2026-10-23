@@ -1,6 +1,7 @@
 // WebSocket relay so phones, tablets and other computers on the network can act as
 // remote controls, stage displays or outputs for the operator console.
 import { WebSocketServer } from 'ws';
+import { remoteControl } from './remoteControl.mjs';
 import { isPublicHost } from './tunnel.mjs';
 
 const PIN = process.env.FREECAST_REMOTE_PIN || '';
@@ -29,6 +30,8 @@ function validCommand(c) {
  */
 export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  const control = remoteControl(wss);
+  let rehearsal = null;
   let lastState = null;
   let lastInfo = [];
   let pendingInfo = null;
@@ -66,6 +69,7 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
       }
       if (msg?.type === 'ping') { ws.send(JSON.stringify({ type: 'pong' })); return; }
       if (msg?.type === 'hello') {
+        if (ws.role) return;
         const role = ['host', 'viewer', 'remote'].includes(msg.role) ? msg.role : 'viewer';
         const pin = ws.pub ? '' : PIN;
         if (ws.pub && role !== 'remote') {
@@ -78,14 +82,23 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
         }
         ws.role = role;
         ws.send(JSON.stringify({ type: 'welcome', pinRequired: Boolean(pin) }));
+        if (role === 'remote') control.register(ws, msg);
+        else if (role === 'host') control.publish();
         if (role === 'remote' || role === 'host') { tellHosts(); tellRemotes(); }
         if (role !== 'host') {
           if (lastState) ws.send(lastState);
           if (role === 'remote') {
+            if (rehearsal) ws.send(rehearsal);
             for (const packet of lastInfo) ws.send(packet);
             for (const packet of pendingInfo?.packets ?? []) ws.send(packet);
           }
         }
+        return;
+      }
+      if (msg?.type === 'remote-control') { control.receive(ws, msg); return; }
+      if (ws.role === 'host' && msg?.type === 'rehearsal') {
+        rehearsal = JSON.stringify({ type: 'rehearsal', active: msg.active === true, state: msg.state, cursor: msg.cursor });
+        broadcast(rehearsal, (c) => c.role === 'remote');
         return;
       }
       if (ws.role === 'host' && msg?.type === 'state') {
@@ -103,12 +116,12 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
         pendingInfo.packets.push(packet);
         broadcast(packet, (c) => c.role === 'remote');
         if (pendingInfo.packets.length === pendingInfo.total) { lastInfo = pendingInfo.packets; pendingInfo = null; }
-      } else if (ws.role === 'remote' && msg?.type === 'command' && validCommand(msg.command)) {
+      } else if (ws.role === 'remote' && control.owns(ws) && msg?.type === 'command' && validCommand(msg.command)) {
         broadcast(JSON.stringify({ type: 'command', command: msg.command }), (c) => c.role === 'host');
       }
     });
   });
-  wss.on('connection', (ws) => ws.on('close', () => { if (ws.role === 'remote') tellHosts(); if (ws.role === 'host') { if (pendingInfo?.owner === ws) pendingInfo = null; tellRemotes(); } }));
+  wss.on('connection', (ws) => ws.on('close', () => { if (ws.role === 'remote') { control.close(ws); tellHosts(); } if (ws.role === 'host') { rehearsal = null; broadcast(JSON.stringify({ type: 'rehearsal', active: false }), (c) => c.role === 'remote'); if (pendingInfo?.owner === ws) pendingInfo = null; tellRemotes(); } }));
   wss.toHost = (command) => {
     if (!validCommand(command)) return false;
     let sent = false;

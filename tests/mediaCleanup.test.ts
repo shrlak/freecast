@@ -19,11 +19,15 @@ describe('service media lifecycle', () => {
     const next = reducer(createInitialState(lib), { type: 'playlist/delete', id: 'service-list' });
     expect(next.library.playlists).toEqual([lib.playlists[1]]);
     expect(next.library.presentations).toEqual(lib.presentations.slice(1));
-    expect(next.library.media.map((m) => m.id)).toEqual(['shared', 'logo', 'standalone']);
+    expect(next.library.media).toEqual(lib.media);
+    const purged = reducer(next, { type: 'trash/purge', ids: next.library.trash!.map((e) => e.id) });
+    expect(purged.library.media.map((m) => m.id)).toEqual(['shared', 'logo', 'standalone']);
   });
-  it('single deck deletion also removes exclusive media', () => {
+  it('single deck deletion retains exclusive media until the trash expires', () => {
     const next = reducer(createInitialState(fixture()), { type: 'presentation/delete', id: 'service' });
-    expect(next.library.media.map((m) => m.id)).not.toContain('only');
+    expect(next.library.media.map((m) => m.id)).toContain('only');
+    const expired = reducer(next, { type: 'trash/expire', now: next.library.trash![0].expiresAt });
+    expect(expired.library.media.map((m) => m.id)).not.toContain('only');
     expect(next.library.presentations.map((p) => p.id)).toEqual(['song', 'online']);
   });
   it('automatic expiry uses the same ownership rules and leaves song libraries alone', () => {

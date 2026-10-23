@@ -1,5 +1,9 @@
+import { TrashModal } from '../ui/TrashModal';
+import { RehearsalModal } from '../ui/RehearsalModal';
+import { RemoteControlModal } from '../ui/RemoteControlModal';
+import type { RemoteControlState } from '../domain/remoteControl';
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { createInitialState, reducer, type Action } from '../domain/reducer';
+import { createInitialState, reducer, type Action, type AppState } from '../domain/reducer';
 import { loadLibrary, normalizeLibrary, saveLibrary } from '../domain/persistence';
 import { activePlaylist } from '../domain/live';
 import { sequence } from '../domain/arrangement';
@@ -81,6 +85,11 @@ function download(name: string, data: string, type: string) {
 export function OperatorView() {
   const [state, dispatchRaw] = useReducer(reducer, undefined, () => createInitialState(loadLibrary()));
   const [modal, setModal] = useState<Modal>(null);
+  const modalRef = useRef(modal); modalRef.current = modal;
+  const rehearsalCommandRef = useRef<((command: Record<string, unknown>) => void) | null>(null);
+  const [rehearsalPreview, setRehearsalPreview] = useState<AppState | null>(null);
+  const [remoteControl, setRemoteControl] = useState<RemoteControlState | null>(null);
+  useEffect(() => { const expire = () => dispatchRaw({ type: 'trash/expire', now: Date.now() }); expire(); const t = setInterval(expire, 60000); return () => clearInterval(t); }, []);
   const [toast, setToast] = useState<string | null>(null);
   const [midiOn, setMidiOn] = useState(() => localStorage.getItem('freecast.midi') === '1');
   const [online, setOnline] = useState<{ status: 'loading' | 'ok' | 'error'; count: number; error?: string }>({ status: 'loading', count: 0 });
@@ -219,8 +228,10 @@ export function OperatorView() {
   const [remotes, setRemotes] = useState(0);
   const lastLibrary = useRef(state.library);
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
+    if (m.type === 'remote-control') setRemoteControl(m as unknown as RemoteControlState);
     if (m.type === 'remotes') setRemotes(Number(m.count) || 0);
     if (m.type !== 'command' || !m.command) return;
+    if (modalRef.current === 'rehearsal') { rehearsalCommandRef.current?.(m.command as Record<string, unknown>); return; }
     let c = m.command as Action & { now?: number };
     // Slide show from the remote: same as the Start / End buttons on this computer.
     const show = (m.command as { type: string }).type;
@@ -236,6 +247,7 @@ export function OperatorView() {
     else dispatch(c);
   });
   useLiveBroadcast(state.live, relay.send);
+  useEffect(() => { relay.send({ type: 'rehearsal', active: !!rehearsalPreview, state: rehearsalPreview?.live, cursor: rehearsalPreview?.cursor }); }, [rehearsalPreview, relay.connected]);
 
   // Share the complete running order and the upcoming slides with remotes.
   const selected = state.library.presentations.find((p) => p.id === state.selectedId) ?? null;
@@ -243,7 +255,7 @@ export function OperatorView() {
   const playlist = activePlaylist(state);
   useEffect(() => {
     let cancelled = false;
-    const info = remoteSlideInfo(state, state.selectedId);
+    const info = remoteSlideInfo(rehearsalPreview ?? state, rehearsalPreview?.selectedId ?? state.selectedId);
     const messages = remoteInfoMessages(info);
     // Current/next previews arrive first; earlier slides also need their media for browsing.
     const previews = [...info.upcoming, ...(info.all ?? [])];
@@ -260,7 +272,7 @@ export function OperatorView() {
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.library, state.selectedId, state.cursor, state.playlistIndex, state.activePlaylistId, relay.connected, remotes]);
+  }, [state.library, state.selectedId, state.cursor, state.playlistIndex, state.activePlaylistId, relay.connected, remotes, rehearsalPreview]);
 
   // A restarted server has forgotten the media it was given.
   useEffect(() => resetSentMedia(), [relay.connected]);
@@ -270,7 +282,7 @@ export function OperatorView() {
     if (remotes > 0) sendMediaToRemotes(mediaIdsFor({ live: state.live }));
   }, [remotes, state.live]);
 
-  useMidi(midiOn, (a) => dispatch(a), state.library.macros);
+  useMidi(midiOn, (a) => { if (modalRef.current === 'rehearsal') rehearsalCommandRef.current?.(a as unknown as Record<string, unknown>); else dispatch(a); }, state.library.macros);
 
   // Slide auto-advance ("go to next" timers) — restarts whenever a different slide goes live.
   const liveSlide = state.live.slide;
@@ -310,6 +322,7 @@ export function OperatorView() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (modal === 'rehearsal') return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !modal) {
         e.preventDefault();
         const box = document.getElementById('library-search') as HTMLInputElement | null;
@@ -486,6 +499,7 @@ export function OperatorView() {
     online,
     relayConnected: relay.connected,
     remoteCount: remotes,
+    remoteRequests: remoteControl?.clients.filter((c) => c.connected && c.requested && c.id !== remoteControl.controllerId).length ?? 0,
     view,
     slideId,
     slideSeq,
@@ -529,6 +543,9 @@ export function OperatorView() {
       <AudioPlayer state={state} dispatch={dispatch} />
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
 
+      {modal === 'trash' && <TrashModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
+      {modal === 'rehearsal' && <RehearsalModal state={state} onPreview={setRehearsalPreview} commandRef={rehearsalCommandRef} onClose={() => setModal(null)} />}
+      {modal === 'remoteControl' && <RemoteControlModal control={remoteControl} send={relay.send} onClose={() => setModal(null)} />}
       {modal === 'edit' && selected && <SlideEditorModal key={selected.id} state={state} dispatch={dispatch} presentation={selected} slideId={slideId} slideSeq={slideSeq}
         onSelect={setSlideId} onClose={() => setModal(null)} onSource={() => setModal(isSong(selected) ? 'song' : 'source')} />}
       {(modal === 'source' || modal === 'new') && (
