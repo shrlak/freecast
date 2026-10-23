@@ -75,8 +75,9 @@ export function createLiveService(lib: Library, tpl: ServiceTemplates | null, da
 export const findLiveService = (lib: Library, date: Date) => lib.playlists.find((p) => p.name === liveServiceName(date));
 
 /** Index range [start, end) of a section's items (after its header, up to the next header). */
+const sectionKey = (title: string) => title.replace(/\s+/g, '').toLowerCase();
 export function sectionRange(pl: Playlist, title: string): [number, number] | null {
-  const h = pl.items.findIndex((i) => i.kind === 'header' && i.title === title);
+  const h = pl.items.findIndex((i) => i.kind === 'header' && sectionKey(i.title) === sectionKey(title));
   if (h < 0) return null;
   let end = h + 1;
   while (end < pl.items.length && pl.items[end].kind !== 'header') end++;
@@ -86,10 +87,39 @@ export function sectionRange(pl: Playlist, title: string): [number, number] | nu
 const isPresentation = (i: PlaylistItem, id: string | null | undefined) => i.kind !== 'header' && !!id && i.presentationId === id;
 
 /** The 기도 presentation this service uses (the item that closes the 찬양 section). */
-export function servicePrayerId(pl: Playlist): string | null {
+export function servicePrayerId(pl: Playlist, presentations?: readonly Presentation[]): string | null {
   const r = sectionRange(pl, SECTION.songs);
   const last = r && r[1] > r[0] ? pl.items[r[1] - 1] : undefined;
-  return last && last.kind !== 'header' ? last.presentationId : null;
+  if (presentations) {
+    const prayer = (id: string | undefined) => presentations.find((p) => p.id === id && !p.lyricsLayout && p.slides.length > 0 && p.slides.every((s) => /^(기도|prayer)$/i.test(s.group.trim())));
+    const bible = sectionRange(pl, SECTION.bible);
+    const beforeBible = bible && pl.items[bible[0] - 2];
+    for (const candidate of [last, beforeBible, ...pl.items]) {
+      if (candidate && candidate.kind !== 'header' && prayer(candidate.presentationId)) return candidate.presentationId;
+    }
+    return null;
+  }
+  // Legacy callers have no deck metadata: a shared closing prayer occurs again after the sermon.
+  if (!last || last.kind === 'header' || !r) return null;
+  return pl.items.some((i, at) => (at < r[0] || at >= r[1]) && isPresentation(i, last.presentationId)) ? last.presentationId : null;
+}
+
+/** Repair a missing/misplaced song section without moving or sorting the songs inside it. */
+export function ensureServiceSection(pl: Playlist, title: SectionTitle, presentations?: readonly Presentation[]): Playlist {
+  const range = sectionRange(pl, title);
+  const front = sectionRange(pl, SECTION.front);
+  const bible = sectionRange(pl, SECTION.bible);
+  if (range && (title !== SECTION.songs || ((!front || range[0] > front[0]) && (!bible || range[0] < bible[0])))) return pl;
+  const block = range ? pl.items.slice(range[0] - 1, range[1]) : [header(title)];
+  const items = range ? [...pl.items.slice(0, range[0] - 1), ...pl.items.slice(range[1])] : [...pl.items];
+  const order: readonly string[] = Object.values(SECTION);
+  const rank = order.indexOf(title);
+  let at = items.findIndex((i) => i.kind === 'header' && order.findIndex((name) => sectionKey(name) === sectionKey(i.title)) > rank);
+  if (at < 0) at = items.length;
+  const prayerId = servicePrayerId(pl, presentations);
+  if (title === SECTION.songs && at > 0 && isPresentation(items[at - 1], prayerId)) at--;
+  items.splice(at, 0, ...block);
+  return { ...pl, items };
 }
 
 /**
@@ -97,8 +127,9 @@ export function servicePrayerId(pl: Playlist): string | null {
  * `replace` first removes the section's other items (except that 기도): a new 콘티 replaces the old set list.
  * Songs going into 설교 후 찬양 get the 기도 that follows them, as in the ppt program.
  */
-export function insertIntoSection(pl: Playlist, title: SectionTitle, presentationIds: string[], opts: { replace?: boolean; keep?: string[] } = {}): Playlist {
-  const prayerId = servicePrayerId(pl);
+export function insertIntoSection(pl: Playlist, title: SectionTitle, presentationIds: string[], opts: { replace?: boolean; keep?: string[]; presentations?: readonly Presentation[] } = {}): Playlist {
+  pl = ensureServiceSection(pl, title, opts.presentations);
+  const prayerId = servicePrayerId(pl, opts.presentations);
   let items = [...pl.items];
   let range = sectionRange({ ...pl, items }, title);
   if (!range) {
@@ -126,9 +157,9 @@ export function insertIntoSection(pl: Playlist, title: SectionTitle, presentatio
 }
 
 /** Presentation ids in a section, in order (without the closing 기도). */
-export function sectionPresentations(pl: Playlist, title: string): string[] {
+export function sectionPresentations(pl: Playlist, title: string, presentations?: readonly Presentation[]): string[] {
   const r = sectionRange(pl, title);
   if (!r) return [];
-  const prayerId = servicePrayerId(pl);
+  const prayerId = servicePrayerId(pl, presentations);
   return pl.items.slice(r[0], r[1]).flatMap((i) => (i.kind === 'header' || i.presentationId === prayerId ? [] : [i.presentationId]));
 }

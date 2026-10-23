@@ -62,8 +62,8 @@ export interface SongReview {
  * lyrics by part — a line break is the next line, a blank line starts the next slide; each part is
  * split into slides of up to 4 lines (6 lines → 3 + 3). Edits save by themselves, with no password:
  * the song replaces its entry in this computer's 찬양 라이브러리 at once (one song per title, the
- * newest), and also goes to the church's shared library when the 관리자 password has been used
- * here before; 등록 registers the song in the shared library (the one the ppt site uses).
+ * newest). Existing shared songs also save to the church library without a password;
+ * 등록 registers a song there. Only deletion requires the administrator password.
  */
 export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnline, review }: {
   library: Library; dispatch: Dispatch<Action>; song: Presentation | null; onClose: () => void; notify: (m: string) => void; reloadOnline: () => void;
@@ -77,8 +77,6 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const [parts, setParts] = useState<Part[]>(() =>
     draft?.sections.length ? draft.sections.map((s) => ({ id: uid('pt'), label: s.label, text: s.lines.join('\n') })) : partsOf(song));
   const [admin, setAdmin] = useState(readAdmin);
-  // The password last accepted by the server — autosave never sends one still being typed, and never asks.
-  const [trustedAdmin, setTrustedAdmin] = useState(readAdmin);
   const [saveState, setSaveState] = useState<string | null>(null);
   const localId = useRef<string | null>(song && !song.online ? song.id : null);
   // Saving makes the song this computer's own copy, so what `song` is changes mid-edit; these stay.
@@ -113,7 +111,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   };
 
   // A library song keeps its title in the shared library (a new title there would be a new song).
-  const shared = fromLibrary.current && !!trustedAdmin && title.trim() === libraryTitle.current;
+  const shared = fromLibrary.current && title.trim() === libraryTitle.current;
   const registered = useRef(false);
   useAutosave(entry(), (e) => {
     if (registered.current) return;
@@ -121,7 +119,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     writeLocal(e);
     if (shared) {
       setSaveState('저장 중…');
-      const job = registerSharedSong(e, trustedAdmin)
+      const job = registerSharedSong(e)
         .then(() => setSaveState('✓ 찬양 라이브러리에 자동 저장됨 (교회 공유 라이브러리 포함)'))
         .catch((err: Error) => setSaveState(`✓ 찬양 라이브러리에 자동 저장됨 · 교회 공유 라이브러리에는 반영하지 못함 (${err.message})`));
       sharedSave.current = job;
@@ -137,15 +135,14 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     if (job) job.then(reloadOnline);
   };
 
-  const withAdmin = async (label: string, job: () => Promise<void>) => {
-    if (!admin) return setError('관리자 비밀번호를 입력하세요 (주일예배 생성기 관리자 설정과 같은 비밀번호).');
+  const save = async (label: string, job: () => Promise<void>, requiresAdmin = false) => {
+    if (requiresAdmin && !admin) return setError('관리자 비밀번호를 입력하세요 (삭제할 때만 필요합니다).');
     setBusy(label);
     setError(null);
     try {
       await job();
       registered.current = true;
-      setTrustedAdmin(admin);
-      rememberAdmin(admin);
+      if (requiresAdmin) rememberAdmin(admin);
     } catch (e) {
       setError((e as Error).message);
       setBusy(null);
@@ -163,17 +160,18 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     review?.onAccept({ ...review.draft, title: e.title, key: e.key, sections: e.sections, progression: tokens.length ? tokens : undefined });
   };
 
-  const register = () => withAdmin('등록 중…', async () => {
-    await registerSharedSong(entry(), admin);
+  const register = () => save('등록 중…', async () => {
+    await registerSharedSong(entry());
+    writeLocal(entry());
     notify(`“${title.trim()}”을(를) 교회 찬양 라이브러리에 등록했습니다 — 주일예배 생성기와 모든 컴퓨터에서 보입니다`);
   });
   const remove = () => {
     if (!song || !confirm(`교회 찬양 라이브러리에서 “${song.title}”을(를) 삭제할까요? 모든 컴퓨터와 주일예배 생성기에서 사라집니다.`)) return;
-    withAdmin('삭제 중…', async () => {
+    save('삭제 중…', async () => {
       await deleteSharedSong(song.title, admin);
       for (const p of library.presentations) if (!p.online && titleKey(p.title) === titleKey(song.title)) dispatch({ type: 'presentation/delete', id: p.id });
       notify(`“${song.title}”을(를) 교회 찬양 라이브러리에서 삭제했습니다`);
-    });
+    }, true);
   };
   const duplicate = !song && !review && title.trim() && findSong(library.presentations, title.trim());
   const close = review ? review.onCancel : done;
@@ -225,9 +223,9 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
         </div>
         <footer className="song-editor-foot">
           {error && <div className="warn">{error}</div>}
-          <label className="row gap-xs muted small" title="자동 저장에는 필요하지 않습니다 — 교회 공유 라이브러리에 등록 · 삭제할 때만 씁니다">관리자 비밀번호 (등록 · 삭제용)
+          {!review && fromLibrary.current && <label className="row gap-xs muted small" title="라이브러리에서 삭제할 때만 필요합니다">관리자 비밀번호 (삭제용)
             <input type="password" value={admin} onChange={(e) => setAdmin(e.target.value)} autoComplete="off" style={{ width: 150 }} />
-          </label>
+          </label>}
           <span className="grow" />
           {review ? (
             <>
