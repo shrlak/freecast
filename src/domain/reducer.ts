@@ -6,7 +6,7 @@ import type {
 } from './types';
 import { attributeChange, mergeActivity } from './activity';
 import { sequence } from './arrangement';
-import { editSlide } from './slideEditing';
+import { deleteSlides, editSlide } from './slideEditing';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
@@ -36,6 +36,7 @@ type DomainAction =
   | { type: 'presentation/delete'; id: string }
   | { type: 'services/finish'; playlistIds: string[]; presentationIds: string[]; mediaIds: string[] }
   | { type: 'slide/update'; presentationId: string; slideId: string; patch: Partial<Omit<Slide, 'id'>> }
+  | { type: 'slide/delete'; presentationId: string; slideIds: string[] }
   | { type: 'arrangement/upsert'; presentationId: string; arrangement: Arrangement }
   | { type: 'arrangement/delete'; presentationId: string; id: string }
   | { type: 'arrangement/select'; presentationId: string; id: string | null }
@@ -191,6 +192,34 @@ function refreshLive(s: AppState, presentationId: string): AppState {
   return { ...next, live: { ...next.live, black: s.live.black, logo: s.live.logo, copyright: s.live.copyright } };
 }
 
+/** Keep the same played occurrence when pages before it are removed or restored. */
+function reconcileLive(before: AppState, after: AppState): AppState {
+  const c = before.cursor;
+  if (!c) return after;
+  const old = findPres(before.library, c.presentationId);
+  const p = findPres(after.library, c.presentationId);
+  if (!old || !p) return after;
+  const previous = sequence(old);
+  const next = sequence(p);
+  const id = previous[c.seq]?.slide.id;
+  const occurrence = previous.slice(0, c.seq).filter((x) => x.slide.id === id).length;
+  const matches = next.flatMap((x, i) => x.slide.id === id ? [i] : []);
+  let seq = matches[Math.min(occurrence, matches.length - 1)];
+  if (seq == null) {
+    const surviving = new Set(next.map((x) => x.slide.id));
+    const through = previous.slice(0, c.seq).filter((x) => surviving.has(x.slide.id)).length;
+    seq = Math.min(through, next.length - 1);
+    // A disabled page must not become live as a side effect of deletion.
+    if (next[seq]?.slide.disabled) {
+      const forward = next.findIndex((x, i) => i >= seq && !x.slide.disabled);
+      seq = forward;
+      if (seq < 0) for (let i = next.length - 1; i >= 0; i--) if (!next[i].slide.disabled) { seq = i; break; }
+    }
+  }
+  if (seq < 0) return { ...after, cursor: null, live: { ...after.live, slide: null, title: null, nextText: null, background: null, copyright: null, bgEffect: null } };
+  return refreshLive({ ...after, cursor: { ...c, seq } }, c.presentationId);
+}
+
 function stepToAction(step: MacroStep, now: number): Action {
   switch (step.type) {
     case 'logo': return { type: 'live/logo', on: step.on };
@@ -255,6 +284,8 @@ function core(s: AppState, a: Action): AppState {
     }
     case 'slide/update':
       return refreshLive(mapPres(s, a.presentationId, (p) => editSlide(p, a.slideId, a.patch, a.occurredAt ?? Date.now())), a.presentationId);
+    case 'slide/delete':
+      return reconcileLive(s, mapPres(s, a.presentationId, (p) => deleteSlides(p, a.slideIds, a.occurredAt ?? Date.now())));
     case 'online/songs': {
       const local = lib.presentations.filter((p) => !p.online);
       const localIds = new Set(local.map((p) => p.id));
@@ -475,7 +506,7 @@ function reduceState(s: AppState, a: Action): AppState {
     const rest = from.slice(0, -1);
     const other = [...(a.type === 'undo' ? s.future : s.past), s.library].slice(-60);
     const next = { ...s, library, lastKey: null, ...(a.type === 'undo' ? { past: rest, future: other } : { past: other, future: rest }) };
-    return syncLive(next.cursor ? refreshLive(next, next.cursor.presentationId) : next);
+    return syncLive(reconcileLive(s, next));
   }
   const next = core(s, a);
   if (next === s) return s;

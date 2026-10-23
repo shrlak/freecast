@@ -110,7 +110,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
     if (!p || !slide) return;
     const i = p.slides.findIndex((s) => s.id === slide.id);
     const slides = p.slides.filter((s) => s.id !== slide.id);
-    updatePres({ slides });
+    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: [slide.id] });
     cmd.setSlideId(slides[Math.max(0, i - 1)]?.id ?? null);
   };
 
