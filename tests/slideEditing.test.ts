@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { editSlide, songSourceFromSlides } from '../src/domain/slideEditing';
+import { deleteSlides, editSlide, songSourceFromSlides } from '../src/domain/slideEditing';
+import { sequence } from '../src/domain/arrangement';
+import { songToPresentation } from '../src/domain/sunday/songs';
 import { createInitialState, reducer } from '../src/domain/reducer';
 import { createSeedLibrary } from '../src/domain/defaults';
 import { normalizeLibrary } from '../src/domain/persistence';
@@ -19,6 +21,66 @@ const song = (): Presentation => ({
 });
 
 describe('individual slide editing', () => {
+  it('deletes just one page of a multi-page verse, preserving other pages and unused parts', () => {
+    const before = song();
+    const after = deleteSlides(before, ['v1a'], 3000);
+    expect(after.slides.map((s) => s.id)).toEqual(['title', 'v1b', 'c']);
+    expect(after.slides[1]).toBe(before.slides[2]);
+    expect(after.slides[2]).toBe(before.slides[3]);
+    expect(after.songSource?.sections).toEqual([
+      { label: 'V1', lines: ['두 번째 장'] }, { label: 'C', lines: ['후렴'] }, { label: 'V2', lines: ['아직 사용하지 않는 2절'] },
+    ]);
+    expect(after.arrangements).toEqual(before.arrangements);
+    expect(after).toMatchObject({ folder: 'Songs', updatedAt: 3000, slidesEdited: true });
+    expect(after.online).toBeUndefined();
+    expect(deleteSlides(before, ['missing'], 3000)).toBe(before);
+  });
+
+  it('does not resurrect a removed final page from original lyrics or repeated arrangements', () => {
+    const after = deleteSlides(song(), ['v1a', 'v1b'], 3000);
+    expect(after.songSource?.sections.map((s) => s.label)).toEqual(['C', 'V2']);
+    expect(after.songSource?.order).toEqual(['C']);
+    expect(after.arrangements?.[0].groups).toEqual(['Title', 'Chorus']);
+    const source = songSourceFromSlides(after);
+    const rebuilt = songToPresentation({ title: after.title, sections: source.sections, progression: source.order }, { themeId: 'theme_classic', linesPerSlide: 4 });
+    expect(rebuilt.slides.some((s) => s.text.includes('첫 번째') || s.text.includes('두 번째'))).toBe(false);
+    expect(sequence(after).map((x) => x.slide.id)).toEqual(['title', 'c']);
+  });
+
+  it('retains the second verse number when the first of repeated source labels is removed', () => {
+    const p = song();
+    p.songSource = { sections: [{ label: 'V', lines: ['1절'] }, { label: 'V', lines: ['2절'] }], order: ['V1', 'V2'] };
+    p.slides = [{ id: 'one', group: 'Verse 1', text: '1절' }, { id: 'two', group: 'Verse 2', text: '2절' }];
+    const after = deleteSlides(p, ['one'], 3000);
+    expect(after.songSource).toEqual({ sections: [{ label: 'V2', lines: ['2절'] }], order: ['V2'] });
+    expect(editSlide(after, 'two', { text: '수정된 2절' }, 4000).songSource?.sections).toEqual([{ label: 'V2', lines: ['수정된 2절'] }]);
+  });
+
+  it('keeps the same repeated live occurrence through deletion, undo and redo', () => {
+    const lib = createSeedLibrary(); lib.presentations = [song()];
+    let state = reducer(createInitialState(lib), { type: 'live/go', presentationId: 'online:song', seq: 5 });
+    expect(state.live.slide?.id).toBe('v1b');
+    state = reducer(state, { type: 'live/black', on: true });
+    state = reducer(state, { type: 'slide/delete', presentationId: 'online:song', slideIds: ['v1a'] });
+    expect(state.cursor?.seq).toBe(3);
+    expect(state.live.slide?.id).toBe('v1b'); expect(state.live.black).toBe(true);
+    state = reducer(state, { type: 'undo' });
+    expect(state.cursor?.seq).toBe(5); expect(state.live.slide?.id).toBe('v1b');
+    state = reducer(state, { type: 'redo' });
+    expect(state.cursor?.seq).toBe(3); expect(state.live.slide?.id).toBe('v1b');
+  });
+
+  it('advances to an adjacent page when deleting the live page and clears an empty deck', () => {
+    const lib = createSeedLibrary(); lib.presentations = [song()];
+    let state = reducer(createInitialState(lib), { type: 'live/go', presentationId: 'online:song', seq: 2 });
+    state = reducer(state, { type: 'slide/delete', presentationId: 'online:song', slideIds: ['v1b'] });
+    expect(state.live.slide?.id).toBe('c');
+    state = reducer(state, { type: 'slide/delete', presentationId: 'online:song', slideIds: ['title', 'v1a', 'c'] });
+    expect(state.cursor).toBeNull(); expect(state.live.slide).toBeNull(); expect(state.live.background).toBeNull();
+    state = reducer(state, { type: 'undo' });
+    expect(state.library.presentations[0].slides.map((s) => s.id)).toEqual(['title', 'v1a', 'c']);
+  });
+
   it('changes one slide while retaining neighbors, IDs, arrangements, background and notes', () => {
     const before = song();
     const after = editSlide(before, 'v1b', { text: '수정한 한 장', style: { fontSize: 110 } }, 1000);

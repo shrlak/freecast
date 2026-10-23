@@ -27,6 +27,13 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, on
   const theme = state.library.themes.find((t) => t.id === p.themeId) ?? state.library.themes[0];
   const update = (patch: Partial<Slide>) => slide && dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch });
   const pick = (id: string) => { setSelectedElement(null); onSelect(id); };
+  const remove = () => {
+    if (!slide) return;
+    const next = p.slides[index + 1] ?? p.slides[index - 1];
+    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: [slide.id] });
+    setSelectedElement(null); setDesigning(false); setMessage('슬라이드 한 장을 삭제했습니다. 실행 취소로 복원할 수 있습니다.');
+    if (next) onSelect(next.id);
+  };
   const shared = isLibrarySong(p) && isSong(p);
   const publishLyrics = async () => {
     const source = songSourceFromSlides(p);
@@ -44,6 +51,7 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, on
         <header className="modal-head"><h2>슬라이드별 편집 · {p.title}</h2><button className="icon-btn" aria-label="Close" onClick={onClose}>✕</button></header>
         <div className="slide-editor-body">
           <nav className="slide-editor-list" aria-label="편집할 슬라이드">
+            <p className="hint">V · C · PC · B 안의 슬라이드도 한 장씩 선택하세요.</p>
             {p.slides.map((s, i) => (
               <button key={s.id} className={s.id === slide?.id ? 'on' : ''} aria-label={`슬라이드 ${i + 1} 편집`} autoFocus={s.id === slide?.id} aria-current={s.id === slide?.id ? 'true' : undefined} onClick={() => pick(s.id)}>
                 <SlideCanvas slide={s} theme={theme} background={resolveBackground(s, p)} bgEffect={p.bgEffect} />
@@ -55,6 +63,7 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, on
             <section className="slide-editor-main">
               <div className="slide-editor-position"><strong>슬라이드 {index + 1} / {p.slides.length}</strong>
                 <span>{state.live.slide?.id === slide.id ? '● 화면에 표시 중 — 수정하면 바로 반영됩니다' : '이 슬라이드에만 적용됩니다'}</span>
+                <button className="danger" onClick={remove}>이 슬라이드만 삭제</button>
               </div>
               <CanvasEditor key={slide.id} slide={slide} theme={theme} background={resolveBackground(slide, p)} bgEffect={p.bgEffect}
                 selectedId={selectedElement} onSelect={setSelectedElement} onChange={update} />

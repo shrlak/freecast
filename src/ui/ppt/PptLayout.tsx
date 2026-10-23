@@ -78,7 +78,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     if (!p || !ids.length) return;
     const left = p.slides.filter((s) => !ids.includes(s.id));
     const at = Math.min(Math.max(0, p.slides.findIndex((s) => ids.includes(s.id))), left.length - 1);
-    updateSlides(left);
+    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: ids });
     cmd.setSlideId(left[at]?.id ?? null);
     setMulti([]);
   };

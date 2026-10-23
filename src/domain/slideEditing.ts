@@ -38,3 +38,22 @@ export function editSlide(p: Presentation, slideId: string, patch: Partial<Omit<
     ...(lyricsChanged ? { songSource: songSourceFromSlides(p, slides) } : {}),
   };
 }
+
+/** Remove only the selected pages; keep the other pages of their lyric parts intact. */
+export function deleteSlides(p: Presentation, slideIds: string[], at: number): Presentation {
+  const ids = new Set(slideIds);
+  const slides = p.slides.filter((s) => !ids.has(s.id));
+  if (slides.length === p.slides.length) return p;
+  const remaining = new Set(slides.map((s) => groupKey(s.group)));
+  const removed = new Set(p.slides.filter((s) => !remaining.has(groupKey(s.group))).map((s) => groupKey(s.group)));
+  const source = songSourceFromSlides(p, slides);
+  // Number before filtering so deleting V1 does not silently rename V2 to V1.
+  const sections = numberRepeatedLabels(source.sections).filter((s) => !removed.has(groupKey(s.label)));
+  const order = source.order?.filter((g) => !removed.has(groupKey(g)));
+  return {
+    ...p, slides, online: undefined, folder: p.online ? 'Songs' : p.folder, updatedAt: at, slidesEdited: true,
+    arrangements: p.arrangements?.map((a) => ({ ...a, groups: a.groups.filter((g) => !removed.has(groupKey(g))) })),
+    ...(p.meta?.order ? { meta: { ...p.meta, order: p.meta.order.filter((g) => !removed.has(groupKey(g))) } } : {}),
+    ...(p.songSource || p.lyricsLayout ? { songSource: { sections, order } } : {}),
+  };
+}
