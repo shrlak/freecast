@@ -33,7 +33,8 @@ export interface Commands {
   view: PptViewMode;
   /** Slide selected for editing in the PowerPoint layout. */
   slideId: string | null;
-  setSlideId: (id: string | null) => void;
+  slideSeq: number | null;
+  setSlideId: (id: string | null, seq?: number) => void;
   cloud: CloudStatus;
   /** 🔒 While a slide is on screen, Enter / Delete in the editor do nothing. */
   locked: boolean;

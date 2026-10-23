@@ -147,6 +147,8 @@ export type SlideAction = MacroStep | { type: 'runMacro'; macroId: string };
 
 export interface Slide {
   id: string;
+  /** Original slide identity when a repeated arrangement occurrence is made independent. */
+  sourceSlideId?: string;
   group: string;
   text: string;
   /** Bold heading above the text (announcement title, prayer topic, scripture reference). */

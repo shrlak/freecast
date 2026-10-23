@@ -10,6 +10,7 @@ import { Recorder } from '../Recorder';
 import { openOutput } from '../LivePanel';
 import { useMediaUrl } from '../hooks';
 import { ACCEPT, type Commands } from './commands';
+import { sequence } from '../../domain/arrangement';
 import { isSong } from '../../domain/templates/fill';
 import { SLIDE_TEMPLATES, type SlideTemplate } from '../../domain/slideTemplates';
 
@@ -86,7 +87,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
   const lib = state.library;
 
   const updatePres = (patch: Partial<Presentation>) => p && dispatch({ type: 'presentation/update', id: p.id, patch });
-  const updateSlide = (patch: Partial<Slide>) => p && slide && dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch });
+  const updateSlide = (patch: Partial<Slide>) => p && slide && dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, seq: cmd.slideSeq ?? undefined, sequenceLength: sequence(p).length, patch });
 
   const addSlide = (copy: boolean) => {
     if (!p) return;
@@ -108,10 +109,12 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
   };
   const deleteSlide = () => {
     if (!p || !slide) return;
-    const i = p.slides.findIndex((s) => s.id === slide.id);
-    const slides = p.slides.filter((s) => s.id !== slide.id);
-    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: [slide.id] });
-    cmd.setSlideId(slides[Math.max(0, i - 1)]?.id ?? null);
+    const pages = sequence(p);
+    const seq = cmd.slideSeq ?? pages.findIndex((x) => x.slide.id === slide.id);
+    if (seq < 0) return;
+    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: [slide.id], seqs: [seq] });
+    const next = Math.min(seq, pages.length - 2);
+    cmd.setSlideId(pages[seq + 1]?.slide.id ?? pages[seq - 1]?.slide.id ?? null, next >= 0 ? next : undefined);
   };
 
   const addElement = (el: Omit<SlideElement, 'id'>) => {

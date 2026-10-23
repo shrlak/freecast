@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Slide } from '../../domain/types';
 import { blankSlide, uid } from '../../domain/lyrics';
@@ -34,9 +34,17 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   const [designing, setDesigning] = useState(false);
   /** The object selected on the canvas (shown in the Format pane). */
   const [selEl, setSelEl] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string; seq: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!menu || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const x = Math.max(8, Math.min(menu.x, window.innerWidth - rect.width - 8));
+    const y = Math.max(8, Math.min(menu.y, window.innerHeight - rect.height - 8));
+    if (x !== menu.x || y !== menu.y) setMenu({ ...menu, x, y });
+  }, [menu]);
   const p = state.library.presentations.find((x) => x.id === state.selectedId) ?? null;
-  const slide = p?.slides.find((s) => s.id === cmd.slideId) ?? p?.slides[0] ?? null;
+  const slide = (p && cmd.slideSeq != null ? sequence(p)[cmd.slideSeq]?.slide : null) ?? p?.slides.find((s) => s.id === cmd.slideId) ?? p?.slides[0] ?? null;
   const index = p && slide ? p.slides.indexOf(slide) : -1;
   const theme = (p && state.library.themes.find((t) => t.id === p.themeId)) || state.library.themes[0];
   const background = slide ? resolveBackground(slide, p) : null;
@@ -49,54 +57,59 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
     [state.library.presentations, state.library.playlists, state.activePlaylistId, state.playlistIndex, state.selectedId]);
   const paneSlides = useMemo(() => rows.filter((r): r is PaneSlide => r.kind === 'slide'), [rows]);
   const [paneKey, setPaneKey] = useState<string | null>(null);
-  const selected = selectedRow(rows, paneKey, p?.id, slide?.id, state.playlistIndex);
+  const selected = (cmd.slideSeq != null ? paneSlides.find((r) => r.presentation.id === p?.id && r.seq === cmd.slideSeq && (r.itemIndex === null || state.playlistIndex === null || r.itemIndex === state.playlistIndex)) : null)
+    ?? selectedRow(rows, paneKey, p?.id, slide?.id, state.playlistIndex);
   /** The playlist item the edited presentation is open from (null: shown on its own). */
   const item = selected?.itemIndex ?? (source && 'playlist' in source
     ? state.playlistIndex ?? source.playlist.items.findIndex((i) => i.kind !== 'header' && i.presentationId === p?.id)
     : null);
   /** Slides picked together (Shift/Ctrl-click) in the edited presentation; empty = just the one being edited. */
   const [multi, setMulti] = useState<string[]>([]);
+  useEffect(() => { setMulti([]); setSelEl(null); }, [p?.id, state.activePlaylistId, item]);
   const sameBlock = (r: PaneSlide) => !!selected && r.presentation.id === selected.presentation.id && r.itemIndex === selected.itemIndex;
   const onClickSlide = (r: PaneSlide, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => {
     if (selected && sameBlock(r) && e.shiftKey) {
       const a = paneSlides.indexOf(selected), b = paneSlides.indexOf(r);
-      setMulti(paneSlides.slice(Math.min(a, b), Math.max(a, b) + 1).filter(sameBlock).map((x) => x.slide.id));
+      setMulti(paneSlides.slice(Math.min(a, b), Math.max(a, b) + 1).filter(sameBlock).map((x) => x.key));
     } else if (selected && sameBlock(r) && (e.metaKey || e.ctrlKey)) {
-      const cur = multi.length ? multi : [selected.slide.id];
-      setMulti(cur.includes(r.slide.id) ? cur.filter((id) => id !== r.slide.id) : [...cur, r.slide.id]);
+      const cur = multi.length ? multi : [selected.key];
+      setMulti(cur.includes(r.key) ? cur.filter((key) => key !== r.key) : [...cur, r.key]);
     } else {
       setMulti([]);
       pick(r);
     }
   };
-  /** The slides an action (delete, section) applies to, in list order. */
-  const picked = (): string[] => {
-    const ids = multi.length && selected ? multi : slide ? [slide.id] : [];
-    return p ? p.slides.filter((s) => ids.includes(s.id)).map((s) => s.id) : [];
+  /** Each row identifies one occurrence, even when it shares a master slide ID. */
+  const picked = (): PaneSlide[] => multi.length && selected ? paneSlides.filter((r) => sameBlock(r) && multi.includes(r.key)) : selected ? [selected] : [];
+  const deleteSlides = (pickedRows: PaneSlide[]) => {
+    if (!p || !pickedRows.length) return;
+    const seqs = pickedRows.map((r) => r.seq);
+    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: pickedRows.map((r) => r.slide.id), seqs });
+    const pages = sequence(p);
+    const at = Math.min(...seqs);
+    const left = pages.filter((_, i) => !seqs.includes(i));
+    const next = Math.min(at, left.length - 1);
+    cmd.setSlideId(left[next]?.slide.id ?? null, next >= 0 ? next : undefined);
+    setMulti([]); setSelEl(null);
   };
-  const deleteSlides = (ids: string[]) => {
-    if (!p || !ids.length) return;
-    const left = p.slides.filter((s) => !ids.includes(s.id));
-    const at = Math.min(Math.max(0, p.slides.findIndex((s) => ids.includes(s.id))), left.length - 1);
-    dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: ids });
-    cmd.setSlideId(left[at]?.id ?? null);
-    setMulti([]);
-  };
+  const editDispatch: Dispatch<Action> = (a) => dispatch(a.type === 'slide/update' && a.presentationId === p?.id && a.slideId === slide?.id ? { ...a, seq: selected?.seq, sequenceLength: p ? sequence(p).length : 0 } : a);
   const makeSection = (ids: string[]) => {
     if (!p || !ids.length) return;
     setSectionRequest({ presentationId: p.id, ids, initialValue: slide?.label || '새 섹션' });
   };
   const pick = (r: PaneSlide) => {
     if (r.itemIndex !== null && r.itemIndex !== state.playlistIndex) dispatch({ type: 'playlist/select', index: r.itemIndex });
-    cmd.setSlideId(r.slide.id);
+    cmd.setSlideId(r.slide.id, r.seq);
     setPaneKey(r.key);
   };
 
   // Keep the selection valid when switching presentations.
   useEffect(() => {
-    if (p && !p.slides.some((s) => s.id === cmd.slideId)) cmd.setSlideId(p.slides[0]?.id ?? null);
+    const page = p && cmd.slideSeq != null ? sequence(p)[cmd.slideSeq]?.slide : null;
+    if (page && page.id !== cmd.slideId) cmd.setSlideId(page.id, cmd.slideSeq!);
+    else if (p && !p.slides.some((s) => s.id === cmd.slideId)) cmd.setSlideId(p.slides[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p?.id, p?.slides.length]);
+  }, [p?.id, p?.slides, cmd.slideSeq, cmd.slideId]);
 
   // Up/Down (and PageUp/PageDown) move through the slide pane's list while editing, like PowerPoint's
   // slide pane — on into the next presentation of the playlist.
@@ -175,18 +188,17 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   });
 
   const updateSlides = (slides: Slide[]) => p && dispatch({ type: 'presentation/update', id: p.id, patch: { slides } });
-  const slideMenu = (id: string, action: 'dup' | 'del' | 'up' | 'down' | 'skip' | 'live') => {
+  const slideMenu = (id: string, action: 'dup' | 'up' | 'down' | 'skip' | 'live') => {
     if (!p) return;
     const i = p.slides.findIndex((s) => s.id === id);
     const s = p.slides[i];
     const slides = [...p.slides];
     if (action === 'dup') slides.splice(i + 1, 0, { ...s, id: uid('s') });
-    if (action === 'del') slides.splice(i, 1);
     if (action === 'up' && i > 0) [slides[i - 1], slides[i]] = [slides[i], slides[i - 1]];
     if (action === 'down' && i < slides.length - 1) [slides[i + 1], slides[i]] = [slides[i], slides[i + 1]];
     if (action === 'skip') slides[i] = { ...s, disabled: s.disabled ? undefined : true };
     if (action === 'live') {
-      const seq = sequence(p).findIndex((x) => x.slide.id === s.id);
+      const seq = menu?.seq ?? selected?.seq ?? sequence(p).findIndex((x) => x.slide.id === s.id);
       if (seq >= 0) dispatch({ type: 'live/go', presentationId: p.id, seq });
     } else updateSlides(slides);
     setMenu(null);
@@ -223,24 +235,24 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           ) : (
             <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick} multi={multi} onClickSlide={onClickSlide}
               heading={source && 'playlist' in source ? source.playlist.name : p?.title ?? ''}
-              onMenu={(x, y, id) => setMenu({ x, y, id })}
+              onMenu={(x, y, id, seq) => setMenu({ x, y, id, seq })}
               onAdd={() => { if (!p) return; const n = { id: uid('s'), group: slide?.group ?? 'Slide', text: '' }; updateSlides([...p.slides, n]); cmd.setSlideId(n.id); }} />
           )}
         </aside>
 
         {cmd.view === 'sorter' ? (
           <div className="ppt-sorter">
-            <SlideGrid state={state} dispatch={dispatch} onEdit={() => cmd.open('edit')} onEditSlide={(id) => { cmd.setSlideId(id); cmd.open('edit'); }} onThemes={() => cmd.open('themes')} notify={cmd.notify} />
+            <SlideGrid state={state} dispatch={dispatch} onEdit={() => cmd.open('edit')} onEditSlide={(id, seq) => { cmd.setSlideId(id, seq); cmd.open('edit'); }} onThemes={() => cmd.open('themes')} notify={cmd.notify} />
           </div>
         ) : (
           <main className="ppt-center">
             <div className="ppt-stage">
               {p && slide ? (
                 <div className="ppt-canvas">
-                  <CanvasEditor slide={slide} theme={theme} background={background} bgEffect={p.bgEffect}
+                  <CanvasEditor key={`${p.id}:${selected?.key}`} slide={slide} theme={theme} background={background} bgEffect={p.bgEffect}
                     selectedId={selEl} onSelect={setSelEl}
                     onLockedDelete={cmd.locked && state.live.slide?.id === slide.id ? () => cmd.notify(LOCK_MSG) : undefined}
-                    onChange={(patch) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch })} />
+                    onChange={(patch) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, seq: selected?.seq, sequenceLength: sequence(p).length, patch })} />
                 </div>
               ) : (
                 <div className="ppt-empty">
@@ -255,7 +267,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
             </div>
             {p && slide && (
               <AutoTextarea className="ppt-notes" placeholder="슬라이드 노트를 추가하려면 클릭하세요 (무대 화면에 표시)"
-                value={slide.notes ?? ''} onChange={(e) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch: { notes: e.target.value || undefined } })} />
+                value={slide.notes ?? ''} onChange={(e) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, seq: selected?.seq, sequenceLength: sequence(p).length, patch: { notes: e.target.value || undefined } })} />
             )}
           </main>
         )}
@@ -263,23 +275,27 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
         {cmd.view === 'normal' && p && slide && (
           <aside className="ppt-format">
             <div className="ppt-format-title">서식 · 슬라이드 {index + 1}</div>
-            <SlideFormat state={state} dispatch={dispatch} presentation={p} slide={slide} onDesign={() => setDesigning(true)} selectedId={selEl} onSelect={setSelEl} />
+            <SlideFormat state={state} dispatch={editDispatch} presentation={p} slide={slide} onDesign={() => setDesigning(true)} selectedId={selEl} onSelect={setSelEl} />
           </aside>
         )}
       </div>
       <StatusBar cmd={cmd} text={p ? `슬라이드 ${index + 1} / ${p.slides.length} · ${p.title}` : '프레젠테이션 없음'} />
 
       {menu && (
-        <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+        <div ref={menuRef} className="ctx-menu" style={{ left: menu.x, top: menu.y, maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
           <button onClick={() => slideMenu(menu.id, 'live')}>▶ 지금 화면에 표시</button>
-          <button onClick={() => { cmd.setSlideId(menu.id); setMenu(null); cmd.open('edit'); }}>✎ 이 슬라이드 편집</button>
-          <button onClick={() => { const ids = picked(); setMenu(null); makeSection(ids); }}>📑 섹션 만들기{multi.length > 1 ? ` (${multi.length}장)` : ''}</button>
+          <button onClick={() => { cmd.setSlideId(menu.id, menu.seq); setMenu(null); cmd.open('edit'); }}>✎ 이 슬라이드 편집</button>
+          <button onClick={() => { const ids = picked(); setMenu(null); makeSection(ids.map((r) => r.slide.id)); }}>📑 섹션 만들기{multi.length > 1 ? ` (${multi.length}장)` : ''}</button>
           <button onClick={() => { setMenu(null); setDesigning(true); }}>✏️ 개체 편집</button>
           <button onClick={() => slideMenu(menu.id, 'dup')}>⧉ 슬라이드 복제</button>
           <button onClick={() => slideMenu(menu.id, 'up')}>↑ 위로 이동</button>
           <button onClick={() => slideMenu(menu.id, 'down')}>↓ 아래로 이동</button>
           <button onClick={() => slideMenu(menu.id, 'skip')}>⏭ 슬라이드 숨기기/해제</button>
-          <button className="danger" onClick={() => { const ids = picked(); setMenu(null); deleteSlides(ids); }}>🗑 슬라이드 삭제{multi.length > 1 ? ` (${multi.length}장)` : ''}</button>
+          <button className="danger" onClick={() => {
+            const row = paneSlides.find((r) => r.presentation.id === p?.id && r.seq === menu.seq && r.itemIndex === selected?.itemIndex);
+            setMenu(null); if (row) deleteSlides([row]);
+          }}>🗑 이 슬라이드만 삭제</button>
+          {multi.length > 1 && <button className="danger" onClick={() => { const chosen = picked(); setMenu(null); deleteSlides(chosen); }}>🗑 선택한 슬라이드 삭제 ({multi.length}장)</button>}
         </div>
       )}
       {designing && p && slide && (
@@ -287,7 +303,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
           onClose={() => setDesigning(false)}
           onSave={(elements, text) => {
-            dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, patch: { elements: elements.length ? elements : undefined, text } });
+            dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, seq: selected?.seq, sequenceLength: sequence(p).length, patch: { elements: elements.length ? elements : undefined, text } });
           }} />
       )}
     </div>

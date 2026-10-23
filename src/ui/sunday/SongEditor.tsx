@@ -235,7 +235,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
             </>
           ) : (
             <>
-              {fromLibrary.current && <button className="danger" disabled={!!busy} onClick={remove}>라이브러리에서 삭제</button>}
+              {fromLibrary.current && <button className="danger" disabled={!!busy} onClick={remove}>찬양 전체를 라이브러리에서 삭제…</button>}
               <span className={saveState?.startsWith('⚠') ? 'warn small' : 'muted small'}>{saveState ?? '편집하면 자동으로 저장됩니다'}</span>
               <button disabled={!valid || !!busy} onClick={register}>{busy ?? '교회 찬양 라이브러리에 등록'}</button>
               <button className="primary" onClick={done}>닫기</button>
