@@ -1,4 +1,4 @@
-import { useState, type Dispatch } from 'react';
+import { useRef, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../domain/reducer';
 import type { Presentation, Slide } from '../domain/types';
 import { resolveBackground } from '../domain/autoBackground';
@@ -23,6 +23,7 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, sl
   const [designing, setDesigning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const listRef = useRef<HTMLElement>(null);
   const pages = sequence(p);
   const index = slideSeq != null && pages[slideSeq] ? slideSeq : Math.max(0, pages.findIndex((x) => x.slide.id === slideId));
   const slide = pages[index]?.slide;
@@ -35,7 +36,10 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, sl
     const next = pages[index + 1]?.slide ?? pages[index - 1]?.slide;
     dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: [slide.id], seqs: [index] });
     setSelectedElement(null); setDesigning(false); setMessage('슬라이드 한 장을 삭제했습니다. 실행 취소로 복원할 수 있습니다.');
-    if (next) onSelect(next.id, Math.min(index, pages.length - 2));
+    if (next) {
+      onSelect(next.id, Math.min(index, pages.length - 2));
+      requestAnimationFrame(() => listRef.current?.querySelector<HTMLButtonElement>('[aria-current="true"]')?.focus());
+    }
   };
   const shared = isLibrarySong(p) && isSong(p);
   const publishLyrics = async () => {
@@ -50,11 +54,19 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, sl
   };
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal slide-editor-modal" role="dialog" aria-modal="true" aria-label="슬라이드별 편집" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+      <div className="modal slide-editor-modal" role="dialog" aria-modal="true" aria-label="슬라이드별 편집" onKeyDown={(e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+        const target = e.target as HTMLElement;
+        if (e.defaultPrevented || e.nativeEvent.isComposing || e.metaKey || e.ctrlKey || e.altKey || target.isContentEditable || target.closest('input,textarea,select')) return;
+        if ((e.key === 'Backspace' || e.key === 'Delete') && target.closest('.slide-editor-list, .ce-root') && !selectedElement) {
+          e.preventDefault(); e.stopPropagation();
+          if (!e.repeat) remove();
+        }
+      }}>
         <header className="modal-head"><h2>슬라이드별 편집 · {p.title}</h2><button className="icon-btn" aria-label="Close" onClick={onClose}>✕</button></header>
         <div className="slide-editor-body">
-          <nav className="slide-editor-list" aria-label="편집할 슬라이드">
-            <p className="hint">V · C · PC · B 안의 슬라이드도 한 장씩 선택하세요.</p>
+          <nav ref={listRef} className="slide-editor-list" aria-label="편집할 슬라이드">
+            <p className="hint">슬라이드를 선택한 뒤 Backspace / Delete로 한 장씩 삭제할 수 있습니다.</p>
             {pages.map(({ slide: s }, i) => (
               <button key={i} className={i === index ? 'on' : ''} aria-label={`슬라이드 ${i + 1} 편집`} autoFocus={i === index} aria-current={i === index ? 'true' : undefined} onClick={() => pick(s.id, i)}>
                 <SlideCanvas slide={s} theme={theme} background={resolveBackground(s, p)} bgEffect={p.bgEffect} />
