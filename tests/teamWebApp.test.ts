@@ -99,5 +99,16 @@ describe('separate permanent team web app', () => {
     const opts = { proxy: origin, origin, id: teamId, secret: 'test-secret-for-the-stage-team', url: 'https://one.trycloudflare.com', kind: 'team' };
     expect(await registerLink(opts, async () => new Response('{"ok":true}'))).toMatchObject({ ok: false, missing: true });
     expect(await registerLink(opts, async (_url: string, init: RequestInit) => { expect(JSON.parse(String(init.body)).kind).toBe('team'); return new Response('{"ok":true,"kind":"team"}'); })).toEqual({ ok: true });
+  });  it('migrates an old Worker’s untyped registration only with its existing owner secret', async () => {
+    const values = new Map<string, string>();
+    const env = { REMOTE_LINKS: { get: async (k: string) => values.has(k) ? JSON.parse(values.get(k)!) : null, put: async (k: string, v: string) => values.set(k, v), delete: async (k: string) => values.delete(k) } };
+    const secret = 'legacy-stage-team-private-secret';
+    const update = (password = secret, kind = 'team') => handleRemoteLink(new Request(origin + '/freecast/remote/' + teamId, { method: 'PUT', body: JSON.stringify({ url: 'https://one.trycloudflare.com', kind, secret: password }) }), env);
+    await update();
+    const legacy = JSON.parse(values.get('remote:' + teamId)!); delete legacy.kind; values.set('remote:' + teamId, JSON.stringify(legacy));
+    expect((await update('different-private-secret')).status).toBe(403);
+    expect((await update()).status).toBe(200);
+    expect(JSON.parse(values.get('remote:' + teamId)!).kind).toBe('team');
+    expect((await update(secret, 'remote')).status).toBe(409);
   });
 });
