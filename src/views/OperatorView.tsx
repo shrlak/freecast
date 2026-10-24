@@ -1,3 +1,5 @@
+import { TeamRequestsModal } from '../ui/TeamRequestsModal';
+import type { TeamRequest } from '../domain/teamRequests';
 import { TrashModal } from '../ui/TrashModal';
 import { RehearsalModal } from '../ui/RehearsalModal';
 import { RemoteControlModal } from '../ui/RemoteControlModal';
@@ -88,6 +90,8 @@ export function OperatorView() {
   const modalRef = useRef(modal); modalRef.current = modal;
   const rehearsalCommandRef = useRef<((command: Record<string, unknown>) => void) | null>(null);
   const [rehearsalPreview, setRehearsalPreview] = useState<AppState | null>(null);
+  const [teamRequests, setTeamRequests] = useState<TeamRequest[]>([]);
+  const knownRequests = useRef(new Set<string>());
   const [remoteControl, setRemoteControl] = useState<RemoteControlState | null>(null);
   useEffect(() => { const expire = () => dispatchRaw({ type: 'trash/expire', now: Date.now() }); expire(); const t = setInterval(expire, 60000); return () => clearInterval(t); }, []);
   const [toast, setToast] = useState<string | null>(null);
@@ -228,6 +232,11 @@ export function OperatorView() {
   const [remotes, setRemotes] = useState(0);
   const lastLibrary = useRef(state.library);
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
+    if (m.type === 'team-requests') {
+      const entries = m.requests as TeamRequest[];
+      for (const r of entries) if (!knownRequests.current.has(r.id) && r.status === 'pending') notifyRef.current(`${r.name}: ${r.text}`);
+      knownRequests.current = new Set(entries.map((r) => r.id)); setTeamRequests(entries);
+    }
     if (m.type === 'remote-control') setRemoteControl(m as unknown as RemoteControlState);
     if (m.type === 'remotes') setRemotes(Number(m.count) || 0);
     if (m.type !== 'command' || !m.command) return;
@@ -499,6 +508,7 @@ export function OperatorView() {
     online,
     relayConnected: relay.connected,
     remoteCount: remotes,
+    teamRequestCount: teamRequests.filter((r) => r.status === 'pending').length,
     remoteRequests: remoteControl?.clients.filter((c) => c.connected && c.requested && c.id !== remoteControl.controllerId).length ?? 0,
     view,
     slideId,
@@ -545,6 +555,7 @@ export function OperatorView() {
 
       {modal === 'trash' && <TrashModal state={state} dispatch={dispatch} onClose={() => setModal(null)} />}
       {modal === 'rehearsal' && <RehearsalModal state={state} onPreview={setRehearsalPreview} commandRef={rehearsalCommandRef} onClose={() => setModal(null)} />}
+      {modal === 'teamRequests' && <TeamRequestsModal requests={teamRequests} send={relay.send} onClose={() => setModal(null)} />}
       {modal === 'remoteControl' && <RemoteControlModal control={remoteControl} send={relay.send} onClose={() => setModal(null)} />}
       {modal === 'edit' && selected && <SlideEditorModal key={selected.id} state={state} dispatch={dispatch} presentation={selected} slideId={slideId} slideSeq={slideSeq}
         onSelect={setSlideId} onClose={() => setModal(null)} onSource={() => setModal(isSong(selected) ? 'song' : 'source')} />}

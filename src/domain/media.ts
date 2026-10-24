@@ -52,13 +52,13 @@ export function mediaUrl(id: string): Promise<string | null> {
   return p;
 }
 
-const isRemote = () => document.body?.dataset.view === 'remote';
+const isRemote = () => ['remote', 'team'].includes(document.body?.dataset.view ?? '');
 
 /** The phone/tablet remote has no media of its own: it gets what slides use from the computer. */
 async function fromComputer(id: string): Promise<string | null> {
   for (let i = 0; i < 40; i++) {
     try {
-      const res = await fetch(`/remote-media/${encodeURIComponent(id)}`);
+      const res = await fetch(`${document.body?.dataset.view === 'team' && location.pathname.startsWith('/freecast/team/') ? '/freecast/team' : ''}/remote-media/${encodeURIComponent(id)}`);
       if (res.ok) return URL.createObjectURL(await res.blob());
     } catch {
       // network hiccup: try again

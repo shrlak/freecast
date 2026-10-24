@@ -1,3 +1,4 @@
+import { connectionQuality } from '../domain/connectionQuality';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LiveState } from '../domain/types';
 import { mediaUrl, peekMediaUrl } from '../domain/media';
@@ -70,7 +71,7 @@ export function useReadyImage(url: string | null): string | null {
 }
 
 export function relayUrl(): string {
-  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/freecast-ws`;
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/${document.body?.dataset.view === 'team' ? 'freecast-team-ws' : 'freecast-ws'}`;
 }
 
 /**
@@ -83,6 +84,7 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
   const socket = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'offline'>('connecting');
+  const [quality, setQuality] = useState(() => connectionQuality([], false, Date.now()));
   const helloKey = JSON.stringify(hello);
   useEffect(() => {
     if (!hello) return;
@@ -97,23 +99,43 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       setStatus(navigator.onLine ? (attempted ? 'reconnecting' : 'connecting') : 'offline');
       attempted = true;
       const ws = new WebSocket(relayUrl());
-      let lastReply = Date.now();
+      let lastReply = Date.now(), serial = 0;
+      let probe: { id: number; start: number } | null = null;
+      let samples: (number | null)[] = [];
+      const measure = (sample: number | null) => {
+        samples = [...samples, sample].slice(-8);
+        const value = connectionQuality(samples, true, Date.now()); setQuality(value);
+        if (['remote', 'team'].includes(String(hello.role)) && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'connection-quality', quality: value }));
+      };
+      const ping = () => {
+        if (probe) measure(null);
+        probe = { id: ++serial, start: performance.now() };
+        ws.send(JSON.stringify({ type: 'ping', id: probe.id }));
+      };
+      const resume = () => {
+        if (closed || document.hidden || ws.readyState !== WebSocket.OPEN) return;
+        samples = []; probe = null; lastReply = Date.now(); setQuality(connectionQuality([], true, Date.now())); ping();
+      };
+      document.addEventListener('visibilitychange', resume);
+      setQuality(connectionQuality([], false, Date.now()));
       deadline = setTimeout(() => ws.close(), 10000);
       socket.current = ws;
       ws.onopen = () => {
         if (closed) return;
         ws.send(helloKey);
-        heartbeat = setInterval(() => {
-          if (Date.now() - lastReply > 30000) ws.close();
-          else if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
-        }, 10000);
       };
       ws.onmessage = (e) => {
         if (closed) return;
         try {
           const message = JSON.parse(String(e.data));
           lastReply = Date.now();
-          if (message.type === 'welcome') { clearTimeout(deadline); setConnected(true); setStatus('connected'); }
+          if (message.type === 'welcome') {
+            clearTimeout(deadline); setConnected(true); setStatus('connected');
+            setQuality(connectionQuality([], true, Date.now())); ping();
+            clearInterval(heartbeat);
+            heartbeat = setInterval(() => { if (document.hidden) return; if (Date.now() - lastReply > 30000) ws.close(); else if (ws.readyState === WebSocket.OPEN) ping(); }, 5000);
+          }
+          if (message.type === 'pong' && probe && (message.id == null || message.id === probe.id)) { measure(performance.now() - probe.start); probe = null; }
           if (message.type !== 'pong') handler.current(message);
         } catch {
           // ignore malformed frames
@@ -121,15 +143,20 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       };
       ws.onerror = () => ws.close();
       ws.onclose = () => {
+        document.removeEventListener('visibilitychange', resume);
         clearTimeout(deadline); clearInterval(heartbeat);
         if (closed) return;
         setConnected(false);
+        setQuality(connectionQuality([], false, Date.now()));
         setStatus(navigator.onLine ? 'reconnecting' : 'offline');
         if (!closed) retry = setTimeout(connect, 2000);
       };
     };
+    const offline = () => { setConnected(false); setStatus('offline'); setQuality(connectionQuality([], false, Date.now())); socket.current?.close(); };
+    window.addEventListener('offline', offline);
     connect();
     return () => {
+      window.removeEventListener('offline', offline);
       closed = true;
       clearTimeout(retry); clearTimeout(deadline); clearInterval(heartbeat);
       socket.current?.close();
@@ -137,9 +164,9 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [helloKey]);
   const send = (m: unknown) => {
-    if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(m));
+    if (navigator.onLine && socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(m));
   };
-  return { send, connected, status };
+  return { send, connected, status, quality };
 }
 
 /** Operator side: publish live state to output/stage windows (same computer) and the relay (other devices). */
