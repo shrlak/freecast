@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // FreeCast desktop app: runs the FreeCast server inside the app and shows the console,
 // audience outputs and stage displays as native windows placed on your displays.
 import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, powerMonitor, safeStorage, screen, session, shell, dialog } from 'electron';
@@ -11,7 +12,7 @@ import { PUBLISH } from './publish.mjs';
 import { setAiConfigProvider } from '../server/ai.mjs';
 import { startTunnel } from '../server/tunnel.mjs';
 import { aiConfig, DEFAULT_PROXY } from '../server/aiProviders.mjs';
-import { linkAddress, remoteWebAppAddress, remotePairingAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
+import { linkAddress, remoteWebAppAddress, remotePairingAddress, teamWebAppAddress, teamPairingAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
 import { pptxToPdf } from './pptxToPdf.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -24,22 +25,24 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 // ---------- settings ----------
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
-let settings = { networkRemote: false, internetRemote: false, remoteLinkId: '', remoteLinkSecret: '', ai: {}, outputDisplays: {} };
+let settings = { networkRemote: false, internetRemote: false, remoteLinkId: '', remoteLinkSecret: '', teamLinkId: '', teamLinkSecret: '', ai: {}, outputDisplays: {} };
 
 function loadSettings() {
   try {
     const raw = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
     let ai = {};
-    if (raw.aiEnc && safeStorage.isEncryptionAvailable()) ai = JSON.parse(safeStorage.decryptString(Buffer.from(raw.aiEnc, 'base64')));
-    else if (raw.aiPlain) ai = raw.aiPlain;
-    settings = { networkRemote: !!raw.networkRemote, internetRemote: !!raw.internetRemote, remoteLinkId: typeof raw.remoteLinkId === 'string' ? raw.remoteLinkId : '', remoteLinkSecret: typeof raw.remoteLinkSecret === 'string' ? raw.remoteLinkSecret : '', ai, outputDisplays: raw.outputDisplays ?? {} };
+    try {
+      if (raw.aiEnc && safeStorage.isEncryptionAvailable()) ai = JSON.parse(safeStorage.decryptString(Buffer.from(raw.aiEnc, 'base64')));
+      else if (raw.aiPlain) ai = raw.aiPlain;
+    } catch { /* An unavailable AI keychain must not discard either permanent link. */ }
+    settings = { networkRemote: !!raw.networkRemote, internetRemote: !!raw.internetRemote, remoteLinkId: typeof raw.remoteLinkId === 'string' ? raw.remoteLinkId : '', remoteLinkSecret: typeof raw.remoteLinkSecret === 'string' ? raw.remoteLinkSecret : '', teamLinkId: typeof raw.teamLinkId === 'string' ? raw.teamLinkId : '', teamLinkSecret: typeof raw.teamLinkSecret === 'string' ? raw.teamLinkSecret : '', ai, outputDisplays: raw.outputDisplays ?? {} };
   } catch {
     // first run
   }
 }
 
 function saveSettings() {
-  const out = { networkRemote: settings.networkRemote, internetRemote: settings.internetRemote, remoteLinkId: settings.remoteLinkId, remoteLinkSecret: settings.remoteLinkSecret, outputDisplays: settings.outputDisplays };
+  const out = { networkRemote: settings.networkRemote, internetRemote: settings.internetRemote, remoteLinkId: settings.remoteLinkId, remoteLinkSecret: settings.remoteLinkSecret, teamLinkId: settings.teamLinkId, teamLinkSecret: settings.teamLinkSecret, outputDisplays: settings.outputDisplays };
   // AI proxy address and optional own Gemini / OpenRouter keys, encrypted with the OS keychain.
   if (Object.keys(settings.ai ?? {}).length) {
     if (safeStorage.isEncryptionAvailable()) out.aiEnc = safeStorage.encryptString(JSON.stringify(settings.ai)).toString('base64');
@@ -53,7 +56,7 @@ function saveSettings() {
 let running = null;
 async function restartServer() {
   await running?.close();
-  running = await startServer({ root: path.join(appRoot, 'dist'), port: PORT, host: settings.networkRemote ? '0.0.0.0' : '127.0.0.1', publicOpen: () => settings.internetRemote });
+  running = await startServer({ root: path.join(appRoot, 'dist'), port: PORT, host: settings.networkRemote ? '0.0.0.0' : '127.0.0.1', publicOpen: () => settings.internetRemote, teamKey: () => settings.teamLinkSecret ? crypto.createHash('sha256').update(settings.teamLinkSecret).digest('hex') : '' });
 }
 
 // ---------- internet remote (phones on any network) ----------
@@ -61,6 +64,7 @@ let tunnel = null;
 let tunnelState = { status: 'off', url: null, error: null };
 // The permanent link (church Worker → the tunnel's current address): 'off' | 'pending' | 'ok' | 'unavailable' | 'error'.
 let linkState = { status: 'off', error: null };
+let teamLinkState = { status: 'off', error: null };
 let linkTimer = null;
 let publishedFor = null;
 
@@ -71,18 +75,20 @@ const linkOpts = () => ({ proxy: REMOTE_PROXY, origin: aiConfig().proxyOrigin, i
 /** Tell the Worker where the tunnel is now (retries until it hears us). */
 async function publishLink() {
   clearTimeout(linkTimer);
-  const url = tunnelState.url;
+  const url = tunnelState.url, remoteId = settings.remoteLinkId, teamId = settings.teamLinkId;
   if (!settings.internetRemote || tunnelState.status !== 'on' || !url) return;
   linkState = { status: 'pending', error: null };
-  const r = await registerLink({ ...linkOpts(), url });
-  if (!settings.internetRemote || tunnelState.url !== url) return;
-  if (r.ok) {
+  teamLinkState = { status: 'pending', error: null };
+  const [r, team] = await Promise.all([registerLink({ ...linkOpts(), url }), registerLink({ proxy: REMOTE_PROXY, origin: aiConfig().proxyOrigin, id: settings.teamLinkId, secret: settings.teamLinkSecret, kind: 'team', url })]);
+  if (!settings.internetRemote || tunnelState.url !== url || settings.remoteLinkId !== remoteId || settings.teamLinkId !== teamId) return;
+  teamLinkState = { status: team.ok ? 'ok' : team.missing ? 'unavailable' : 'error', error: team.error ?? null };
+  if (r.ok && team.ok) {
     publishedFor = url;
     linkState = { status: 'ok', error: null };
     return;
   }
-  linkState = { status: r.missing ? 'unavailable' : 'error', error: r.error };
-  linkTimer = setTimeout(publishLink, r.missing ? 10 * 60_000 : 30_000);
+  linkState = { status: r.ok ? 'ok' : r.missing ? 'unavailable' : 'error', error: r.error ?? null };
+  linkTimer = setTimeout(publishLink, 30_000);
 }
 
 function syncTunnel() {
@@ -92,6 +98,7 @@ function syncTunnel() {
   publishedFor = null;
   tunnelState = { status: 'off', url: null, error: null };
   linkState = { status: 'off', error: null };
+  teamLinkState = { status: 'off', error: null };
   if (!settings.internetRemote) return;
   // The permanent link is made once and then kept, until "New Link" is pressed.
   if (!settings.remoteLinkId || !settings.remoteLinkSecret) {
@@ -99,6 +106,9 @@ function syncTunnel() {
     settings.remoteLinkId = c.id;
     settings.remoteLinkSecret = c.secret;
     saveSettings();
+  }
+  if (!settings.teamLinkId || !settings.teamLinkSecret) {
+    const c = newLinkCredentials(); settings.teamLinkId = c.id; settings.teamLinkSecret = c.secret; saveSettings();
   }
   tunnelState = { status: 'connecting', url: null, error: null };
   tunnel = startTunnel(PORT, (st) => {
@@ -328,6 +338,7 @@ ipcMain.handle('desktop:info', (e) => {
     internet: { on: settings.internetRemote, status: tunnelState.status, url: tunnelState.url, error: tunnelState.error, note: tunnelState.note ?? null,
       webAppUrl: remoteWebAppAddress(REMOTE_PROXY), pairingUrl: settings.remoteLinkId ? remotePairingAddress(REMOTE_PROXY, settings.remoteLinkId) : null,
       connectionCode: settings.remoteLinkId ?? null,
+      team: { webAppUrl: teamWebAppAddress(REMOTE_PROXY), pairingUrl: settings.teamLinkId ? teamPairingAddress(REMOTE_PROXY, settings.teamLinkId) : null, connectionCode: settings.teamLinkId || null, status: teamLinkState.status, error: teamLinkState.error },
       link: settings.internetRemote && settings.remoteLinkId ? linkAddress(REMOTE_PROXY, settings.remoteLinkId) : null, linkStatus: linkState.status, linkError: linkState.error },
   };
 });
@@ -335,6 +346,10 @@ ipcMain.handle('desktop:copyRemoteCode', (e) => {
   if (!fromMain(e) || !settings.remoteLinkId) return false;
   clipboard.writeText(settings.remoteLinkId);
   return true;
+});
+ipcMain.handle('desktop:copyTeamLink', (e) => {
+  if (!fromMain(e) || !settings.teamLinkId) return false;
+  clipboard.writeText(teamPairingAddress(REMOTE_PROXY, settings.teamLinkId)); return true;
 });
 ipcMain.handle('desktop:pptxToPdf', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptxToPdf(bytes) : null));
 ipcMain.handle('desktop:openView', (e, url, displayId) => {

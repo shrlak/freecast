@@ -149,6 +149,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
           <button key={t} className={`rb-tab ${t === tab ? 'on' : ''} ${t === '파일' ? 'file' : ''}`} onClick={() => setTab(t)}>{t}</button>
         ))}
         <span className="rb-spacer" />
+        <button className={`rb-busy ${cmd.teamRequestCount ? 'team-request-alert' : ''}`} onClick={() => cmd.open('teamRequests')}>무대팀 요청 {cmd.teamRequestCount}</button>
         <button className="rb-busy" onClick={() => cmd.open('remoteControl')} title="리모컨 조작권 관리">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}{cmd.remoteRequests > 0 && <strong className="remote-request-badge"> · 조작권 요청 {cmd.remoteRequests}</strong>}</button>
         {busy && <span className="rb-busy">{busy}</span>}
         <button className="rb-account" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">

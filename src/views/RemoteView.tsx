@@ -1,3 +1,7 @@
+import { TeamRequestPanel } from '../ui/TeamRequestPanel';
+import { ConnectionQualityBadge } from '../ui/ConnectionQualityBadge';
+import type { TeamRequest } from '../domain/teamRequests';
+import { phoneIdentity } from '../domain/phoneIdentity';
 import type { RemoteControlState } from '../domain/remoteControl';
 import type { Cursor } from '../domain/live';
 import { Fragment, useEffect, useRef, useState } from 'react';
@@ -40,7 +44,10 @@ export function RemoteView() {
   });
   const [deviceName, setDeviceName] = useState(() => localStorage.getItem('freecast.remote.deviceName') || (/iPhone|iPad/i.test(navigator.userAgent) ? 'iPhone 리모컨' : '내 리모컨'));
   const initialName = useRef(deviceName);
-  const [clientToken] = useState(() => { const old = localStorage.getItem('freecast.remote.clientToken'); if (old) return old; const token = [...crypto.getRandomValues(new Uint8Array(32))].map((b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('freecast.remote.clientToken', token); return token; });
+  const [clientToken] = useState(() => phoneIdentity('remote'));
+  const [requests, setRequests] = useState<TeamRequest[]>([]);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestsOpen, setRequestsOpen] = useState(false);
   const [control, setControl] = useState<RemoteControlState | null>(null);
   const [rehearsal, setRehearsal] = useState<{ active: boolean; state?: LiveState; cursor?: Cursor | null } | null>(null);
   const [actualLive, setLive] = useState<LiveState | null>(null);
@@ -50,7 +57,9 @@ export function RemoteView() {
   const list = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [hostConnected, setHostConnected] = useState(false);
-  const { send, connected, status } = useRelay({ type: 'hello', role: 'remote', pin, clientToken, name: initialName.current }, (m) => {
+  const { send, connected, status, quality } = useRelay({ type: 'hello', role: 'remote', pin, clientToken, name: initialName.current }, (m) => {
+    if (m.type === 'team-requests') { setRequests(m.requests as TeamRequest[]); setRequestError(null); }
+    if (m.type === 'team-request-error') setRequestError(String(m.message));
     if (m.type === 'remote-control') setControl(m as unknown as RemoteControlState);
     if (m.type === 'rehearsal') setRehearsal(m as unknown as { active: boolean; state?: LiveState; cursor?: Cursor | null });
     if (m.type === 'welcome') send({ type: 'remote-control', action: 'rename', name: deviceName });
@@ -112,6 +121,7 @@ export function RemoteView() {
           setAppearance(next);
           try { localStorage.setItem('freecast.remote.appearance', next); } catch { /* usable for this session */ }
         }}>{appearance === 'dark' ? '☀ 밝게' : '☾ 어둡게'}</button>}
+        <ConnectionQualityBadge quality={quality} connected={ready} compact />
         <span className={`remote-connection ${ready ? 'connected' : 'disconnected'}`} role="status" aria-live="polite" aria-label={connectionLabel} title={connectionLabel}>
           <span className="remote-connection-dot" aria-hidden="true" />
           <span className="remote-connection-text">{connectionLabel}</span>
@@ -119,6 +129,7 @@ export function RemoteView() {
       </header>
       <section className="remote-access" aria-label="리모컨 조작권">
         <details className="remote-identity"><summary>기기</summary><label>기기 이름 <input aria-label="리모컨 기기 이름" maxLength={80} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} onBlur={() => { localStorage.setItem('freecast.remote.deviceName', deviceName); send({ type: 'remote-control', action: 'rename', name: deviceName }); }} /></label></details>
+        <button onClick={() => setRequestsOpen(true)}>요청</button>
         <span role="status">{control?.canControl ? '● 내가 조작 중' : `보기 전용 · ${control?.clients.find((c) => c.id === control.controllerId)?.name ?? '조작권 없음'}`}</span>
         {!control?.canControl && <button disabled={!ready || control?.clients.find((c) => c.id === control.selfId)?.requested} onClick={() => send({ type: 'remote-control', action: 'request' })}>조작권 요청</button>}
         {control?.canControl && <select aria-label="조작권 넘기기" value="" onChange={(e) => { if (e.target.value) send({ type: 'remote-control', action: 'handoff', id: e.target.value }); }}><option value="">{control.clients.some((c) => c.requested && c.id !== control.selfId) ? '조작권 요청 있음' : '조작권 넘기기…'}</option>{control.clients.filter((c) => c.connected && c.id !== control.selfId).map((c) => <option key={c.id} value={c.id}>{c.name}{c.requested ? ' (요청)' : ''}</option>)}</select>}
@@ -187,6 +198,7 @@ export function RemoteView() {
           </div>
         </section>
       </fieldset>
+      {requestsOpen && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setRequestsOpen(false)}><section className="modal team-sender-modal" role="dialog" aria-modal="true" aria-label="방송실 요청" onKeyDown={(e) => { if (e.key === 'Escape') setRequestsOpen(false); }}><header className="modal-head"><h2>방송실 요청</h2><button autoFocus aria-label="닫기" onClick={() => setRequestsOpen(false)}>✕</button></header><div className="feature-scroll"><TeamRequestPanel requests={requests} error={requestError} ready={ready} send={(m) => { setRequestError(null); send(m); }} /></div></section></div>}
     </div>
   );
 }

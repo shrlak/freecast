@@ -12,6 +12,7 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
   const [orKey, setOrKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [copyStatus, setCopyStatus] = useState('');
+  const [teamCopyStatus, setTeamCopyStatus] = useState('');
   const refresh = () => desktop?.info().then(setInfo);
 
   useEffect(() => { setCopyStatus(''); }, [info?.internet.connectionCode]);
@@ -130,6 +131,20 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
         {info.internet.on && (info.internet.linkStatus === 'error' || info.internet.linkStatus === 'unavailable') && <p className="hint">{info.internet.linkError ?? '연결 등록을 다시 시도하고 있습니다.'}</p>}
         <p className="hint">연결 QR 코드는 컴퓨터를 조작할 수 있는 개인 연결 정보입니다. 미디어팀에만 공유하세요.</p>
       </div>
+      {info.internet.team && <section className="stack team-link-settings">
+        <h3>무대팀 전용 웹앱 · 고정 링크</h3>
+        <code className="small selectable">{info.internet.team.webAppUrl}</code>
+        <p className="hint">무대팀은 현재 송출을 보고 방송실에 비공개 요청을 보낼 수 있습니다. 슬라이드 조작권은 주어지지 않습니다. 일반 리모컨과 다른 연결 코드이며, 재시작·인터넷 재연결·일반 리모컨 키 재발급으로 바뀌지 않습니다.</p>
+        {info.internet.team.pairingUrl && <>
+          <label className="stack small">이 컴퓨터의 무대팀 연결 링크<input readOnly className="selectable" value={info.internet.team.pairingUrl} onFocus={(e) => e.currentTarget.select()} /></label>
+          <button disabled={info.internet.team.status !== 'ok'} onClick={async () => { try { setTeamCopyStatus(await desktop!.copyTeamLink() ? '무대팀 연결 링크를 복사했습니다.' : '위 링크를 선택해 직접 복사해 주세요.'); } catch { setTeamCopyStatus('위 링크를 선택해 직접 복사해 주세요.'); } }}>무대팀 연결 링크 복사</button>
+          <label className="stack small">무대팀 연결 코드<input readOnly className="selectable" value={info.internet.team.connectionCode ?? ''} onFocus={(e) => e.currentTarget.select()} /></label>
+          {info.internet.team.status === 'ok' && <img src={qrDataUrl(info.internet.team.pairingUrl)} alt="무대팀 전용 연결 QR 코드" width={160} height={160} />}
+        </>}
+        <p role="status" className="hint">{teamCopyStatus}</p>
+        {info.internet.on && info.internet.team.status !== 'ok' && <p className="hint">{info.internet.team.error || '무대팀 고정 링크를 등록하고 있습니다…'}</p>}
+        <p className="hint">같은 인터넷 리모컨 스위치를 사용합니다. 무대팀 기기에서는 위 링크를 열고 Safari의 공유 → 홈 화면에 추가를 선택하세요.</p>
+      </section>}
     </div>
   );
 }

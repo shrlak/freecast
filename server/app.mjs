@@ -44,7 +44,7 @@ export function lanAddresses() {
  * Start the server. `host` 127.0.0.1 keeps it private to this computer;
  * 0.0.0.0 lets phones and other computers on the network connect.
  */
-export function startServer({ root, port, host = '127.0.0.1', publicOpen = () => false }) {
+export function startServer({ root, port, host = '127.0.0.1', publicOpen = () => false, teamKey = () => '' }) {
   if (!fs.existsSync(path.join(root, 'index.html'))) throw new Error(`App files not found in ${root} — run \`npm run build\` first.`);
   const serveStatic = staticHandler(path.resolve(root));
   let control = (_req, _res, next) => next();
@@ -55,14 +55,14 @@ export function startServer({ root, port, host = '127.0.0.1', publicOpen = () =>
   const publicPage = (req, res) => {
     const url = new URL(req.url ?? '/', 'http://local');
     if (req.method === 'GET' && url.pathname.startsWith('/remote-media/')) return remoteMediaGet(req, res);
-    if (!/\.\w+$/.test(url.pathname) && url.searchParams.get('view') !== 'remote') {
+    if (!/\.\w+$/.test(url.pathname) && !['remote', 'team'].includes(url.searchParams.get('view'))) {
       res.writeHead(302, { location: '/?view=remote' });
       return res.end();
     }
     serveStatic(req, res);
   };
   const server = http.createServer((req, res) => (isPublicHost(req.headers.host) ? publicPage(req, res) : req.method === 'GET' && req.url?.startsWith('/remote-media/') ? remoteMediaGet(req, res) : everything(req, res)));
-  const wss = attachRelay(server, { publicOpen });
+  const wss = attachRelay(server, { publicOpen, teamKey });
   control = controlMiddleware(wss);
   return new Promise((resolve, reject) => {
     server.once('error', reject);

@@ -13,18 +13,24 @@ export function newLinkCredentials() {
 export const remoteWebAppAddress = (proxy) => `${String(proxy).replace(/\/+$/, '')}/freecast/remote/`;
 export const remotePairingAddress = (proxy, id) => `${remoteWebAppAddress(proxy)}#${id}`;
 
+export const teamWebAppAddress = (proxy) => `${String(proxy).replace(/\/+$/, '')}/freecast/team/`;
+export const teamPairingAddress = (proxy, id) => `${teamWebAppAddress(proxy)}#${id}`;
+
 /** The private-id registration endpoint (older saved links also open the web app). */
 export const linkAddress = (proxy, id) => `${String(proxy).replace(/\/+$/, '')}/freecast/remote/${id}`;
 
-async function call(method, { proxy, origin, id, secret, url }, fetchFn) {
+async function call(method, { proxy, origin, id, secret, url, kind }, fetchFn) {
   try {
     const res = await fetchFn(linkAddress(proxy, id), {
       method,
       headers: { Origin: origin, 'content-type': 'application/json' },
-      body: JSON.stringify({ secret, url }),
+      body: JSON.stringify({ secret, url, ...(kind ? { kind } : {}) }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (res.ok) return { ok: true };
+    if (res.ok) {
+      if (method === 'PUT' && kind === 'team') { const body = await res.json().catch(() => ({})); if (body.kind !== 'team') return { ok: false, missing: true, error: '서버에 무대팀 고정 링크 기능을 업데이트해야 합니다.' }; }
+      return { ok: true };
+    }
     const data = await res.json().catch(() => ({}));
     // The Worker answered but has no such route: it has not been updated yet.
     if (res.status === 404 && (data.error === 'not found' || !data.error)) return { ok: false, missing: true, error: '교회 서버(Worker)에 고정 링크 기능이 아직 설치되지 않았습니다.' };

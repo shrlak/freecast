@@ -1,6 +1,8 @@
 // WebSocket relay so phones, tablets and other computers on the network can act as
 // remote controls, stage displays or outputs for the operator console.
 import { WebSocketServer } from 'ws';
+import { timingSafeEqual } from 'node:crypto';
+import { teamRequests } from './teamRequests.mjs';
 import { remoteControl } from './remoteControl.mjs';
 import { isPublicHost } from './tunnel.mjs';
 
@@ -28,35 +30,43 @@ function validCommand(c) {
  * `publicOpen()` says the internet remote is switched on. The address itself is the key:
  * it is long and random, and a new one can be made at any time.
  */
-export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
+export function attachRelay(httpServer, { publicOpen = () => false, teamKey = () => '' } = {}) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   const control = remoteControl(wss);
+  const team = teamRequests(wss);
   let rehearsal = null;
   let lastState = null;
   let lastInfo = [];
   let pendingInfo = null;
 
   httpServer.on('upgrade', (req, socket, head) => {
-    if (!req.url?.startsWith('/freecast-ws')) return;
+    let pathname;
+    try { pathname = new URL(req.url ?? '/', 'http://local').pathname; } catch { return socket.destroy(); }
+    if (!['/freecast-ws', '/freecast-team-ws'].includes(pathname)) return;
     const pub = isPublicHost(req.headers.host);
     if (pub && !publicOpen()) return socket.destroy();
+    const received = req.headers['x-freecast-team-key'];
+    const expected = teamKey();
+    const authorizedTeam = typeof received === 'string' && typeof expected === 'string' && /^[a-f0-9]{64}$/.test(expected) && /^[a-f0-9]{64}$/.test(received) && timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+    const teamOnly = pathname === '/freecast-team-ws' || authorizedTeam;
+    if (pub && teamOnly && !authorizedTeam) return socket.destroy();
     wss.handleUpgrade(req, socket, head, (ws) => {
-      ws.pub = pub;
+      ws.pub = pub; ws.teamOnly = teamOnly;
       wss.emit('connection', ws);
     });
   });
 
   // The console only needs to ship slide media while a remote is connected.
   const tellHosts = () => {
-    const count = [...wss.clients].filter((c) => c.readyState === 1 && c.role === 'remote').length;
-    broadcast(JSON.stringify({ type: 'remotes', count }), (c) => c.role === 'host');
+    const count = [...wss.clients].filter((c) => c.readyState === 1 && ['remote', 'team'].includes(c.role)).length;
+    broadcast(JSON.stringify({ type: 'remotes', count, teamCount: [...wss.clients].filter((c) => c.readyState === 1 && c.role === 'team').length }), (c) => c.role === 'host');
   };
 
   const broadcast = (data, filter) => {
     for (const c of wss.clients) if (c.readyState === 1 && filter(c)) c.send(data);
   };
 
-  const tellRemotes = () => broadcast(JSON.stringify({ type: 'host-status', connected: [...wss.clients].some((c) => c.readyState === 1 && c.role === 'host') }), (c) => c.role === 'remote');
+  const tellRemotes = () => broadcast(JSON.stringify({ type: 'host-status', connected: [...wss.clients].some((c) => c.readyState === 1 && c.role === 'host') }), (c) => c.role === 'remote' || c.role === 'team');
 
   wss.on('connection', (ws) => {
     ws.role = null;
@@ -67,24 +77,24 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
       } catch {
         return;
       }
-      if (msg?.type === 'ping') { ws.send(JSON.stringify({ type: 'pong' })); return; }
+      if (msg?.type === 'ping') { ws.send(JSON.stringify({ type: 'pong', ...(typeof msg.id === 'number' && Number.isFinite(msg.id) || typeof msg.id === 'string' && msg.id.length <= 80 ? { id: msg.id } : {}) })); return; }
       if (msg?.type === 'hello') {
         if (ws.role) return;
-        const role = ['host', 'viewer', 'remote'].includes(msg.role) ? msg.role : 'viewer';
+        const role = ws.teamOnly ? 'team' : ['host', 'viewer', 'remote', 'team'].includes(msg.role) ? msg.role : 'viewer';
         const pin = ws.pub ? '' : PIN;
-        if (ws.pub && role !== 'remote') {
+        if (ws.pub && role !== 'remote' && !(role === 'team' && ws.teamOnly)) {
           ws.send(JSON.stringify({ type: 'error', error: 'Not allowed' }));
           return ws.close();
         }
-        if (role === 'remote' && pin && msg.pin !== pin) {
+        if (['remote', 'team'].includes(role) && pin && msg.pin !== pin) {
           ws.send(JSON.stringify({ type: 'error', error: 'Wrong PIN' }));
           return ws.close();
         }
         ws.role = role;
         ws.send(JSON.stringify({ type: 'welcome', pinRequired: Boolean(pin) }));
-        if (role === 'remote') control.register(ws, msg);
+        if (['remote', 'team'].includes(role)) control.register(ws, msg);
         else if (role === 'host') control.publish();
-        if (role === 'remote' || role === 'host') { tellHosts(); tellRemotes(); }
+        if (['remote', 'team', 'host'].includes(role)) { tellHosts(); tellRemotes(); team.publish(); }
         if (role !== 'host') {
           if (lastState) ws.send(lastState);
           if (role === 'remote') {
@@ -95,6 +105,8 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
         }
         return;
       }
+      if (msg?.type === 'team-request') { team.receive(ws, msg); return; }
+      if (msg?.type === 'connection-quality') { control.quality(ws, msg.quality); return; }
       if (msg?.type === 'remote-control') { control.receive(ws, msg); return; }
       if (ws.role === 'host' && msg?.type === 'rehearsal') {
         rehearsal = JSON.stringify({ type: 'rehearsal', active: msg.active === true, state: msg.state, cursor: msg.cursor });
@@ -103,7 +115,7 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
       }
       if (ws.role === 'host' && msg?.type === 'state') {
         lastState = String(raw);
-        broadcast(lastState, (c) => c.role === 'viewer' || c.role === 'remote');
+        broadcast(lastState, (c) => c.role === 'viewer' || c.role === 'remote' || c.role === 'team');
       } else if (ws.role === 'host' && msg?.type === 'info') {
         pendingInfo = null;
         lastInfo = [String(raw)];
@@ -121,7 +133,7 @@ export function attachRelay(httpServer, { publicOpen = () => false } = {}) {
       }
     });
   });
-  wss.on('connection', (ws) => ws.on('close', () => { if (ws.role === 'remote') { control.close(ws); tellHosts(); } if (ws.role === 'host') { rehearsal = null; broadcast(JSON.stringify({ type: 'rehearsal', active: false }), (c) => c.role === 'remote'); if (pendingInfo?.owner === ws) pendingInfo = null; tellRemotes(); } }));
+  wss.on('connection', (ws) => ws.on('close', () => { if (['remote', 'team'].includes(ws.role)) { control.close(ws); tellHosts(); } if (ws.role === 'host') { rehearsal = null; broadcast(JSON.stringify({ type: 'rehearsal', active: false }), (c) => c.role === 'remote'); if (pendingInfo?.owner === ws) pendingInfo = null; tellRemotes(); } }));
   wss.toHost = (command) => {
     if (!validCommand(command)) return false;
     let sent = false;

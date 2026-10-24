@@ -19,6 +19,7 @@ export interface DesktopInfo {
     webAppUrl?: string; pairingUrl?: string | null;
     /** The code phones enter in the web app; never the registration secret. */
     connectionCode?: string | null;
+    team?: { webAppUrl: string; pairingUrl: string | null; connectionCode: string | null; status: 'off' | 'pending' | 'ok' | 'unavailable' | 'error'; error: string | null };
     link: string | null; linkStatus: 'off' | 'pending' | 'ok' | 'unavailable' | 'error'; linkError: string | null };
 }
 
@@ -32,6 +33,7 @@ export interface UpdateState {
 export interface DesktopBridge {
   info(): Promise<DesktopInfo>;
   copyRemoteCode(): Promise<boolean>;
+  copyTeamLink(): Promise<boolean>;
   /** A .pptx drawn by PowerPoint / LibreOffice on this computer, as a PDF; null when neither can. */
   pptxToPdf(bytes: Uint8Array): Promise<Uint8Array | null>;
   openView(url: string, displayId?: number | null): Promise<void>;

@@ -973,3 +973,40 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
 @media (orientation: portrait) and (max-height: 650px) {
   .remote-console .remote-controls { grid-template-rows: minmax(0, 2.7fr) minmax(80px, 1fr); }
 }
+
+/* Private stage-team requests and measured WebSocket response quality. */
+.connection-quality { display: inline-flex; align-items: center; gap: 4px; flex: none; font-size: 11px; white-space: nowrap; color: var(--muted); }
+.connection-quality > i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.connection-quality.good { color: #248a52; }
+.connection-quality.fair, .connection-quality.measuring { color: #a5700a; }
+.connection-quality.poor, .connection-quality.offline { color: #d33b3b; }
+.team-request-alert { color: #a65c00 !important; background: #fff2ce !important; border: 1px solid #b47a00 !important; }
+.team-requests-modal { width: min(900px, 94vw); max-height: 85dvh; }
+.team-requests-modal > p, .team-requests-modal > label { margin: 12px 16px; }
+.team-request { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.team-request.pending { border-left: 4px solid #bf7900; }
+.team-request.acknowledged { border-left: 4px solid #278151; }
+.team-request.done { opacity: .7; }
+.team-request-panel h2 { font-size: 18px; margin: 8px 0; }
+.team-presets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.team-presets > button { min-height: 58px; font-size: 16px; padding: 12px; }
+.team-request-panel form input { min-width: 0; flex: 1; font-size: 16px; }
+.team-request-panel form button { min-height: 44px; flex: none; }
+.team-request-history .team-request { display: block; }
+.team-request-history .team-request > div { font-size: 12px; margin-top: 4px; color: var(--muted); }
+.team-sender-modal { width: min(620px, 94vw); max-height: 90dvh; }
+.team-console { max-width: 660px; height: 100dvh; overflow: auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+.team-console > .remote-head { position: sticky; top: -12px; z-index: 2; background: var(--bg); padding: 8px 0; }
+.team-console > label input { min-width: 0; flex: 1; font-size: 16px; }
+.team-preview { flex: none; }
+.team-preview > summary { cursor: pointer; padding: 8px 0; font-size: 13px; }
+.team-preview > .canvas-frame { width: min(60%, 260px); margin: 0 auto; }
+.team-preview > p { max-height: 3em; overflow: hidden; white-space: pre-line; }
+.team-console .team-request-panel { flex: none; }
+body[data-view='team'][data-remote-appearance='light'] { --bg: #f5f6f8; --panel: #fff; --panel-2: #e9edf2; --line: #cbd2dc; --text: #202b3a; --muted: #566477; color-scheme: light; }
+@media (orientation: landscape) and (max-height: 480px) {
+  .team-console { max-width: 1000px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); align-content: start; align-items: start; }
+  .team-console > .remote-head, .team-console > label, .team-console > .connection-quality { grid-column: 1 / -1; }
+  .team-preview > .canvas-frame { width: 90%; }
+}
+.team-console .remote-head > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
