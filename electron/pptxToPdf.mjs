@@ -5,17 +5,18 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const run = (cmd, args, timeout = 120000) =>
   new Promise((resolve) => execFile(cmd, args, { timeout, windowsHide: true }, (err) => resolve(!err)));
 
 const exists = (file) => { try { return fs.statSync(file).isFile(); } catch { return false; } };
 
-async function viaPowerPoint(input, output) {
+async function viaPowerPoint(input, output, format = 'pdf') {
   if (process.platform === 'win32') {
     const q = (s) => `'${s.replace(/'/g, "''")}'`;
     const script = `$ErrorActionPreference='Stop';$p=New-Object -ComObject PowerPoint.Application;`
-      + `try{$d=$p.Presentations.Open(${q(input)},-1,0,0);$d.SaveAs(${q(output)},32);$d.Close()}finally{$p.Quit()}`;
+      + `try{$d=$p.Presentations.Open(${q(input)},-1,0,0);$d.SaveAs(${q(output)},${format === 'pptx' ? 24 : 32})}finally{if($d){$d.Close()}}`;
     return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script]);
   }
   if (process.platform === 'darwin') {
@@ -24,7 +25,7 @@ async function viaPowerPoint(input, output) {
       'on run argv',
       'tell application "Microsoft PowerPoint"',
       'open POSIX file (item 1 of argv)',
-      'save active presentation in (item 2 of argv) as save as PDF',
+      `save active presentation in (item 2 of argv) as save as ${format === 'pptx' ? 'Open XML presentation' : 'PDF'}`,
       'close active presentation saving no',
       'end tell',
       'end run',
@@ -45,12 +46,34 @@ function sofficeCandidates() {
   return list;
 }
 
-async function viaLibreOffice(input, dir) {
+async function viaLibreOffice(input, dir, format = 'pdf') {
   for (const exe of sofficeCandidates()) {
     if (path.isAbsolute(exe) && !exists(exe)) continue;
-    if (await run(exe, ['--headless', '--convert-to', 'pdf', '--outdir', dir, input], 180000)) return true;
+    const profile = pathToFileURL(path.join(path.dirname(dir), 'lo-profile')).href;
+    if (await run(exe, [`-env:UserInstallation=${profile}`, '--headless', '--convert-to', format, '--outdir', dir, input], 180000)
+      && exists(path.join(dir, `deck.${format}`))) return true;
   }
   return false;
+}
+
+/** Legacy .ppt must become OOXML, never an image/PDF, before the renderer can edit it. */
+export async function pptToPptx(bytes) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'freecast-ppt-'));
+  try {
+    const input = path.join(dir, 'deck.ppt');
+    const output = path.join(dir, 'out', 'deck.pptx');
+    fs.mkdirSync(path.dirname(output));
+    fs.writeFileSync(input, bytes);
+    if (!(await viaPowerPoint(input, output, 'pptx')) || !exists(output)) {
+      if (!(await viaLibreOffice(input, path.dirname(output), 'pptx'))) return null;
+    }
+    const result = fs.readFileSync(output);
+    return result.length > 4 && result[0] === 0x50 && result[1] === 0x4b ? result : null;
+  } catch {
+    return null;
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 /** @param {Uint8Array} bytes the .pptx @returns {Promise<Buffer | null>} the PDF */

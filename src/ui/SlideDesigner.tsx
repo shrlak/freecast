@@ -7,6 +7,7 @@ import { NO_GUIDES, snapMove, type SnapGuides } from '../domain/snap';
 import { CANVAS_H, CANVAS_W, ElementView as SlideElementSlot, SlideCanvas } from './SlideCanvas';
 import { useAutosave, useWidth } from './hooks';
 import { AutoTextarea } from './AutoTextarea';
+import { isPdfSlide, PDF_READ_ONLY } from '../domain/importedSlides';
 
 interface Props {
   slide: Slide;
@@ -29,7 +30,7 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
   const fileRef = useRef<HTMLInputElement>(null);
   const k = width / CANVAS_W || 1;
   const selected = els.find((e) => e.id === sel);
-  useAutosave({ els, text }, (v) => onSave(v.els, v.text), { delay: 400 });
+  useAutosave({ els, text }, (v) => onSave(v.els, v.text), { delay: 400, enabled: !isPdfSlide(slide) });
   const update = (id: string, patch: Partial<SlideElement>) => setEls((list) => list.map((e) => (e.id === id ? patchElement(e, patch) : e)));
 
   const add = (el: Omit<SlideElement, 'id' | 'x' | 'y' | 'w' | 'h'> & Partial<SlideElement>) => {
@@ -84,6 +85,10 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
   };
 
   const preview: Slide = { ...slide, text, elements: [] };
+
+  if (isPdfSlide(slide)) return <div className="modal-backdrop"><div className="modal" role="dialog" aria-label="PDF 읽기 전용">
+    <p>{PDF_READ_ONLY}</p><button onClick={onClose}>닫기</button>
+  </div></div>;
 
   return (
     <div className="modal-backdrop" onKeyDown={(e) => {

@@ -19,31 +19,25 @@ const imageSlide = (mediaId: string, group: string): Slide => ({
 
 /**
  * Turn PPTX, PDF and image files into slides, in the order given:
- * PDF → one slide per page, image → one slide, PPTX → its slides as they look (every picture, box and text its own object, plus notes).
+ * PDF → read-only pages; image → one slide; PPTX/PPT → editable objects, plus notes.
  */
 export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => void, onProgress?: (msg: string) => void, onApprox?: (fileName: string) => void): Promise<Slide[]> {
   const slides: Slide[] = [];
   for (const file of files) {
     const base = file.name.replace(/\.[^.]+$/, '');
-    if (/\.pptx$/i.test(file.name)) {
+    if (/\.pptx?$/i.test(file.name)) {
+      const format = /\.ppt$/i.test(file.name) ? 'ppt' : 'pptx';
       const addPptMedia = (m: MediaMeta) => addMedia({ ...m, backgroundHidden: true });
-      onProgress?.(`Reading ${file.name}…`);
-      const data = await file.arrayBuffer();
-      const imported = await importPptx(new Blob([data])).catch(() => []);
-      // Best: let PowerPoint (or LibreOffice) draw the slides, so each one is exactly the original.
-      const pdf = await desktop?.pptxToPdf(new Uint8Array(data)).catch(() => null);
-      if (pdf) {
-        const pages = await renderPdf(new Blob([pdf as BlobPart]), { scale: 2.5, quality: 0.95 }).catch(() => []);
-        if (pages.length) {
-          for (const [i, page] of pages.entries()) {
-            const notes = imported.length === pages.length ? imported[i].notes : undefined;
-            slides.push({ ...imageSlide(await storeImage(page.blob, `${base} ${i + 1}`, addPptMedia), base), notes });
-          }
-          continue;
-        }
+      onProgress?.(`편집 가능한 슬라이드 읽는 중: ${file.name}…`);
+      let data = await file.arrayBuffer();
+      if (format === 'ppt') {
+        onProgress?.(`PPT를 편집 가능한 PPTX로 변환 중: ${file.name}…`);
+        const converted = await desktop?.pptToPptx?.(new Uint8Array(data)).catch(() => null);
+        if (!converted) throw new Error(`${file.name}: 구형 PPT 변환에는 데스크톱 앱과 PowerPoint 또는 LibreOffice가 필요합니다. 설치 후 다시 가져오거나 PowerPoint에서 PPTX로 저장해 주세요. 기존 자료는 유지됩니다.`);
+        data = new Uint8Array(converted).buffer;
       }
-      // No PowerPoint or LibreOffice to draw it: the slides are rebuilt from the file, so text can differ a little.
-      onApprox?.(file.name);
+      const imported = await importPptx(new Blob([data])).catch(() => []);
+      // Keep source objects editable on every platform; never flatten PowerPoint into PDF pages.
       let n = 0;
       // Every picture, box and text of the slide becomes its own object at the same place, size and
       // order, so it looks and plays like the PowerPoint slide and can still be edited.
@@ -57,20 +51,22 @@ export async function filesToSlides(files: File[], addMedia: (m: MediaMeta) => v
       }).catch(() => []);
       if (faithful.length) {
         // Speaker notes come from the plain reader when it sees the same slides (a title would draw the text twice).
-        faithful.forEach((s, i) => slides.push({ ...s, notes: imported.length === faithful.length ? imported[i].notes : undefined }));
+        faithful.forEach((s, i) => slides.push({ ...s, importSource: { format, name: file.name, page: i + 1 }, notes: imported.length === faithful.length ? imported[i].notes : undefined }));
         continue;
       }
+      if (!imported.length) throw new Error(`${file.name}: 슬라이드를 읽지 못했습니다. 기존 자료는 유지됩니다.`);
+      onApprox?.(file.name);
       for (const [i, s] of imported.entries()) {
         const mediaId = s.image ? await storeImage(s.image, `${base} ${i + 1}`, addPptMedia) : undefined;
         slides.push({
-          id: uid('s'), group: base, title: s.title, text: s.text, notes: s.notes,
+          id: uid('s'), importSource: { format, name: file.name, page: i + 1 }, group: base, title: s.title, text: s.text, notes: s.notes,
           background: mediaId ? { kind: 'media', mediaId, mediaType: 'image', fit: 'contain' } : undefined,
         });
       }
     } else if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
       onProgress?.(`Rendering ${file.name}…`);
       for (const page of await renderPdf(file, { scale: 2.5, quality: 0.95 })) {
-        slides.push(imageSlide(await storeImage(page.blob, `${base} p${page.page}`, addMedia), base));
+        slides.push({ ...imageSlide(await storeImage(page.blob, `${base} p${page.page}`, (m) => addMedia({ ...m, backgroundHidden: true })), base), importSource: { format: 'pdf', name: file.name, page: page.page } });
       }
     } else if (file.type.startsWith('image/')) {
       slides.push(imageSlide(await storeImage(file, file.name, addMedia), base));

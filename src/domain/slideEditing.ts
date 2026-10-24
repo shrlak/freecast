@@ -2,6 +2,7 @@ import type { Presentation, Slide } from './types';
 import { activeArrangement, expandCode, sequence } from './arrangement';
 import { uid } from './lyrics';
 import { numberRepeatedLabels } from './sunday/slidePlanner';
+import { editableSlidePatch } from './importedSlides';
 
 const groupKey = (group: string) => expandCode(group.replace(/\s+/g, '')).replace(/\s+/g, '').toLowerCase();
 const groupCode = (g: string) => g.replace(/Pre-Chorus/i, 'PC').replace(/Chorus/i, 'C').replace(/Verse/i, 'V').replace(/Bridge/i, 'B').replace(/Intro/i, 'I').replace(/Interlude/i, 'INT').replace(/Ending/i, 'E').replace(/Tag/i, 'T').replace(/\s+/g, '');
@@ -108,7 +109,10 @@ export function songSourceFromSlides(p: Presentation, slides = p.slides): NonNul
 
 /** Change one slide without rebuilding its neighbors, IDs, media or arrangements. */
 export function editSlide(p: Presentation, slideId: string, patch: Partial<Omit<Slide, 'id'>>, at: number): Presentation {
-  if (!p.slides.some((s) => s.id === slideId)) return p;
+  const target = p.slides.find((s) => s.id === slideId);
+  if (!target) return p;
+  patch = editableSlidePatch(target, patch);
+  if (!Object.keys(patch).length) return p;
   const slides = p.slides.map((s) => s.id === slideId ? { ...s, ...patch } : s);
   const lyricsChanged = ('text' in patch || 'group' in patch) && (p.songSource || p.lyricsLayout);
   const visual = ['text', 'title', 'subtext', 'elements', 'style', 'background', 'group', 'caption'].some((key) => key in patch);

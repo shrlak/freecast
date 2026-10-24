@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
 import type { Action } from '../../domain/reducer';
 import type { Library, Presentation, Slide, Theme } from '../../domain/types';
 import { readConti } from '../../domain/recognition/conti';
-import { putMedia } from '../../domain/media';
 import { presentationFromSongFile } from '../../domain/io/songFormats';
 import { findSong, songToPresentation, withProgression, type SongDraft } from '../../domain/sunday/songs';
 import { CHURCH_BACKGROUNDS } from '../../domain/defaults';
@@ -11,7 +10,7 @@ import { acceptedDrafts, type ContiReview } from './contiReview';
 import { parseRefs } from '../../domain/bible/refs';
 import { loadScriptureChunks } from '../../domain/bible/slides';
 import { uid } from '../../domain/lyrics';
-import { loadServiceTemplates, pptxSlides, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
+import { loadServiceTemplates, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
 import { templateDeckUpdates } from '../../domain/templates/register';
 import { announcementSlides, refreshFront, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
 import { createLiveService, findLiveService, ensureServiceSection, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
@@ -317,22 +316,8 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     for (const file of files) {
       const beforeCount = added.length;
       const name = file.name.replace(/\.[^.]+$/, '');
-      if (/\.pptx$/i.test(file.name)) {
-        await pptxSlides(await file.arrayBuffer(), {
-          group: () => name,
-          mediaId: () => uid('m'),
-          store: async (mid, blob) => {
-            await putMedia(mid, blob);
-            dispatch({ type: 'media/add', media: { id: mid, name: `${name} ${added.length + 1}`, type: 'image', backgroundHidden: true } });
-          },
-          onSlide: (s, n, total) => {
-            setBusy(`설교 슬라이드 ${n + 1}/${total}: ${name}`);
-            push(s);
-          },
-        });
-      } else {
-        for (const s of await filesToSlides([file], (m) => dispatch({ type: 'media/add', media: m }), setBusy)) push(s);
-      }
+      setBusy(`설교 슬라이드 읽는 중: ${name}`);
+      for (const s of await filesToSlides([file], (m) => dispatch({ type: 'media/add', media: m }), setBusy)) push(s);
       if (added.length === beforeCount) throw new Error(`${file.name}: 슬라이드를 읽지 못했습니다. 기존 PPT는 유지됩니다.`);
     }
     const replacement = replaceDeckSlides(original, added);
@@ -343,7 +328,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   const drop = (files: File[]) => {
     const lyricFiles = files.filter((f) => LYRIC_FILE.test(f.name));
     const contiFile = files.find((f) => /\.pdf$/i.test(f.name) && CONTI_NAME.test(f.name));
-    const sermonFiles = files.filter((f) => !lyricFiles.includes(f) && f !== contiFile && (/\.(pptx|pdf)$/i.test(f.name) || f.type.startsWith('image/')));
+    const sermonFiles = files.filter((f) => !lyricFiles.includes(f) && f !== contiFile && (/\.(pptx?|pdf)$/i.test(f.name) || f.type.startsWith('image/')));
     (async () => {
       if (contiFile) await conti(contiFile);
       if (lyricFiles.length) await lyrics(lyricFiles);

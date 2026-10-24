@@ -147,6 +147,8 @@ export type SlideAction = MacroStep | { type: 'runMacro'; macroId: string };
 
 export interface Slide {
   id: string;
+  /** Original import type: PowerPoint objects remain editable; PDF page content is read-only. */
+  importSource?: { format: 'pptx' | 'ppt' | 'pdf'; name: string; page: number };
   /** Original slide identity when a repeated arrangement occurrence is made independent. */
   sourceSlideId?: string;
   /** Main text is song lyrics; corner QR codes must leave equal space on both sides. */

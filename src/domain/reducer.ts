@@ -9,6 +9,7 @@ import { attributeChange, mergeActivity } from './activity';
 import { sequence } from './arrangement';
 import { deleteSlides, deleteSlidesAt, editSlide, editSlideAt } from './slideEditing';
 import { centerAddedLyricSlides, centerSongLyrics } from './songCentering';
+import { preservePdfPages } from './importedSlides';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
@@ -273,7 +274,7 @@ function core(s: AppState, a: Action): AppState {
     case 'presentation/update':
       // Editing an online song makes it this computer's own copy (saved locally from then on).
       return refreshLive(mapPres(s, a.id, (p) => {
-        const next = { ...p, ...a.patch, online: undefined };
+        const next = { ...p, ...a.patch, ...(a.patch.slides ? { slides: preservePdfPages(p.slides, a.patch.slides) } : {}), online: undefined };
         return a.patch.slides ? centerAddedLyricSlides(p, next) : next;
       }), a.id);
     case 'trash/restore':

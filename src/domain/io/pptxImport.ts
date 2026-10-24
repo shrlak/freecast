@@ -35,7 +35,13 @@ function slideNumber(path: string): number {
  */
 export async function importPptx(file: Blob): Promise<ImportedSlide[]> {
   const zip = await JSZip.loadAsync(await file.arrayBuffer());
-  const slidePaths = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p)).sort((a, b) => slideNumber(a) - slideNumber(b));
+  const fallback = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p)).sort((a, b) => slideNumber(a) - slideNumber(b));
+  const presentation = (await zip.file('ppt/presentation.xml')?.async('string')) ?? '';
+  const relationships = (await zip.file('ppt/_rels/presentation.xml.rels')?.async('string')) ?? '';
+  const attrs = (xml: string, name: string) => new RegExp(`(?:^|\\s)${name}=["']([^"']+)["']`).exec(xml)?.[1];
+  const targets = new Map([...relationships.matchAll(/<Relationship\b[^>]*>/g)].map(([xml]) => [attrs(xml, 'Id'), attrs(xml, 'Target')]));
+  const ordered = [...presentation.matchAll(/<p:sldId\b[^>]*>/g)].map(([xml]) => targets.get(attrs(xml, 'r:id'))).filter((p): p is string => !!p).map((p) => new URL(p, 'https://x/ppt/presentation.xml').pathname.slice(1));
+  const slidePaths = ordered.length ? ordered : fallback;
   const slides: ImportedSlide[] = [];
   for (const path of slidePaths) {
     const xml = await zip.file(path)!.async('string');

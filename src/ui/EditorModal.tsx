@@ -3,6 +3,7 @@ import type { Presentation, SongMeta, Theme, Transition, TransitionKind } from '
 import { parseLyrics, serializeLyrics, uid } from '../domain/lyrics';
 import { useAutosave } from './hooks';
 import { AutoTextarea } from './AutoTextarea';
+import { isPdfSlide, PDF_READ_ONLY } from '../domain/importedSlides';
 
 interface Props {
   presentation: Presentation | null;
@@ -21,6 +22,7 @@ Chorus line one
 Chorus line two`;
 
 export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
+  const hasPdf = presentation?.slides.some(isPdfSlide) ?? false;
   const [title, setTitle] = useState(presentation?.title ?? '');
   const [folder, setFolder] = useState(presentation?.folder ?? 'Songs');
   const [text, setText] = useState(() => (presentation ? serializeLyrics(presentation.slides) : ''));
@@ -29,7 +31,7 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
   const [transition, setTransition] = useState<Transition | undefined>(presentation?.transition);
   const [showCopyright, setShowCopyright] = useState(!!presentation?.showCopyright);
   const [bgEffect, setBgEffect] = useState(presentation?.bgEffect ?? { dim: 0, blur: 0 });
-  const preview = useMemo(() => parseLyrics(text, { maxLines }), [text, maxLines]);
+  const preview = useMemo(() => hasPdf ? presentation!.slides : parseLyrics(text, { maxLines }), [hasPdf, presentation, text, maxLines]);
   const setM = (k: keyof SongMeta, v: string) => setMeta((m) => ({ ...m, [k]: v || undefined }));
 
   const id = useRef(presentation?.id ?? uid('p'));
@@ -76,7 +78,8 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
               <input className="title-input grow" placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
               <input placeholder="Folder" value={folder} onChange={(e) => setFolder(e.target.value)} style={{ width: 140 }} />
             </div>
-            <AutoTextarea className="lyrics-input" placeholder={PLACEHOLDER} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
+            {hasPdf && <p className="hint">{PDF_READ_ONLY} 다른 슬라이드는 슬라이드별 편집을 사용해 주세요.</p>}
+            <AutoTextarea className="lyrics-input" disabled={hasPdf} placeholder={PLACEHOLDER} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
             <p className="hint">
               Blank line = new slide. Section lines like <code>[Verse 1]</code>, <code>Chorus</code> or <code>Bridge:</code> label the slides that follow.
               Wrap a line in <code>**…**</code> to make it bold.
@@ -108,7 +111,7 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
               <strong>{preview.length} slides</strong>
               <label className="field-inline">
                 Max lines/slide
-                <select value={maxLines} onChange={(e) => setMaxLines(Number(e.target.value))}>
+                <select disabled={hasPdf} value={maxLines} onChange={(e) => setMaxLines(Number(e.target.value))}>
                   <option value={0}>No limit</option>
                   {[1, 2, 3, 4, 6].map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>

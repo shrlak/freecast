@@ -13,7 +13,7 @@ import { setAiConfigProvider } from '../server/ai.mjs';
 import { startTunnel } from '../server/tunnel.mjs';
 import { aiConfig, DEFAULT_PROXY } from '../server/aiProviders.mjs';
 import { linkAddress, remoteWebAppAddress, remotePairingAddress, teamWebAppAddress, teamPairingAddress, newLinkCredentials, registerLink, removeLink } from '../server/remoteLink.mjs';
-import { pptxToPdf } from './pptxToPdf.mjs';
+import { pptxToPdf, pptToPptx } from './pptxToPdf.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(here, '..');
@@ -352,6 +352,7 @@ ipcMain.handle('desktop:copyTeamLink', (e) => {
   clipboard.writeText(teamPairingAddress(REMOTE_PROXY, settings.teamLinkId)); return true;
 });
 ipcMain.handle('desktop:pptxToPdf', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptxToPdf(bytes) : null));
+ipcMain.handle('desktop:pptToPptx', (e, bytes) => (fromMain(e) && bytes instanceof Uint8Array ? pptToPptx(bytes) : null));
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
   if (!fromMain(e) || typeof url !== 'string') return;
   openView(url, typeof displayId === 'number' ? displayId : displayId === null ? null : undefined);

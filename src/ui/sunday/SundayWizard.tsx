@@ -229,9 +229,9 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
           )}
           {step === 2 && (
             <div className="stack narrow">
-              <p>설교 PPT (.pptx) or PDF — its slides go right after the scripture. Skip if there is none.</p>
+              <p>설교 PPT (.pptx, .ppt) or PDF — its slides go right after the scripture. Skip if there is none.</p>
               <button className="primary" onClick={() => sermonRef.current?.click()}>Upload sermon file</button>
-              <input ref={sermonRef} type="file" accept=".pptx,.pdf,image/*" multiple hidden onChange={(e) => { importInto(e.target.files, 'sermonSlides'); e.target.value = ''; }} />
+              <input ref={sermonRef} type="file" accept=".pptx,.ppt,.pdf,image/*" multiple hidden onChange={(e) => { importInto(e.target.files, 'sermonSlides'); e.target.value = ''; }} />
               {slideList(d.sermonSlides, 'sermonSlides')}
             </div>
           )}
@@ -264,7 +264,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
             <div className="stack narrow">
               <p>추가 자료: PDF (one slide per page), images, PPTX. They go after the Back/End slides, in this order.</p>
               <button onClick={() => extraRef.current?.click()}>＋ Add files</button>
-              <input ref={extraRef} type="file" accept=".pdf,.pptx,image/*" multiple hidden onChange={(e) => { importInto(e.target.files, 'extraSlides'); e.target.value = ''; }} />
+              <input ref={extraRef} type="file" accept=".pdf,.pptx,.ppt,image/*" multiple hidden onChange={(e) => { importInto(e.target.files, 'extraSlides'); e.target.value = ''; }} />
               {slideList(d.extraSlides, 'extraSlides')}
             </div>
           )}

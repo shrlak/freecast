@@ -36,6 +36,8 @@ export interface DesktopBridge {
   copyTeamLink(): Promise<boolean>;
   /** A .pptx drawn by PowerPoint / LibreOffice on this computer, as a PDF; null when neither can. */
   pptxToPdf(bytes: Uint8Array): Promise<Uint8Array | null>;
+  /** Legacy binary PPT → editable PPTX via locally installed PowerPoint or LibreOffice. */
+  pptToPptx(bytes: Uint8Array): Promise<Uint8Array | null>;
   openView(url: string, displayId?: number | null): Promise<void>;
   /** Slide show starts: cover the projector (or this screen) right away, like PowerPoint. */
   present(url: string): Promise<void>;

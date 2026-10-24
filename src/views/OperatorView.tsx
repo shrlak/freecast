@@ -432,7 +432,7 @@ export function OperatorView() {
         notify('Importing…');
         const approx: string[] = [];
         const toSlides = (list: File[]) => filesToSlides(list, (m) => dispatch({ type: 'media/add', media: m }), notify, (n) => approx.push(n));
-        const isPptx = (f: File) => /\.pptx$/i.test(f.name);
+        const isPptx = (f: File) => /\.pptx?$/i.test(f.name);
         let total = 0;
         // Each PowerPoint file becomes its own presentation in a new 재생목록 named after the file.
         for (const f of files.filter(isPptx)) {
@@ -462,7 +462,7 @@ export function OperatorView() {
           total += slides.length;
         }
         notify(approx.length
-          ? `Imported ${total} slides — ${approx.join(', ')} could not be drawn exactly (PowerPoint or LibreOffice is needed), so some text may differ`
+          ? `Imported ${total} slides — ${approx.join(', ')} was imported with simplified layout; text remains editable`
           : `Imported ${total} slides`);
       }
     } catch (e) {

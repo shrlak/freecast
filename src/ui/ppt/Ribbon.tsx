@@ -1,3 +1,4 @@
+import { isPdfSlide, PDF_READ_ONLY } from '../../domain/importedSlides';
 import { formatStoragePercent } from '../../domain/cloudStorage';
 import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
@@ -71,7 +72,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
   const upload = (kind: 'conti' | 'lyrics' | 'sermon') => {
     uploadKind.current = kind;
     const input = uploadRef.current!;
-    input.accept = kind === 'conti' ? 'application/pdf,.pdf' : kind === 'lyrics' ? ACCEPT.lyrics : '.pptx,.pdf,image/*';
+    input.accept = kind === 'conti' ? 'application/pdf,.pdf' : kind === 'lyrics' ? ACCEPT.lyrics : '.pptx,.ppt,.pdf,image/*';
     input.multiple = kind !== 'conti';
     input.click();
   };
@@ -119,6 +120,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
 
   const addElement = (el: Omit<SlideElement, 'id'>) => {
     if (!p || !slide) return cmd.notify('먼저 슬라이드를 선택하세요');
+    if (isPdfSlide(slide)) return cmd.notify(PDF_READ_ONLY);
     updateSlide({ elements: [...(slide.elements ?? []), { id: uid('el'), ...el }] });
     onDesign();
   };
@@ -212,7 +214,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="📄" label="새로 만들기" onClick={() => cmd.open('new')} />
               <div className="rb-col">
                 <Small icon="✎" label="슬라이드별 편집" disabled={!p} onClick={() => cmd.open('edit')} />
-                <Small icon="✏️" label="개체 편집" disabled={!slide} onClick={onDesign} />
+                <Small icon="✏️" label="개체 편집" disabled={!slide || isPdfSlide(slide)} onClick={onDesign} />
                 <Small icon="📋" label="재생목록에 추가" disabled={!p} onClick={() => p && dispatch({ type: 'playlist/addItem', item: { id: uid('pli'), presentationId: p.id } })} />
               </div>
             </Group>
@@ -238,17 +240,17 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               {SLIDE_TEMPLATES.map((t) => <Big key={t.id} icon={t.icon} label={t.name} disabled={!p} onClick={() => addFromTemplate(t)} />)}
             </Group>
             <Group label="개체">
-              <Big icon="T" label="텍스트 상자" disabled={!slide} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 320, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />
-              <Big icon="🖼" label="그림" disabled={!slide} onClick={() => { insertKind.current = 'image'; if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.click(); } }} />
-              <Big icon="🎬" label="비디오" disabled={!slide} onClick={() => { insertKind.current = 'video'; if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.click(); } }} />
-              <Big icon="⬛" label="도형" disabled={!slide} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 100, y: 820, w: 1240, h: 200 })} />
-              <Big icon="⚪" label="원" disabled={!slide} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 570, y: 390, w: 300, h: 300 })} />
-              <Big icon="📷" label="카메라" disabled={!slide} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 320, y: 315, w: 800, h: 450 })} />
+              <Big icon="T" label="텍스트 상자" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 320, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />
+              <Big icon="🖼" label="그림" disabled={!slide || isPdfSlide(slide)} onClick={() => { insertKind.current = 'image'; if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.click(); } }} />
+              <Big icon="🎬" label="비디오" disabled={!slide || isPdfSlide(slide)} onClick={() => { insertKind.current = 'video'; if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.click(); } }} />
+              <Big icon="⬛" label="도형" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 100, y: 820, w: 1240, h: 200 })} />
+              <Big icon="⚪" label="원" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 570, y: 390, w: 300, h: 300 })} />
+              <Big icon="📷" label="카메라" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 320, y: 315, w: 800, h: 450 })} />
             </Group>
             <Group label="텍스트">
-              <Small icon="🕒" label="현재 시각 {time}" disabled={!slide} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{time}` })} />
-              <Small icon="📅" label="날짜 {date}" disabled={!slide} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{date}` })} />
-              <Small icon="⏱" label="타이머" disabled={!slide || !lib.timers.length} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{timer:${lib.timers[0]?.name}}` })} />
+              <Small icon="🕒" label="현재 시각 {time}" disabled={!slide || isPdfSlide(slide)} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{time}` })} />
+              <Small icon="📅" label="날짜 {date}" disabled={!slide || isPdfSlide(slide)} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{date}` })} />
+              <Small icon="⏱" label="타이머" disabled={!slide || isPdfSlide(slide) || !lib.timers.length} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{timer:${lib.timers[0]?.name}}` })} />
             </Group>
             <input ref={fileRef} type="file" hidden onChange={(e) => insertMedia(e.target.files?.[0])} />
           </>
@@ -337,7 +339,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="⛪" label="예배 열기" title="이번 주 주일예배를 교회 템플릿으로 엽니다 — 올리는 자료가 바로 들어갑니다" disabled={working} onClick={service.open} />
               {contiButton}
               <Big icon="🎵" label="가사 올리기" title="가사 파일(.txt/.md 등)을 찬양 순서에 넣습니다" disabled={working} onClick={() => upload('lyrics')} />
-              <Big icon="🎤" label="설교 슬라이드" title="설교 PPTX/PDF/이미지로 기존 설교 슬라이드를 교체합니다. 예배 순서와 설정은 유지됩니다. 여러 파일은 한 번에 선택하세요." disabled={working} onClick={() => upload('sermon')} />
+              <Big icon="🎤" label="설교 슬라이드" title="설교 PPTX/PPT/PDF/이미지로 기존 설교 슬라이드를 교체합니다. 예배 순서와 설정은 유지됩니다. 여러 파일은 한 번에 선택하세요." disabled={working} onClick={() => upload('sermon')} />
             </Group>
             <Group label="예배 준비"><Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} /><Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} /><Big icon="🗑" label="휴지통" onClick={() => cmd.open('trash')} />
               <Big icon="🕘" label="복원 지점" onClick={() => cmd.open('restore')} /></Group>
