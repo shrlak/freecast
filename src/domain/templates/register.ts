@@ -41,7 +41,7 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
   const sunday = upcomingSunday(now);
   const prayer = (lib.sunday.prayerText ?? '').trim();
   const frontKey = `front:${tpl.keys.front}|${mdy(sunday)}|${hash(prayer)}`;
-  if (front && front.templateKey !== frontKey) {
+  if (front && !front.protected && front.templateKey !== frontKey) {
     const topics = parsePrayerTopics(prayer);
     // Same church file as before: only the date and the 기도 준비 slides change, edits stay.
     if (front.templateKey?.startsWith(`front:${tpl.keys.front}|`)) out.push({ id: front.id, patch: { templateKey: frontKey, slides: refreshFront(front.slides, tpl, sunday, topics) } });
@@ -49,7 +49,7 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
   }
 
   const back = byId(lib.sunday.backId);
-  if (back && tpl.back?.length && tpl.keys.back) {
+  if (back && !back.protected && tpl.back?.length && tpl.keys.back) {
     const title = lib.sunday.confessionSong.trim() || DEFAULT_CONFESSION_SONG;
     const song = findConfessionSong(lib.presentations, title);
     const lines = lib.sunday.linesPerSlide;

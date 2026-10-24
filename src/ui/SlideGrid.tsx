@@ -11,6 +11,7 @@ import { SlideDesigner } from './SlideDesigner';
 import { TimelineBar } from './TimelineBar';
 import { resolveBackground } from '../domain/autoBackground';
 import { NameDialog } from './NameDialog';
+import { MaterialProtectionButton } from './MaterialProtection';
 
 interface Props {
   state: AppState;
@@ -121,6 +122,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
       <div className="toolbar">
         <h1 className="truncate">{p.title}{p.meta?.key && <span className="key-badge">{p.meta.key}</span>}</h1>
         <div className="row gap-s wrap">
+          <MaterialProtectionButton presentation={p} dispatch={dispatch} />
           <label className="field-inline">
             Theme
             <select value={p.themeId} onChange={(e) => dispatch({ type: 'presentation/update', id: p.id, patch: { themeId: e.target.value } })}>
@@ -137,7 +139,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
           <button disabled={busy} title="AI: add an English translation line under each slide" onClick={translate}>{busy ? 'Translating…' : '✨ Translate'}</button>
           <button title="Download as PowerPoint" onClick={() => exportPptx(state.library, { presentation: p }, p.title).catch((e) => notify(String(e)))}>⇩ PPTX</button>
           <button title="Duplicate" onClick={() => dispatch({ type: 'presentation/create', presentation: { ...p, id: uid('p'), title: `${p.title} copy`, slides: p.slides.map((s) => ({ ...s, id: uid('s') })) } })}>⧉</button>
-          <button className="danger" onClick={() => setDeleting(true)}>자료 전체 삭제…</button>
+          <button className="danger" disabled={p.protected} onClick={() => setDeleting(true)}>자료 전체 삭제…</button>
         </div>
       </div>
       <ArrangementBar p={p} dispatch={dispatch} />
@@ -171,7 +173,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
           dispatch({ type: 'presentation/delete', id: p.id });
         }} />}
       {inspected && (
-        <SlideInspector
+        <SlideInspector readOnly={p.protected}
           slide={inspected}
           library={state.library}
           onChange={(patch) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: inspected.id, patch })}
@@ -183,7 +185,7 @@ export function SlideGrid({ state, dispatch, onEdit, onEditSlide, onThemes, noti
         const sl = p.slides.find((x) => x.id === design);
         if (!sl) return null;
         return (
-          <SlideDesigner
+          <SlideDesigner readOnly={p.protected}
             slide={sl} theme={theme} background={resolveBackground(sl, p)} media={state.library.media}
             addMedia={(m) => dispatch({ type: 'media/add', media: m })}
             onClose={() => setDesign(null)}

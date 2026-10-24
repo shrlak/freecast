@@ -5,6 +5,7 @@ export const ACTIVITY_LIMIT = 2000;
 const SKIP = new Set(['trash/expire', 'library/merge', 'online/songs', 'songs/dedupe', 'services/finish', 'device/register', 'activity/record', 'usage/clear']);
 const LABELS: Record<string, string> = {
   'presentation/create': '프레젠테이션 추가', 'presentation/createMany': '자료 가져오기', 'presentation/update': '프레젠테이션 수정', 'presentation/delete': '프레젠테이션 삭제',
+  'presentation/protect': '자료 보호 설정',
   'trash/restore': '휴지통 복원', 'trash/purge': '휴지통 영구 삭제',
   'slide/update': '슬라이드 수정', 'slide/delete': '슬라이드 삭제', 'media/add': '미디어 추가', 'media/remove': '미디어 삭제', 'sunday/settings': '예배 설정 수정',
   'playlist/retention': '예배 자동 삭제 설정', 'playlist/set': '예배 순서 수정', 'playlist/create': '재생목록 추가', 'playlist/rename': '재생목록 이름 변경', 'playlist/delete': '재생목록 삭제',

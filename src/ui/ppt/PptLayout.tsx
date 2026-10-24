@@ -18,6 +18,7 @@ import { paneSource, selectedRow, slidePaneRows, type PaneSlide } from './paneRo
 import { resolveBackground } from '../../domain/autoBackground';
 import { NameDialog } from '../NameDialog';
 import { AutoTextarea } from '../AutoTextarea';
+import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
 
 const LOCK_MSG = '🔒 화면에 표시 중이라 삭제·추가가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요';
 
@@ -84,6 +85,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   const picked = (): PaneSlide[] => multi.length && selected ? paneSlides.filter((r) => sameBlock(r) && multi.includes(r.key)) : selected ? [selected] : [];
   const deleteSlides = (pickedRows: PaneSlide[]) => {
     if (!p || !pickedRows.length) return;
+    if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
     const seqs = pickedRows.map((r) => r.seq);
     dispatch({ type: 'slide/delete', presentationId: p.id, slideIds: pickedRows.map((r) => r.slide.id), seqs });
     const pages = sequence(p);
@@ -144,6 +146,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
       // Enter adds a blank white slide after the current one (Enter on a focused button still presses it).
       if (e.key === 'Enter' && !selEl && p && slide && !e.metaKey && !e.ctrlKey && !e.altKey && !t.closest('button,a,[role="button"]')) {
         e.preventDefault();
+        if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
         if (locked) return cmd.notify(LOCK_MSG);
         const n = blankSlide(slide.group);
         const slides = [...p.slides];
@@ -176,6 +179,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
       const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'));
       if (!file) return;
       e.preventDefault();
+      if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
       const id = uid('m');
       const at = slide ? p.slides.indexOf(slide) + 1 : p.slides.length;
       putMedia(id, file).then(() => {
@@ -254,7 +258,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
             <div className="ppt-stage">
               {p && slide ? (
                 <div className="ppt-canvas">
-                  <CanvasEditor key={`${p.id}:${selected?.key}`} slide={slide} theme={theme} background={background} bgEffect={p.bgEffect}
+                  <CanvasEditor key={`${p.id}:${selected?.key}`} readOnly={p.protected} slide={slide} theme={theme} background={background} bgEffect={p.bgEffect}
                     selectedId={selEl} onSelect={setSelEl}
                     onLockedDelete={cmd.locked && state.live.slide?.id === slide.id ? () => cmd.notify(LOCK_MSG) : undefined}
                     onChange={(patch) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, seq: selected?.seq, sequenceLength: sequence(p).length, patch })} />
@@ -271,7 +275,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
               )}
             </div>
             {p && slide && (
-              <AutoTextarea className="ppt-notes" placeholder="슬라이드 노트를 추가하려면 클릭하세요 (무대 화면에 표시)"
+              <AutoTextarea disabled={p.protected} className="ppt-notes" placeholder="슬라이드 노트를 추가하려면 클릭하세요 (무대 화면에 표시)"
                 value={slide.notes ?? ''} onChange={(e) => dispatch({ type: 'slide/update', presentationId: p.id, slideId: slide.id, seq: selected?.seq, sequenceLength: sequence(p).length, patch: { notes: e.target.value || undefined } })} />
             )}
           </main>
@@ -304,7 +308,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
         </div>
       )}
       {designing && p && slide && (
-        <SlideDesigner slide={slide} theme={theme} background={background} media={state.library.media}
+        <SlideDesigner readOnly={p.protected} slide={slide} theme={theme} background={background} media={state.library.media}
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
           onClose={() => setDesigning(false)}
           onSave={(elements, text) => {

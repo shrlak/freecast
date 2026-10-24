@@ -10,6 +10,7 @@ import { sequence } from './arrangement';
 import { deleteSlides, deleteSlidesAt, editSlide, editSlideAt } from './slideEditing';
 import { centerAddedLyricSlides, centerSongLyrics } from './songCentering';
 import { preservePdfPages } from './importedSlides';
+import { blockedProtectedAction, isProtected, keepProtectedMaterials, protectionWinners, mergeProtectionChanges } from './materialProtection';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
 import { createEmptyLive } from './defaults';
@@ -43,6 +44,7 @@ type DomainAction =
   | { type: 'presentation/createMany'; presentations: Presentation[]; playlist?: Playlist }
   | { type: 'presentation/update'; id: string; patch: Partial<Omit<Presentation, 'id'>> }
   | { type: 'presentation/delete'; id: string }
+  | { type: 'presentation/protect'; id: string; on: boolean }
   | { type: 'services/finish'; playlistIds: string[]; presentationIds: string[]; mediaIds: string[] }
   | { type: 'slide/update'; presentationId: string; slideId: string; seq?: number; sequenceLength?: number; patch: Partial<Omit<Slide, 'id'>> }
   | { type: 'slide/delete'; presentationId: string; slideIds: string[]; seqs?: number[] }
@@ -257,6 +259,7 @@ function stepToAction(step: MacroStep, now: number): Action {
 }
 
 function core(s: AppState, a: Action): AppState {
+  if (blockedProtectedAction(s.library, a)) return s;
   if (isExtra(a)) return extraReducer(s, a);
   const lib = s.library;
   switch (a.type) {
@@ -274,9 +277,18 @@ function core(s: AppState, a: Action): AppState {
     case 'presentation/update':
       // Editing an online song makes it this computer's own copy (saved locally from then on).
       return refreshLive(mapPres(s, a.id, (p) => {
-        const next = { ...p, ...a.patch, ...(a.patch.slides ? { slides: preservePdfPages(p.slides, a.patch.slides) } : {}), online: undefined };
+        const next = { ...p, ...a.patch, protected: p.protected, protectionChangedAt: p.protectionChangedAt, ...(a.patch.slides ? { slides: preservePdfPages(p.slides, a.patch.slides) } : {}), online: undefined };
         return a.patch.slides ? centerAddedLyricSlides(p, next) : next;
       }), a.id);
+    case 'presentation/protect': {
+      const p = findPres(lib, a.id);
+      if (!p || isProtected(p) === a.on) return s;
+      const at = Math.max(a.occurredAt ?? Date.now(), (p.protectionChangedAt ?? 0) + 1);
+      return setLib(s, { protectionChanges: [...mergeProtectionChanges(lib).filter((c) => c.id !== a.id), { id: a.id, on: a.on, at }],
+        presentations: lib.presentations.map((p) => p.id === a.id ? { ...p, protected: a.on,
+        protectionChangedAt: at,
+        online: undefined, folder: p.online ? 'Songs' : p.folder, updatedAt: a.occurredAt ?? Date.now() } : p) });
+    }
     case 'trash/restore':
       return reconcileLive(s, { ...s, library: restoreTrash(lib, a.id, a.occurredAt ?? Date.now(), a.seq) });
     case 'trash/purge':
@@ -297,10 +309,10 @@ function core(s: AppState, a: Action): AppState {
       };
     }
     case 'services/finish': {
-      const gone = new Set(a.presentationIds);
+      const gone = new Set(a.presentationIds.filter((id) => !isProtected(findPres(lib, id))));
       const drop = new Set(a.playlistIds);
       const trash = [...(lib.trash ?? []), ...lib.presentations.filter((p) => gone.has(p.id)).map((p) => trashPresentation(lib, p, a.occurredAt ?? Date.now()))];
-      const removedMedia = new Set(exclusivePresentationMedia({ ...lib, trash }, a.presentationIds));
+      const removedMedia = new Set(exclusivePresentationMedia({ ...lib, trash }, [...gone]));
       let playlists = lib.playlists.filter((p) => !drop.has(p.id)).map((pl) => ({ ...pl, items: pl.items.filter((i) => i.kind === 'header' || !gone.has(i.presentationId)) }));
       if (!playlists.length) playlists = [{ id: uid('pl'), name: '재생목록', items: [] }];
       return {
@@ -460,7 +472,7 @@ function core(s: AppState, a: Action): AppState {
     case 'sunday/settings':
       return setLib(s, { sunday: { ...lib.sunday, ...a.patch } });
     case 'library/replace':
-      return { ...createInitialState(a.library), past: [...s.past, s.library].slice(-60), pastPositions: [...s.pastPositions, { before: s.cursor, after: null }].slice(-60) };
+      return { ...createInitialState(keepProtectedMaterials({ ...a.library, protectionChanges: mergeProtectionChanges(lib, a.library) }, protectionWinners(lib), [lib])), past: [...s.past, s.library].slice(-60), pastPositions: [...s.pastPositions, { before: s.cursor, after: null }].slice(-60) };
     case 'device/register':
       return setLib(s, { devices: [...(lib.devices ?? []).filter((d) => d.id !== a.device.id), a.device] });
     case 'activity/record':
@@ -581,6 +593,9 @@ function reduceState(s: AppState, a: Action): AppState {
   }
   const next = core(s, a);
   if (next === s) return s;
+  // Lock changes form a history boundary: Undo cannot silently unlock or restore an older protected deck.
+  const protectionState = (lib: Library) => JSON.stringify(mergeProtectionChanges(lib).sort((a, b) => a.id.localeCompare(b.id)));
+  if (a.type === 'presentation/protect' || (next.library !== s.library && protectionState(next.library) !== protectionState(s.library))) return syncLive({ ...next, past: [], future: [], pastPositions: [], futurePositions: [], lastKey: null });
   if ((a.type === 'trash/purge' || a.type === 'trash/expire') && next.library !== s.library) return syncLive({ ...next, past: [], future: [], pastPositions: [], futurePositions: [], lastKey: null });
   if (next.library === s.library || a.type.startsWith('live/') || NO_HISTORY.has(a.type)) return syncLive(next);
   const key = historyKey(a);

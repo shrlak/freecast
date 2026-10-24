@@ -56,6 +56,7 @@ export function normalizeLibrary(value: unknown): Library | null {
     themes: [...(themes as Library['themes']), ...DEFAULT_THEMES.filter((t) => !themes.some((x) => isObj(x) && x.id === t.id))],
     playlists,
     backgroundLibraryReset: true,
+    protectionChanges: arr<NonNullable<Library['protectionChanges']>[number]>(value.protectionChanges, []).filter((c) => c && typeof c.id === 'string' && typeof c.on === 'boolean' && Number.isFinite(c.at)),
     media: arr<MediaMeta>(value.media, []).map((m) =>
       value.backgroundLibraryReset === true || m.type === 'audio' ? m : { ...m, backgroundHidden: true }),
     timers: arr(value.timers, seed.timers),

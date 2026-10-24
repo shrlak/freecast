@@ -1,5 +1,6 @@
 import { TeamRequestPanel } from '../ui/TeamRequestPanel';
 import { ConnectionQualityBadge } from '../ui/ConnectionQualityBadge';
+import { HoldToEndButton } from '../ui/HoldToEndButton';
 import type { TeamRequest } from '../domain/teamRequests';
 import { phoneIdentity } from '../domain/phoneIdentity';
 import type { RemoteControlState } from '../domain/remoteControl';
@@ -143,10 +144,7 @@ export function RemoteView() {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8M7 5.5a8 8 0 1 0 10 0" /></svg>
           <span>Start</span>
         </button>
-        <button className="remote-end" aria-label="End slideshow" title="End slideshow" disabled={!control?.canControl} onClick={() => cmd({ type: 'show/end' })}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-          <span>End</span>
-        </button>
+        <HoldToEndButton disabled={!ready || !control?.canControl || requestsOpen} onConfirm={() => cmd({ type: 'show/end' })} />
       <button className={`remote-black ${live?.black ? 'active' : ''}`} aria-label="Black screen" aria-pressed={live?.black ?? false} title={live?.black ? 'Show slide' : 'Black screen'} disabled={!control?.canControl} onClick={() => cmd({ type: 'live/toggleBlack' })}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>
         <span>{live?.black ? 'Show' : 'Black'}</span>

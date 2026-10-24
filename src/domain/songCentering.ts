@@ -27,6 +27,7 @@ function lyricBoxes(slide: Slide, song: Presentation): SlideElement[] {
 
 /** One-time centering for saved songs and the default layout for newly created songs. */
 export function centerSongLyrics(song: Presentation): Presentation {
+  if (song.protected) return song;
   const knownSong = song.online || song.folder === 'Songs' || song.lyricsLayout || song.songSource || song.themeId === 'theme_tpl_lyrics';
   if (!knownSong || song.lyricsCentered) return song;
   const slides = song.slides.map((slide) => {

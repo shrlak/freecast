@@ -6,6 +6,7 @@ import { deleteMedia, forgetMediaUrl, putMedia } from '../domain/media';
 import { uid } from '../domain/lyrics';
 import { useMediaUrl } from './hooks';
 import { assetUrl } from './SlideCanvas';
+import { protectedMediaIds, PROTECTED_MESSAGE } from '../domain/materialProtection';
 
 interface Props {
   state: AppState;
@@ -57,6 +58,7 @@ export function MediaBin({ state, dispatch }: Props) {
   };
 
   const remove = async (m: MediaMeta) => {
+    if (protectedMediaIds(state.library).has(m.id)) { alert(PROTECTED_MESSAGE); return; }
     if (!confirm(`Remove “${m.name}” from the media bin?`)) return;
     dispatch({ type: 'media/remove', id: m.id });
     forgetMediaUrl(m.id);

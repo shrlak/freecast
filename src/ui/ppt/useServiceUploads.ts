@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
+import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
 import type { Action } from '../../domain/reducer';
 import type { Library, Presentation, Slide, Theme } from '../../domain/types';
 import { readConti } from '../../domain/recognition/conti';
@@ -308,6 +309,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
     await show(id, sermonId);
     const original = lib.current.presentations.find((p) => p.id === sermonId);
     if (!original) throw new Error('설교 프레젠테이션을 찾지 못했습니다');
+    if (original.protected) throw new Error(PROTECTED_MESSAGE);
     const added: Slide[] = [];
     const push = (s: Slide) => {
       added.push(s);
