@@ -1,9 +1,11 @@
 import type { Slide } from '../domain/types';
 import { patchElement } from '../domain/templates/convert';
 import { AutoTextarea } from './AutoTextarea';
+import { isPdfSlide, PDF_READ_ONLY } from '../domain/importedSlides';
 
 /** Every editable word on this slide, including text imported as PowerPoint objects. */
 export function SlideContentEditor({ slide, onChange }: { slide: Slide; onChange: (patch: Partial<Slide>) => void }) {
+  if (isPdfSlide(slide)) return <p className="hint" role="note">{PDF_READ_ONLY}</p>;
   return (
     <div className="slide-content-editor">
       <label>슬라이드 제목<input aria-label="슬라이드 제목" value={slide.title ?? ''} onChange={(e) => onChange({ title: e.target.value || undefined })} /></label>

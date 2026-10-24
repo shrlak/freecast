@@ -299,7 +299,7 @@ const NO_INHERIT: TextInheritContext = { placeholderKey: null, layoutMatch: null
 
 function readTextShape(sp: Element, box: ShapeBase, ctx: TextInheritContext): RenderedTextShape | null {
   const spPr = firstEl(sp, 'p:spPr');
-  const txBody = firstEl(sp, 'p:txBody');
+  const txBody = firstEl(sp, 'p:txBody') ?? firstEl(sp, 'a:txBody');
   const fill = readSolidFill(spPr);
   const outline = readOutline(spPr);
   if (!txBody) return fill || outline ? { kind: 'text', ...box, fill, outline, paragraphs: [] } : null;
@@ -313,11 +313,12 @@ function readTextShape(sp: Element, box: ShapeBase, ctx: TextInheritContext): Re
   for (const p of allEls(txBody, 'a:p')) {
     const align = readAlign(firstEl(p, 'a:pPr'));
     const runs: RenderedRun[] = [];
-    for (const r of allEls(p, 'a:r')) {
+    for (const r of Array.from(p.children).filter((el) => ['a:r', 'a:fld', 'a:br'].includes(el.tagName))) {
+      if (r.tagName === 'a:br') { runs.push({ text: '\n' }); continue; }
       const t = firstEl(r, 'a:t');
       const text = t?.textContent ?? '';
       if (!text) continue;
-      const rPr = firstEl(r, 'a:rPr');
+      const rPr = firstEl(r, 'a:rPr') ?? firstEl(p, 'a:defRPr') ?? firstEl(p, 'a:endParaRPr');
       const szAttr = rPr?.getAttribute('sz');
       const sizePt = szAttr
         ? Number(szAttr) / 100
@@ -428,6 +429,50 @@ async function readSpTreeShapes(
   const shapes: RenderedShape[] = [];
   for (const child of Array.from(spTree.children)) {
     if (skipPlaceholders && isPlaceholder(child)) continue;
+    // A grouped box still needs separate editable children, in the group's coordinate system.
+    if (child.tagName === 'p:grpSp') {
+      const props = Array.from(child.children).find((el) => el.tagName === 'p:grpSpPr');
+      const xfrm = props && firstEl(props, 'a:xfrm');
+      const off = xfrm && firstEl(xfrm, 'a:off'), ext = xfrm && firstEl(xfrm, 'a:ext');
+      const chOff = xfrm && firstEl(xfrm, 'a:chOff'), chExt = xfrm && firstEl(xfrm, 'a:chExt');
+      const sx = Number(ext?.getAttribute('cx')) / Number(chExt?.getAttribute('cx')) || 1;
+      const sy = Number(ext?.getAttribute('cy')) / Number(chExt?.getAttribute('cy')) || 1;
+      const nested = await readSpTreeShapes(child, zip, relTargets, urlCache, skipPlaceholders, inherit);
+      for (const s of nested) shapes.push({ ...s,
+        xEmu: Number(off?.getAttribute('x')) + (s.xEmu - Number(chOff?.getAttribute('x'))) * sx,
+        yEmu: Number(off?.getAttribute('y')) + (s.yEmu - Number(chOff?.getAttribute('y'))) * sy,
+        wEmu: s.wEmu * sx, hEmu: s.hEmu * sy,
+        ...(s.kind === 'text' ? { paragraphs: s.paragraphs.map((p) => ({ ...p, runs: p.runs.map((r) => ({ ...r, ...(r.sizePt ? { sizePt: r.sizePt * sy } : {}) })) })) } : {}),
+      });
+      continue;
+    }
+    if (child.tagName === 'p:graphicFrame') {
+      const xfrm = firstEl(child, 'p:xfrm');
+      const off = xfrm && firstEl(xfrm, 'a:off'), ext = xfrm && firstEl(xfrm, 'a:ext');
+      const table = firstEl(child, 'a:tbl');
+      if (!off || !ext || !table) continue;
+      const widths = allEls(table, 'a:gridCol').map((col) => Number(col.getAttribute('w')) || 1);
+      const rows = Array.from(table.children).filter((el) => el.tagName === 'a:tr');
+      const heights = rows.map((row) => Number(row.getAttribute('h')) || 1);
+      const sx = Number(ext.getAttribute('cx')) / widths.reduce((a, b) => a + b, 0);
+      const sy = Number(ext.getAttribute('cy')) / heights.reduce((a, b) => a + b, 0);
+      let y = Number(off.getAttribute('y'));
+      for (const [ri, row] of rows.entries()) {
+        let x = Number(off.getAttribute('x'));
+        for (const [ci, cell] of Array.from(row.children).filter((el) => el.tagName === 'a:tc').entries()) {
+          const w = (widths[ci] ?? 1) * sx;
+          if (cell.getAttribute('hMerge') !== '1' && cell.getAttribute('vMerge') !== '1') {
+            const span = Math.max(1, Number(cell.getAttribute('gridSpan')) || 1);
+            const rowSpan = Math.max(1, Number(cell.getAttribute('rowSpan')) || 1);
+            const shape = readTextShape(cell, { xEmu: x, yEmu: y, wEmu: widths.slice(ci, ci + span).reduce((a, b) => a + b, 0) * sx, hEmu: heights.slice(ri, ri + rowSpan).reduce((a, b) => a + b, 0) * sy }, { ...NO_INHERIT, themeFonts: inherit?.themeFonts ?? {} });
+            if (shape) shapes.push({ ...shape, fill: readSolidFill(firstEl(cell, 'a:tcPr')) ?? shape.fill });
+          }
+          x += w;
+        }
+        y += heights[ri] * sy;
+      }
+      continue;
+    }
     const box = inherit
       ? resolveBox(child, inherit.layoutSpTree, inherit.masterSpTree)
       : readXfrm(firstEl(child, 'p:spPr'));

@@ -5,6 +5,7 @@ import { patchElement } from '../../domain/templates/convert';
 import { NO_GUIDES, snapMove, type SnapGuides } from '../../domain/snap';
 import { SlideCanvas, slideTheme } from '../SlideCanvas';
 import { useWidth } from '../hooks';
+import { isPdfSlide } from '../../domain/importedSlides';
 
 /** The slide's own text (lyrics, scripture…) drawn by the theme, selectable like an object. */
 export const SLIDE_TEXT = '__slide-text';
@@ -174,6 +175,10 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
   };
   const at = (b: Box): CSSProperties => ({ left: b.x * k, top: b.y * k, width: b.w * k, height: b.h * k });
   const hasSlideText = !!(slide.text.trim() || slide.title || slide.subtext);
+
+  if (isPdfSlide(slide)) return <div className="ce-root" ref={ref} tabIndex={0} aria-label="PDF 읽기 전용 미리보기">
+    <SlideCanvas slide={slide} theme={baseTheme} background={background} bgEffect={bgEffect} />
+  </div>;
 
   return (
     <div className="ce-root" ref={ref} tabIndex={0} onKeyDown={onKeyDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}

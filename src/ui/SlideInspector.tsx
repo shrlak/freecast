@@ -2,6 +2,8 @@ import type { Background, Library, MediaMeta, Slide, SlideAction, TransitionKind
 import { parseChannels } from '../domain/effects';
 import { obs } from '../domain/obs';
 import { AutoTextarea } from './AutoTextarea';
+import { isPdfSlide } from '../domain/importedSlides';
+import { PdfReadOnly } from './PdfReadOnly';
 
 interface Props {
   slide: Slide;
@@ -35,6 +37,7 @@ function describe(a: SlideAction, lib: Library): string {
 
 /** Per-slide settings: text, notes, actions, timing, hotkey, transition, background, QR links. */
 export function SlideInspector({ slide, library: lib, onChange, onDesign, onClose, compact }: Props) {
+  if (isPdfSlide(slide)) return <div className="inspector"><PdfReadOnly slide={slide} onChange={onChange} /><button onClick={onClose}>닫기</button></div>;
   const bgValue = slide.background?.kind === 'media' ? slide.background.mediaId : '';
   const visual = lib.media.filter((m) => m.type !== 'audio');
   const actions = slide.actions ?? [];

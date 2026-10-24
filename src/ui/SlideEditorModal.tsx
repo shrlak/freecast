@@ -13,6 +13,8 @@ import { SlideContentEditor } from './SlideContentEditor';
 import { SlideDesigner } from './SlideDesigner';
 import { AutoTextarea } from './AutoTextarea';
 import { sequence } from '../domain/arrangement';
+import { isPdfSlide } from '../domain/importedSlides';
+import { filesToSlides } from './importFiles';
 
 /** One persistent slide at a time, for songs, scripture, announcements and imported decks. */
 export function SlideEditorModal({ state, dispatch, presentation: p, slideId, slideSeq, onSelect, onSource, onClose }: {
@@ -23,6 +25,8 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, sl
   const [designing, setDesigning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLElement>(null);
   const pages = sequence(p);
   const index = slideSeq != null && pages[slideSeq] ? slideSeq : Math.max(0, pages.findIndex((x) => x.slide.id === slideId));
@@ -42,6 +46,19 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, sl
     }
   };
   const shared = isLibrarySong(p) && isSong(p);
+  const reimport = async (file: File | undefined) => {
+    if (!file || importing) return;
+    setImporting(true); setMessage('원본 PPT를 편집 가능한 슬라이드로 읽는 중…');
+    try {
+      if (!/\.pptx?$/i.test(file.name)) throw new Error('PPTX 또는 PPT 파일을 선택해 주세요.');
+      const slides = await filesToSlides([file], (media) => dispatch({ type: 'media/add', media }), setMessage);
+      if (!slides.length) throw new Error('슬라이드를 읽지 못했습니다. 기존 자료는 유지됩니다.');
+      dispatch({ type: 'presentation/update', id: p.id, patch: { slides, arrangements: undefined, arrangementId: null, slidesEdited: true } });
+      setSelectedElement(null); setDesigning(false); onSelect(slides[0].id, 0);
+      setMessage(`${slides.length}장을 편집 가능한 PPT로 교체했습니다. 실행 취소로 이전 자료를 복원할 수 있습니다.`);
+    } catch (e) { setMessage((e as Error).message); }
+    finally { setImporting(false); if (importRef.current) importRef.current.value = ''; }
+  };
   const publishLyrics = async () => {
     const source = songSourceFromSlides(p);
     if (!source.sections.some((s) => s.lines.some((l) => l.trim()))) return setMessage('등록할 가사를 입력해 주세요.');
@@ -82,20 +99,23 @@ export function SlideEditorModal({ state, dispatch, presentation: p, slideId, sl
               </div>
               <CanvasEditor key={`${p.id}:${index}`} slide={slide} theme={theme} background={resolveBackground(slide, p)} bgEffect={p.bgEffect}
                 selectedId={selectedElement} onSelect={setSelectedElement} onChange={update} />
-              {!slide.text && !slide.elements?.length && slide.background && <p className="hint">그림·PDF 슬라이드에는 본문을 입력해 텍스트를 추가할 수 있습니다. 이미지 안의 글자는 원본 파일에서 수정해 주세요.</p>}
+              {!isPdfSlide(slide) && !slide.text && !slide.elements?.length && slide.background && <p className="hint">이미지 안의 글자는 직접 수정할 수 없습니다. 이전에 가져온 PPT라면 아래 ‘PPT 원본 다시 가져오기’로 편집 가능한 슬라이드로 교체해 주세요.</p>}
               <SlideContentEditor slide={slide} onChange={update} />
               <label className="stack">슬라이드 노트<AutoTextarea aria-label="슬라이드 노트" rows={2} value={slide.notes ?? ''} onChange={(e) => update({ notes: e.target.value || undefined })} /></label>
             </section>
             <aside className="slide-editor-format">
-              <SlideFormat key={`${p.id}:${index}`} state={state} dispatch={editDispatch} presentation={p} slide={slide} showContent={false}
+              {!isPdfSlide(slide) && <SlideFormat key={`${p.id}:${index}`} state={state} dispatch={editDispatch} presentation={p} slide={slide} showContent={false}
                 selectedId={selectedElement} onSelect={setSelectedElement} onDesign={() => setDesigning(true)} />
+              }
             </aside>
           </> : <p className="empty">슬라이드가 없습니다. 전체 텍스트 편집에서 추가할 수 있습니다.</p>}
         </div>
         <footer className="modal-foot">
           <span className="muted small grow">{message ?? '수정 내용은 자동 저장됩니다 · 실행 취소: ⌘/Ctrl+Z'}</span>
           <button disabled={!state.past.length} onClick={() => dispatch({ type: 'undo' })}>실행 취소</button>
-          <button onClick={onSource}>{isSong(p) ? '전체 가사 편집' : '전체 텍스트 편집'}</button>
+          {!isSong(p) && <><input ref={importRef} type="file" accept=".pptx,.ppt" hidden onChange={(e) => void reimport(e.target.files?.[0])} />
+            <button disabled={importing} onClick={() => importRef.current?.click()} title="이 자료의 모든 슬라이드를 원본 PPT로 교체합니다. 재생목록 연결과 프레젠테이션 설정은 유지됩니다.">{importing ? 'PPT 읽는 중…' : 'PPT 원본 다시 가져오기'}</button></>}
+          <button disabled={importing || p.slides.some(isPdfSlide)} onClick={onSource}>{isSong(p) ? '전체 가사 편집' : '전체 텍스트 편집'}</button>
           {shared && <button disabled={saving} onClick={publishLyrics}>{saving ? '반영 중…' : '교회 찬양 라이브러리에 가사 반영'}</button>}
           <button className="primary" onClick={onClose}>닫기</button>
         </footer>

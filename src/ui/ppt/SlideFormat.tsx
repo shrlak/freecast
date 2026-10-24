@@ -12,6 +12,8 @@ import { CLEAR_TEXT_FORMAT, ElementFormat, elementPatch, sizeOf, textValue } fro
 import { TextFormatPanel } from './TextFormatPanel';
 import { SlideContentEditor } from '../SlideContentEditor';
 import { changeCase } from '../../domain/textFormat';
+import { isPdfSlide } from '../../domain/importedSlides';
+import { PdfReadOnly } from '../PdfReadOnly';
 
 interface Props {
   state: AppState;
@@ -90,6 +92,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
   const ref = textEls[0];
   const patchBoxes = (fn: (e: typeof elements[number]) => Partial<typeof elements[number]>) =>
     upd({ elements: elements.map((e) => (e.kind === 'text' ? patchElement(e, fn(e)) : e)) });
+  if (isPdfSlide(slide)) return <PdfReadOnly slide={slide} onChange={upd} />;
   return (
     <div className="slide-format">
       {showContent && <Section title="내용 · 이 슬라이드만"><SlideContentEditor slide={slide} onChange={upd} /></Section>}
