@@ -1,4 +1,5 @@
 import { TeamRequestsModal } from '../ui/TeamRequestsModal';
+import { blockedProtectedAction, protectedMediaIds, PROTECTED_MESSAGE } from '../domain/materialProtection';
 import type { TeamRequest } from '../domain/teamRequests';
 import { TrashModal } from '../ui/TrashModal';
 import { RehearsalModal } from '../ui/RehearsalModal';
@@ -114,6 +115,8 @@ export function OperatorView() {
   const macrosRef = useRef<Macro[]>([]);
   const schedulesRef = useRef<{ id: string; macroId: string }[]>([]);
   const dispatch = useMemo(() => (a: Action) => {
+    const blocked = blockedProtectedAction(latestLib.current, a);
+    if (blocked) { notifyRef.current(`${blocked}: ${PROTECTED_MESSAGE}`); return; }
     if ((a.type === 'live/go' || a.type === 'live/next') && a.now == null) a = { ...a, now: Date.now() };
     const macroId = a.type === 'macro/run' ? a.id : a.type === 'schedule/ran' ? schedulesRef.current.find((x) => x.id === a.id)?.macroId : undefined;
     const macro = macroId ? macrosRef.current.find((m) => m.id === macroId) : undefined;
@@ -417,7 +420,7 @@ export function OperatorView() {
       await saveRestorePoint(state.library, 'import', Date.now(), activePlaylist(state)?.name ?? '자료 가져오기');
       if (kind === 'backup') {
         notify('Restoring backup…');
-        const lib = await importBackup(files[0]);
+        const lib = await importBackup(files[0], protectedMediaIds(latestLib.current));
         if (confirm('Replace your current library with this backup? (You can undo with ⌘Z.)')) dispatch({ type: 'library/replace', library: lib });
       } else if (kind === 'library') {
         const lib = normalizeLibrary(JSON.parse(await files[0].text()));
@@ -436,9 +439,10 @@ export function OperatorView() {
         let total = 0;
         // Each PowerPoint file becomes its own presentation in a new 재생목록 named after the file.
         for (const f of files.filter(isPptx)) {
-          const slides = await toSlides([f]);
           const title = f.name.replace(/\.[^.]+$/, '');
           const existing = state.library.presentations.filter((p) => p.folder === 'Imported' && p.title === title);
+          if (existing.some((p) => p.protected)) throw new Error(`${title}: ${PROTECTED_MESSAGE}`);
+          const slides = await toSlides([f]);
           if (existing.length > 1) throw new Error(`같은 이름의 PPT가 여러 개입니다: ${title}. 프레젠테이션 이름을 구분해 주세요.`);
           if (!slides.length) throw new Error(`${title}: 슬라이드를 읽지 못했습니다. 기존 PPT를 유지합니다.`);
           if (existing.length === 1) {

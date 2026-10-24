@@ -4,8 +4,10 @@ import { obs } from '../domain/obs';
 import { AutoTextarea } from './AutoTextarea';
 import { isPdfSlide } from '../domain/importedSlides';
 import { PdfReadOnly } from './PdfReadOnly';
+import { PROTECTED_MESSAGE } from '../domain/materialProtection';
 
 interface Props {
+  readOnly?: boolean;
   slide: Slide;
   library: Library;
   onChange: (patch: Partial<Omit<Slide, 'id'>>) => void;
@@ -36,7 +38,8 @@ function describe(a: SlideAction, lib: Library): string {
 }
 
 /** Per-slide settings: text, notes, actions, timing, hotkey, transition, background, QR links. */
-export function SlideInspector({ slide, library: lib, onChange, onDesign, onClose, compact }: Props) {
+export function SlideInspector({ slide, library: lib, onChange, onDesign, onClose, compact, readOnly }: Props) {
+  if (readOnly) return <div className="inspector"><p>{PROTECTED_MESSAGE}</p><button onClick={onClose}>닫기</button></div>;
   if (isPdfSlide(slide)) return <div className="inspector"><PdfReadOnly slide={slide} onChange={onChange} /><button onClick={onClose}>닫기</button></div>;
   const bgValue = slide.background?.kind === 'media' ? slide.background.mediaId : '';
   const visual = lib.media.filter((m) => m.type !== 'audio');

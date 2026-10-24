@@ -2,6 +2,7 @@ import type { Library, Presentation, UsageEntry } from './types';
 import { uid } from './lyrics';
 import { mergeActivity, mergeDevices, newestModification } from './activity';
 import { clearTransitions } from './persistence';
+import { keepProtectedMaterials, protectionWinners, mergeProtectionChanges } from './materialProtection';
 
 /** The part of the library that is shared through the cloud (online songs come from GitHub instead). */
 export function syncable(lib: Library): Library {
@@ -62,8 +63,11 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
   const base = base0 && fresh(base0);
   const local = fresh(local0);
   const remote = fresh(remote0);
+  const locked = protectionWinners(base, local, remote);
   // First sync on this computer (no shared history): the cloud copy wins, local-only items are added.
   const presentations = mergeById<Presentation>(base?.presentations, local.presentations, remote.presentations, (l, r) => {
+    if (locked.has(l.id)) return [locked.get(l.id)!];
+    if ((l.protectionChangedAt ?? 0) !== (r.protectionChangedAt ?? 0)) return [(l.protectionChangedAt ?? 0) > (r.protectionChangedAt ?? 0) ? l : r];
     if (!base) return [r];
     conflicts.push(l.title);
     return [l, { ...r, id: uid('p'), title: `${r.title} (다른 기기)` }];
@@ -77,11 +81,12 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
     mergeById<{ id: string }>(base?.[k] as { id: string }[] | undefined, (local[k] ?? []) as { id: string }[], (remote[k] ?? []) as { id: string }[], (l, r) => [base ? l : r]) as Library[K];
   return {
     conflicts,
-    library: {
+    library: keepProtectedMaterials({
       version: 1,
       aspect: '4:3',
       transitionsReset: true,
       backgroundLibraryReset: local.backgroundLibraryReset || remote.backgroundLibraryReset,
+      protectionChanges: mergeProtectionChanges(base, local, remote),
       devices: mergeDevices(local.devices, remote.devices),
       activity: mergeActivity(local.activity, remote.activity),
       lastModified: newestModification(local.lastModified, remote.lastModified),
@@ -101,6 +106,6 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
       usage: usage.slice(-5000),
       sunday: pick(base?.sunday, local.sunday, remote.sunday, !!base),
       logoMediaId: pick(base?.logoMediaId, local.logoMediaId, remote.logoMediaId, !!base),
-    },
+    }, locked, [base, local, remote].filter((s): s is Library => !!s)),
   };
 }

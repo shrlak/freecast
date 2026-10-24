@@ -14,6 +14,7 @@ import { SlideContentEditor } from '../SlideContentEditor';
 import { changeCase } from '../../domain/textFormat';
 import { isPdfSlide } from '../../domain/importedSlides';
 import { PdfReadOnly } from '../PdfReadOnly';
+import { ProtectedMaterialNotice } from '../MaterialProtection';
 
 interface Props {
   state: AppState;
@@ -92,6 +93,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
   const ref = textEls[0];
   const patchBoxes = (fn: (e: typeof elements[number]) => Partial<typeof elements[number]>) =>
     upd({ elements: elements.map((e) => (e.kind === 'text' ? patchElement(e, fn(e)) : e)) });
+  if (p.protected) return <ProtectedMaterialNotice presentation={p} dispatch={dispatch} />;
   if (isPdfSlide(slide)) return <PdfReadOnly slide={slide} onChange={upd} />;
   return (
     <div className="slide-format">

@@ -9,6 +9,7 @@ export const isLibrarySong = (p: Presentation) => !!p.online || p.folder === 'So
  * this computer beats the church library's, and between equals the later one in the list wins.
  */
 function newer(a: Presentation, ai: number, b: Presentation, bi: number): boolean {
+  if (!!a.protected !== !!b.protected) return !!a.protected;
   if (a.updatedAt && b.updatedAt && a.updatedAt !== b.updatedAt) return a.updatedAt > b.updatedAt;
   if (!!a.online !== !!b.online) return !a.online;
   return ai > bi;
@@ -30,6 +31,7 @@ export function dedupeSongs(presentations: Presentation[]): { presentations: Pre
   });
   const replaced = new Map<string, string>();
   const kept = presentations.filter((p, i) => {
+    if (p.protected) return true;
     const k = isLibrarySong(p) ? titleKey(p.title) : '';
     const at = k ? best.get(k) : undefined;
     if (at === undefined || at === i) return true;

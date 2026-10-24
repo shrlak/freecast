@@ -240,7 +240,7 @@ export function songStyleUpdates(presentations: Presentation[], tpl: ServiceTemp
   const key = songKey(tpl, maxLines);
   // (A song in the template design whose 진행 skips its title slide is redone too: the title must open the song.)
   const skipsTitle = (p: Presentation) => !!p.arrangements?.some((a) => !a.groups.includes('Title')) && p.slides.some((s) => s.group === 'Title');
-  return presentations.filter((p) => !p.slidesEdited && (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
+  return presentations.filter((p) => !p.protected && !p.slidesEdited && (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
 }
 
 export interface ScriptureFill {

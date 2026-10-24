@@ -24,6 +24,7 @@ interface Props {
   onChange: (patch: Partial<Slide>) => void;
   /** Called instead of deleting when 🔒 is on and this slide is on screen. */
   onLockedDelete?: () => void;
+  readOnly?: boolean;
 }
 
 /**
@@ -32,7 +33,7 @@ interface Props {
  * Delete to remove; double-click (or click again) text to type on the slide. Changes apply as you
  * go, so a slide that is live updates on screen.
  */
-export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, selectedId, onSelect, onChange, onLockedDelete }: Props) {
+export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, selectedId, onSelect, onChange, onLockedDelete, readOnly }: Props) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const k = width / CANVAS_W || 1;
   const [session, setSession] = useState<{ slideId: string; id: string } | null>(null);
@@ -176,7 +177,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
   const at = (b: Box): CSSProperties => ({ left: b.x * k, top: b.y * k, width: b.w * k, height: b.h * k });
   const hasSlideText = !!(slide.text.trim() || slide.title || slide.subtext);
 
-  if (isPdfSlide(slide)) return <div className="ce-root" ref={ref} tabIndex={0} aria-label="PDF 읽기 전용 미리보기">
+  if (readOnly || isPdfSlide(slide)) return <div className="ce-root" ref={ref} tabIndex={0} aria-label={readOnly ? '보호된 자료 미리보기' : 'PDF 읽기 전용 미리보기'}>
     <SlideCanvas slide={slide} theme={baseTheme} background={background} bgEffect={bgEffect} />
   </div>;
 

@@ -4,6 +4,7 @@ import type { AppState, Action } from '../domain/reducer';
 import { activePlaylist } from '../domain/live';
 import { NameDialog } from './NameDialog';
 import { uid } from '../domain/lyrics';
+import { MaterialProtectionButton } from './MaterialProtection';
 
 interface Props {
   state: AppState;
@@ -72,6 +73,7 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
                 >
                   <span className="truncate">{p.title}</span>
                   <span className="row gap-xs item-actions">
+                    <MaterialProtectionButton presentation={p} dispatch={dispatch} compact />
                     {p.meta?.key && <span className="key-badge">{p.meta.key}</span>}
                     <button
                       className="mini-btn"

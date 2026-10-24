@@ -6,6 +6,8 @@ import { planSectionSlides } from '../../domain/sunday/slidePlanner';
 import { deleteSharedSong, registerSharedSong } from '../../domain/online';
 import { uid } from '../../domain/lyrics';
 import { useAutosave } from '../hooks';
+import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
+import { ProtectedMaterialNotice } from '../MaterialProtection';
 import { AutoTextarea } from '../AutoTextarea';
 
 interface Part { id: string; label: string; text: string }
@@ -79,6 +81,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const [admin, setAdmin] = useState(readAdmin);
   const [saveState, setSaveState] = useState<string | null>(null);
   const localId = useRef<string | null>(song && !song.online ? song.id : null);
+  const protectedSong = library.presentations.find((p) => p.protected && (p.id === song?.id || p.id === localId.current || titleKey(p.title) === titleKey(title)));
   // Saving makes the song this computer's own copy, so what `song` is changes mid-edit; these stay.
   const fromLibrary = useRef(!!song?.online);
   const libraryTitle = useRef(song?.title ?? '');
@@ -98,6 +101,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
 
   /** This computer's copy (online songs become a local song of the same title). */
   const writeLocal = (e: ReturnType<typeof entry>) => {
+    if (protectedSong) return;
     const p = songToPresentation({ title: e.title, key: e.key, sections: e.sections, progression: e.order.length ? e.order : undefined }, { themeId: 'theme_sunday', linesPerSlide: per, folder: song && !song.online ? song.folder ?? 'Songs' : 'Songs' });
     const withSource = { ...p, songSource: { sections: e.sections, order: e.order.length ? e.order : undefined } };
     const local = localId.current ?? findSong(library.presentations.filter((x) => !x.online), e.title)?.id ?? null;
@@ -114,7 +118,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   const shared = fromLibrary.current && title.trim() === libraryTitle.current;
   const registered = useRef(false);
   useAutosave(entry(), (e) => {
-    if (registered.current) return;
+    if (registered.current || protectedSong) return;
     // Always into this computer's library first — no password involved.
     writeLocal(e);
     if (shared) {
@@ -126,7 +130,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
     } else {
       setSaveState('✓ 찬양 라이브러리에 자동 저장됨');
     }
-  }, { delay: 700, enabled: !review && valid });
+  }, { delay: 700, enabled: !review && !protectedSong && valid });
 
   /** Closing: the last edit is already saved; the shared library is re-read when it changed. */
   const done = () => {
@@ -136,6 +140,7 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   };
 
   const save = async (label: string, job: () => Promise<void>, requiresAdmin = false) => {
+    if (protectedSong) return setError(PROTECTED_MESSAGE);
     if (requiresAdmin && !admin) return setError('관리자 비밀번호를 입력하세요 (삭제할 때만 필요합니다).');
     setBusy(label);
     setError(null);
@@ -175,6 +180,10 @@ export function SongEditor({ library, dispatch, song, onClose, notify, reloadOnl
   };
   const duplicate = !song && !review && title.trim() && findSong(library.presentations, title.trim());
   const close = review ? review.onCancel : done;
+
+  if (protectedSong && !review) return <div className="modal-backdrop"><div className="modal" role="dialog" aria-label="보호된 찬양">
+    <ProtectedMaterialNotice presentation={protectedSong} dispatch={dispatch} /><button onClick={close}>닫기</button>
+  </div></div>;
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => !review && e.target === e.currentTarget && done()}>

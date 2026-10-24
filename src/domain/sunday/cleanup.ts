@@ -5,6 +5,7 @@ import { isLibrarySong } from './dedupe';
 import { exclusivePresentationMedia } from '../mediaCleanup';
 import type { Library } from '../types';
 import { SERVICE_END_HOUR } from './notice';
+import { isProtected } from '../materialProtection';
 
 const SERVICE_NAME = /^(\d{2})(\d{2}) 주일예배$/;
 
@@ -51,7 +52,7 @@ export function deletedServices(lib: Library, playlistIds: string[]): ServiceCle
     lib.playlists.filter((pl) => !doneIds.has(pl.id)).flatMap((pl) => pl.items.flatMap((i) => (i.kind === 'header' ? [] : [i.presentationId]))),
   );
   const presentationIds = lib.presentations
-    .filter((p) => !isLibrarySong(p) && p.folder && folders.has(p.folder) && !usedElsewhere.has(p.id))
+    .filter((p) => !isProtected(p) && !isLibrarySong(p) && p.folder && folders.has(p.folder) && !usedElsewhere.has(p.id))
     .map((p) => p.id);
   const mediaIds = exclusivePresentationMedia(lib, presentationIds);
   return { playlistIds: done.map((pl) => pl.id), presentationIds, mediaIds };

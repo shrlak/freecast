@@ -4,6 +4,7 @@ import { parseLyrics, serializeLyrics, uid } from '../domain/lyrics';
 import { useAutosave } from './hooks';
 import { AutoTextarea } from './AutoTextarea';
 import { isPdfSlide, PDF_READ_ONLY } from '../domain/importedSlides';
+import { PROTECTED_MESSAGE } from '../domain/materialProtection';
 
 interface Props {
   presentation: Presentation | null;
@@ -63,7 +64,11 @@ export function EditorModal({ presentation, themes, onSave, onClose }: Props) {
   useAutosave({ title, folder, text, maxLines, meta, transition, showCopyright, bgEffect }, () => {
     onSave(build(), !created.current);
     created.current = true;
-  }, { enabled: !!presentation || !!title.trim() || !!text.trim() });
+  }, { enabled: !presentation?.protected && (!!presentation || !!title.trim() || !!text.trim()) });
+
+  if (presentation?.protected) return <div className="modal-backdrop"><div className="modal" role="dialog" aria-label="보호된 자료">
+    <p>{PROTECTED_MESSAGE}</p><button onClick={onClose}>닫기</button>
+  </div></div>;
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

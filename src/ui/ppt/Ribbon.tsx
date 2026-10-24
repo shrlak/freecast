@@ -1,4 +1,6 @@
 import { isPdfSlide, PDF_READ_ONLY } from '../../domain/importedSlides';
+import { MaterialProtectionButton } from '../MaterialProtection';
+import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
 import { formatStoragePercent } from '../../domain/cloudStorage';
 import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
@@ -92,6 +94,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
 
   const addSlide = (copy: boolean) => {
     if (!p) return;
+    if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
     const i = slide ? p.slides.findIndex((s) => s.id === slide.id) : p.slides.length - 1;
     const base = copy && slide ? { ...slide, id: uid('s') } : { id: uid('s'), group: slide?.group ?? 'Slide', text: '' };
     const slides = [...p.slides];
@@ -101,6 +104,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
   };
   const addFromTemplate = (t: SlideTemplate) => {
     if (!p) return;
+    if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
     const i = slide ? p.slides.findIndex((s) => s.id === slide.id) : p.slides.length - 1;
     const n = t.make(slide?.group ?? 'Slide');
     const slides = [...p.slides];
@@ -110,6 +114,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
   };
   const deleteSlide = () => {
     if (!p || !slide) return;
+    if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
     const pages = sequence(p);
     const seq = cmd.slideSeq ?? pages.findIndex((x) => x.slide.id === slide.id);
     if (seq < 0) return;
@@ -120,12 +125,14 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
 
   const addElement = (el: Omit<SlideElement, 'id'>) => {
     if (!p || !slide) return cmd.notify('먼저 슬라이드를 선택하세요');
+    if (p.protected) return cmd.notify(PROTECTED_MESSAGE);
     if (isPdfSlide(slide)) return cmd.notify(PDF_READ_ONLY);
     updateSlide({ elements: [...(slide.elements ?? []), { id: uid('el'), ...el }] });
     onDesign();
   };
   const insertMedia = async (file: File | undefined) => {
     if (!file) return;
+    if (p?.protected) return cmd.notify(PROTECTED_MESSAGE);
     const id = uid('m');
     const kind = insertKind.current;
     await putMedia(id, file);
@@ -214,10 +221,11 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="📄" label="새로 만들기" onClick={() => cmd.open('new')} />
               <div className="rb-col">
                 <Small icon="✎" label="슬라이드별 편집" disabled={!p} onClick={() => cmd.open('edit')} />
-                <Small icon="✏️" label="개체 편집" disabled={!slide || isPdfSlide(slide)} onClick={onDesign} />
+                <Small icon="✏️" label="개체 편집" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={onDesign} />
                 <Small icon="📋" label="재생목록에 추가" disabled={!p} onClick={() => p && dispatch({ type: 'playlist/addItem', item: { id: uid('pli'), presentationId: p.id } })} />
               </div>
             </Group>
+            {p && <Group label="필수 자료"><MaterialProtectionButton presentation={p} dispatch={dispatch} className="rb-big" /></Group>}
             <Group label="편집">
               <Small icon="⚡" label="빠른 찾기 (⌘/Ctrl+K)" title="가사·성경·광고를 모든 프레젠테이션에서 찾아 바로 표시" onClick={() => cmd.open('find')} />
               <Small icon="🔎" label="찾기 (⌘/Ctrl+F)" onClick={() => { const b = document.getElementById('library-search') as HTMLInputElement | null; b?.focus(); }} />
@@ -240,16 +248,16 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               {SLIDE_TEMPLATES.map((t) => <Big key={t.id} icon={t.icon} label={t.name} disabled={!p} onClick={() => addFromTemplate(t)} />)}
             </Group>
             <Group label="개체">
-              <Big icon="T" label="텍스트 상자" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 320, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />
-              <Big icon="🖼" label="그림" disabled={!slide || isPdfSlide(slide)} onClick={() => { insertKind.current = 'image'; if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.click(); } }} />
-              <Big icon="🎬" label="비디오" disabled={!slide || isPdfSlide(slide)} onClick={() => { insertKind.current = 'video'; if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.click(); } }} />
-              <Big icon="⬛" label="도형" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 100, y: 820, w: 1240, h: 200 })} />
-              <Big icon="⚪" label="원" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 570, y: 390, w: 300, h: 300 })} />
-              <Big icon="📷" label="카메라" disabled={!slide || isPdfSlide(slide)} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 320, y: 315, w: 800, h: 450 })} />
+              <Big icon="T" label="텍스트 상자" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => addElement({ kind: 'text', text: '텍스트', x: 320, y: 440, w: 800, h: 200, fontSize: 80, color: '#ffffff', bold: true, shadow: true, align: 'center' })} />
+              <Big icon="🖼" label="그림" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => { insertKind.current = 'image'; if (fileRef.current) { fileRef.current.accept = 'image/*'; fileRef.current.click(); } }} />
+              <Big icon="🎬" label="비디오" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => { insertKind.current = 'video'; if (fileRef.current) { fileRef.current.accept = 'video/*'; fileRef.current.click(); } }} />
+              <Big icon="⬛" label="도형" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 100, y: 820, w: 1240, h: 200 })} />
+              <Big icon="⚪" label="원" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 570, y: 390, w: 300, h: 300 })} />
+              <Big icon="📷" label="카메라" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 320, y: 315, w: 800, h: 450 })} />
             </Group>
             <Group label="텍스트">
-              <Small icon="🕒" label="현재 시각 {time}" disabled={!slide || isPdfSlide(slide)} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{time}` })} />
-              <Small icon="📅" label="날짜 {date}" disabled={!slide || isPdfSlide(slide)} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{date}` })} />
+              <Small icon="🕒" label="현재 시각 {time}" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{time}` })} />
+              <Small icon="📅" label="날짜 {date}" disabled={!slide || p?.protected || isPdfSlide(slide)} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{date}` })} />
               <Small icon="⏱" label="타이머" disabled={!slide || isPdfSlide(slide) || !lib.timers.length} onClick={() => updateSlide({ text: `${slide?.text ? `${slide.text}\n` : ''}{timer:${lib.timers[0]?.name}}` })} />
             </Group>
             <input ref={fileRef} type="file" hidden onChange={(e) => insertMedia(e.target.files?.[0])} />

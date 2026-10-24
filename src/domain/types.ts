@@ -202,6 +202,10 @@ export interface Transition {
 
 export interface Presentation {
   id: string;
+  /** Essential material: unlock explicitly before editing, replacing or deleting it. */
+  protected?: boolean;
+  /** A newer explicit protection change wins during device sync; old clients cannot silently unlock. */
+  protectionChangedAt?: number;
   /** Which church template (and 고백송) this deck was last built from; set on decks FreeCast keeps in sync. */
   templateKey?: string;
   /** A song's lyrics by part as written (blank lines kept) and its 진행 — what the song editor edits. */
@@ -436,6 +440,8 @@ export interface TrashEntry {
 }
 
 export interface Library {
+  /** Explicit protection changes survive deletion so another device can honor an unlocked deletion. */
+  protectionChanges?: { id: string; on: boolean; at: number }[];
   version: 1;
   devices?: DeviceRegistration[];
   activity?: ActivityEntry[];

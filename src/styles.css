@@ -230,7 +230,7 @@ details > summary { cursor: pointer; }
 .menu-items { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; min-width: 260px; box-shadow: 0 16px 40px rgba(0,0,0,.5); }
 .menu-items button { text-align: left; border: none; background: transparent; }
 .menu-items button:hover:not(:disabled) { background: var(--panel-2); }
-.toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: #1f2937; border: 1px solid var(--accent); padding: 10px 16px; border-radius: 8px; z-index: 50; max-width: 70vw; box-shadow: 0 10px 30px rgba(0,0,0,.5); cursor: pointer; }
+.toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #f9fafb; border: 1px solid var(--accent); padding: 10px 16px; border-radius: 8px; z-index: 50; max-width: 70vw; box-shadow: 0 10px 30px rgba(0,0,0,.5); cursor: pointer; }
 
 /* library */
 .folder { display: block; width: 100%; text-align: left; border: none; background: transparent; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; padding: 6px 4px 2px; }
@@ -866,6 +866,14 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
 .remote-console .remote-show button, .remote-console .remote-black { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 0; width: 72px; min-width: 72px; height: 72px; border: 1px solid var(--key-edge); border-radius: 50%; background: linear-gradient(var(--key-top), var(--key-bottom)); color: var(--key-text); box-shadow: inset 0 1px 1px #ffffff30, 0 2px 3px #00000024; font-size: 12px; line-height: 1; white-space: nowrap; }
 .remote-show .remote-start svg { color: #34c759; }
 .remote-show .remote-end svg { color: #ff453a; fill: currentColor; stroke: none; }
+.hold-instructions { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.remote-show .hold-to-end { position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.hold-to-end > * { position: relative; z-index: 1; }
+.hold-to-end.holding::before { content: ''; position: absolute; inset: 0; background: #ff453a55; transform-origin: left; animation: hold-end-progress 1s linear both; }
+@keyframes hold-end-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.protected-material-notice { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); line-height: 1.5; }
+.protected-material-notice p { margin: 10px 0; }
+@media (prefers-reduced-motion: reduce) { .hold-to-end.holding::before { animation: none; transform: none; } }
 .remote-console .remote-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; height: 88px; }
 .remote-console .remote-nav button { display: grid; place-items: center; min-width: 64px; min-height: 64px; padding: 0; border: 2px solid #197f50; border-radius: 36px; background: linear-gradient(145deg, #35ba7a, #17864f); color: #fff; box-shadow: inset 0 2px 3px #ffffff50, inset 0 -3px 5px #00000035, 0 2px 4px #00000025; }
 .remote-nav svg { width: 38px; height: 38px; stroke-width: 3; }

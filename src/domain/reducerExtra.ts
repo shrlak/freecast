@@ -1,4 +1,5 @@
 import { mergeActivity, mergeDevices, newestModification } from './activity';
+import { isProtected, keepProtectedMaterials, protectionWinners, mergeProtectionChanges } from './materialProtection';
 // Actions for looks, stage layouts, playback markers, timelines and playlist templates.
 // Kept apart from reducer.ts so each file stays small.
 import type { Library, Look, PlaybackMarker, Playlist, Presentation, StageLayout, Timeline } from './types';
@@ -55,7 +56,7 @@ export function extraReducer(s: AppState, a: ExtraAction): AppState {
     }
     case 'presentation/replaceMany': {
       const next = new Map(a.presentations.map((p) => [p.id, p]));
-      return setLib({ presentations: lib.presentations.map((p) => next.get(p.id) ?? p) });
+      return setLib({ presentations: lib.presentations.map((p) => isProtected(p) ? p : next.get(p.id) ?? p) });
     }
     case 'playlist/set': {
       const old = lib.playlists.find((p) => p.id === a.playlist.id);
@@ -71,7 +72,8 @@ export function extraReducer(s: AppState, a: ExtraAction): AppState {
       // Cloud sync: take the merged library but keep online songs, selection and what's live.
       const incoming = new Set(a.library.presentations.map((p) => p.id));
       const online = lib.presentations.filter((p) => p.online && !incoming.has(p.id));
-      return { ...s, library: { ...a.library, activity: mergeActivity(lib.activity, a.library.activity), devices: mergeDevices(lib.devices, a.library.devices), lastModified: newestModification(lib.lastModified, a.library.lastModified), presentations: [...a.library.presentations, ...online] } };
+      const incomingLibrary = { ...a.library, protectionChanges: mergeProtectionChanges(lib, a.library), activity: mergeActivity(lib.activity, a.library.activity), devices: mergeDevices(lib.devices, a.library.devices), lastModified: newestModification(lib.lastModified, a.library.lastModified), presentations: [...a.library.presentations, ...online] };
+      return { ...s, library: keepProtectedMaterials(incomingLibrary, protectionWinners(lib, a.library), [lib, a.library]) };
     }
     case 'live/videoClock':
       return { ...s, live: { ...s.live, video: { ...s.live.video, endsAt: a.endsAt } } };
