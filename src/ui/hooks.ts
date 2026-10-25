@@ -116,7 +116,9 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
         ws.send(JSON.stringify({ type: 'ping', id: probe.id }));
       };
       const resume = () => {
-        if (closed || document.hidden || ws.readyState !== WebSocket.OPEN) return;
+        if (closed || document.hidden || !navigator.onLine || socket.current !== ws) return;
+        if (ws.readyState === WebSocket.CLOSED) { clearTimeout(retry); connect(); return; }
+        if (ws.readyState !== WebSocket.OPEN) return;
         // Mobile browsers can suspend a tab while keeping a dead WebSocket marked OPEN.
         // Replace that socket immediately on return rather than waiting for a 30-second timeout.
         if (Date.now() - lastReply > 12000) { ws.close(); return; }
@@ -127,11 +129,11 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       deadline = setTimeout(() => ws.close(), 8000);
       socket.current = ws;
       ws.onopen = () => {
-        if (closed) return;
+        if (closed || socket.current !== ws) return;
         ws.send(helloKey);
       };
       ws.onmessage = (e) => {
-        if (closed) return;
+        if (closed || socket.current !== ws) return;
         try {
           const message = JSON.parse(String(e.data));
           lastReply = Date.now();
@@ -151,7 +153,8 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       ws.onclose = () => {
         document.removeEventListener('visibilitychange', resume);
         clearTimeout(deadline); clearInterval(heartbeat);
-        if (closed) return;
+        if (closed || socket.current !== ws) return;
+        socket.current = null;
         setConnected(false);
         setQuality(connectionQuality([], false, Date.now()));
         setStatus(navigator.onLine ? 'reconnecting' : 'offline');
