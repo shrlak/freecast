@@ -38,7 +38,7 @@ export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date,
     elements: s.elements?.map((e, n) => ({ ...e, id: slides[i]?.elements?.[n]?.kind === e.kind ? slides[i].elements![n].id : e.id })) }));
 }
 
-/** A faithful Front template copy, including all logos and original prayer text; replace dates only. */
+/** Keep Front typography and content; change dates and omit the prayer page's corner logo only. */
 export function fillFront(tpl: ServiceTemplates, date: Date, _topics: PrayerTopic[] = []): Slide[] {
   return tpl.front.map((s) => withDate({ ...s, id: uid('s'), elements: s.elements?.map((e) => ({ ...e, id: uid('e') })) }, date));
 }
