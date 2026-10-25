@@ -144,7 +144,7 @@ export function startTunnel(port, onChange, { dir, ensureBinary = ensureCloudfla
       failures = healthy ? 0 : failures + 1;
       // Allow DNS propagation and brief network drops before replacing the quick tunnel.
       if (failures >= 2) { connect(); return; }
-      healthTimer = setTimeout(health, 30_000);
+      healthTimer = setTimeout(health, 15_000);
     };
     const read = (chunk) => {
       if (!active()) return;
@@ -155,7 +155,7 @@ export function startTunnel(port, onChange, { dir, ensureBinary = ensureCloudfla
         gotUrl = true;
         clearTimeout(quiet);
         set({ status: 'on', url: pending, error: null });
-        healthTimer = setTimeout(health, 30_000);
+        healthTimer = setTimeout(health, 15_000);
       }
     };
     // No working connection after a while: try another tunnel.

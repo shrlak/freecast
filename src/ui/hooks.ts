@@ -93,8 +93,11 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
     let heartbeat: ReturnType<typeof setInterval>;
     let deadline: ReturnType<typeof setTimeout>;
     let attempted = false;
+    let failures = 0;
     const connect = () => {
       if (closed) return;
+      clearTimeout(retry);
+      if (!navigator.onLine) { setConnected(false); setStatus('offline'); return; }
       setConnected(false);
       setStatus(navigator.onLine ? (attempted ? 'reconnecting' : 'connecting') : 'offline');
       attempted = true;
@@ -113,27 +116,32 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
         ws.send(JSON.stringify({ type: 'ping', id: probe.id }));
       };
       const resume = () => {
-        if (closed || document.hidden || ws.readyState !== WebSocket.OPEN) return;
-        samples = []; probe = null; lastReply = Date.now(); setQuality(connectionQuality([], true, Date.now())); ping();
+        if (closed || document.hidden || !navigator.onLine || socket.current !== ws) return;
+        if (ws.readyState === WebSocket.CLOSED) { clearTimeout(retry); connect(); return; }
+        if (ws.readyState !== WebSocket.OPEN) return;
+        // Mobile browsers can suspend a tab while keeping a dead WebSocket marked OPEN.
+        // Replace that socket immediately on return rather than waiting for a 30-second timeout.
+        if (Date.now() - lastReply > 12000) { ws.close(); return; }
+        samples = []; probe = null; setQuality(connectionQuality([], true, Date.now())); ping();
       };
       document.addEventListener('visibilitychange', resume);
       setQuality(connectionQuality([], false, Date.now()));
-      deadline = setTimeout(() => ws.close(), 10000);
+      deadline = setTimeout(() => ws.close(), 8000);
       socket.current = ws;
       ws.onopen = () => {
-        if (closed) return;
+        if (closed || socket.current !== ws) return;
         ws.send(helloKey);
       };
       ws.onmessage = (e) => {
-        if (closed) return;
+        if (closed || socket.current !== ws) return;
         try {
           const message = JSON.parse(String(e.data));
           lastReply = Date.now();
           if (message.type === 'welcome') {
-            clearTimeout(deadline); setConnected(true); setStatus('connected');
+            clearTimeout(deadline); failures = 0; setConnected(true); setStatus('connected');
             setQuality(connectionQuality([], true, Date.now())); ping();
             clearInterval(heartbeat);
-            heartbeat = setInterval(() => { if (document.hidden) return; if (Date.now() - lastReply > 30000) ws.close(); else if (ws.readyState === WebSocket.OPEN) ping(); }, 5000);
+            heartbeat = setInterval(() => { if (document.hidden) return; if (Date.now() - lastReply > 16000) ws.close(); else if (ws.readyState === WebSocket.OPEN) ping(); }, 4000);
           }
           if (message.type === 'pong' && probe && (message.id == null || message.id === probe.id)) { measure(performance.now() - probe.start); probe = null; }
           if (message.type !== 'pong') handler.current(message);
@@ -145,18 +153,28 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       ws.onclose = () => {
         document.removeEventListener('visibilitychange', resume);
         clearTimeout(deadline); clearInterval(heartbeat);
-        if (closed) return;
+        if (closed || socket.current !== ws) return;
+        socket.current = null;
         setConnected(false);
         setQuality(connectionQuality([], false, Date.now()));
         setStatus(navigator.onLine ? 'reconnecting' : 'offline');
-        if (!closed) retry = setTimeout(connect, 2000);
+        // Retry quickly on a brief drop, then back off to avoid busy-looping on a prolonged outage.
+        if (navigator.onLine) retry = setTimeout(connect, Math.min(4000, 500 * 2 ** Math.min(failures++, 3)));
       };
     };
     const offline = () => { setConnected(false); setStatus('offline'); setQuality(connectionQuality([], false, Date.now())); socket.current?.close(); };
+    const online = () => {
+      if (closed) return;
+      // Network switching (Wi-Fi / mobile data) may leave the old socket in a stale state.
+      if (socket.current?.readyState === WebSocket.OPEN) socket.current.close();
+      else if (!socket.current || socket.current.readyState === WebSocket.CLOSED) { clearTimeout(retry); connect(); }
+    };
     window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
     connect();
     return () => {
       window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
       closed = true;
       clearTimeout(retry); clearTimeout(deadline); clearInterval(heartbeat);
       socket.current?.close();
