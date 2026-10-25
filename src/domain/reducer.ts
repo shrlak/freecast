@@ -1,6 +1,7 @@
 import { trashPresentation, trashSlides, restoreTrash, purgeTrash } from './trash';
 import { exclusivePresentationMedia } from './mediaCleanup';
 import { deletedServices, isServicePlaylist } from './sunday/cleanup';
+import { isSaturdayDawnName, saturdayDawnImageCleanup } from './saturdayDawn';
 import type {
   Arrangement, Background, Library, MacroStep, MediaMeta, MessageTemplate, Macro, Playlist, PlaylistItem,
   Presentation, Prop, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer, DeviceIdentity, DeviceRegistration, ActivityEntry,
@@ -388,8 +389,9 @@ function core(s: AppState, a: Action): AppState {
     case 'playlist/delete': {
       const target = lib.playlists.find((p) => p.id === a.id);
       if (target && isServicePlaylist(target.name)) return core(s, { type: 'services/finish', ...deletedServices(lib, [a.id]) });
-      if (lib.playlists.length <= 1) return s;
+      if (lib.playlists.length <= 1 && !isSaturdayDawnName(target?.name ?? '')) return s;
       const playlists = lib.playlists.filter((p) => p.id !== a.id);
+      if (!playlists.length) playlists.push({ id: uid('pl'), name: '재생목록', items: [] });
       return { ...setLib(s, { playlists }), activePlaylistId: s.activePlaylistId === a.id ? playlists[0].id : s.activePlaylistId, playlistIndex: null };
     }
     case 'playlist/retention':
@@ -594,8 +596,22 @@ function reduceState(s: AppState, a: Action): AppState {
       ...next, cursor: null, live: { ...next.live, slide: null, title: null, nextText: null, background: null, copyright: null, bgEffect: null },
     });
   }
-  const next = core(s, a);
+  let next = core(s, a);
   if (next === s) return s;
+  if (a.type === 'playlist/removeItem' || a.type === 'playlist/delete' || a.type === 'playlist/set' || a.type === 'services/finish') {
+    const cleanup = saturdayDawnImageCleanup(s.library, next.library);
+    const keep = new Set(cleanup.keep);
+    if (next.library.presentations.some((p) => keep.has(p.id) && !p.cleanupOnPlaylistRemoval)) next = { ...next, library: { ...next.library,
+      presentations: next.library.presentations.map((p) => keep.has(p.id) && !p.cleanupOnPlaylistRemoval ? { ...p, cleanupOnPlaylistRemoval: 'saturday-dawn' } : p) } };
+    const gone = new Set(cleanup.remove);
+    if (gone.size) {
+      const trash = [...(next.library.trash ?? []), ...s.library.presentations.filter((p) => gone.has(p.id))
+        .map((p) => trashPresentation(s.library, p, a.occurredAt ?? Date.now()))];
+      next = { ...next, library: { ...next.library, trash, presentations: next.library.presentations.filter((p) => !gone.has(p.id)) },
+        selectedId: next.selectedId && gone.has(next.selectedId) ? null : next.selectedId,
+        cursor: next.cursor && gone.has(next.cursor.presentationId) ? null : next.cursor };
+    }
+  }
   // Lock changes form a history boundary: Undo cannot silently unlock or restore an older protected deck.
   const protectionState = (lib: Library) => JSON.stringify(mergeProtectionChanges(lib).sort((a, b) => a.id.localeCompare(b.id)));
   if (a.type === 'presentation/protect' || (next.library !== s.library && protectionState(next.library) !== protectionState(s.library))) return syncLive({ ...next, past: [], future: [], pastPositions: [], futurePositions: [], lastKey: null });

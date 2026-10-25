@@ -206,6 +206,8 @@ export interface Transition {
 
 export interface Presentation {
   id: string;
+  /** An image from a Saturday dawn service; retain ownership while other playlists still use it. */
+  cleanupOnPlaylistRemoval?: 'saturday-dawn';
   /** Essential material: unlock explicitly before editing, replacing or deleting it. */
   protected?: boolean;
   /** A newer explicit protection change wins during device sync; old clients cannot silently unlock. */
