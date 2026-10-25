@@ -973,6 +973,12 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
   .rehearsal-list { overflow: visible; }
   .rehearsal-main { overflow: visible; }
 }
+.remote-status-details { position: relative; flex: none; }
+.remote-status-details > summary { cursor: pointer; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; list-style: none; }
+.remote-status-details > summary::-webkit-details-marker { display: none; }
+.remote-status-popover { position: absolute; z-index: 25; top: calc(100% + 6px); right: -10px; width: min(290px, 85vw); padding: 12px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px #0005; font-size: 12px; line-height: 1.5; }
+.remote-status-popover p { margin: 0 0 6px; white-space: normal; }
+.remote-status-popover small { color: var(--muted); font-size: 11px; }
 .remote-identity { position: relative; flex: none; }
 .remote-identity > summary { cursor: pointer; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
 .remote-identity > label { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 250px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px #0004; }
