@@ -83,7 +83,7 @@ describe('remote full slide catalog', () => {
     expect(next?.current).toEqual(changed.current);
     expect(next?.upcoming).toEqual(changed.upcoming);
     expect(next?.all).toBe(initial.all);
-    expect(reader.accept({ ...position!, upcomingKeys: ['unknown:0:'] })).toBeNull();
+    expect(reader.accept({ ...position!, upcoming: [{ key: 'unknown:0:', heading: false }] })).toBeNull();
   });
 
   it('ignores stale or out-of-order chunks and accepts a fresh complete catalog', () => {
