@@ -136,10 +136,11 @@ export function attachRelay(httpServer, { publicOpen = () => false, teamKey = ()
         broadcast(packet, (c) => c.role === 'remote');
         if (pendingInfo.packets.length === pendingInfo.total) { lastInfo = pendingInfo.packets; pendingInfo = null; }
       } else if (ws.role === 'host' && msg?.type === 'info-position') {
-        if (!Array.isArray(msg.upcomingKeys) || msg.upcomingKeys.length > 100 ||
-            !msg.upcomingKeys.every((key) => typeof key === 'string' && key.length <= 256) ||
+        if (!Array.isArray(msg.upcoming) || msg.upcoming.length > 100 ||
+            !msg.upcoming.every((item) => item && typeof item.key === 'string' && item.key.length <= 256 &&
+              typeof item.heading === 'boolean' && (item.section === undefined || typeof item.section === 'string' && item.section.length <= 256)) ||
             (msg.current !== null && (!msg.current || typeof msg.current.presentationId !== 'string' || !Number.isInteger(msg.current.seq)))) return;
-        lastPosition = JSON.stringify({ type: 'info-position', current: msg.current, upcomingKeys: msg.upcomingKeys });
+        lastPosition = JSON.stringify({ type: 'info-position', current: msg.current, upcoming: msg.upcoming });
         broadcast(lastPosition, (c) => c.role === 'remote');
       } else if (ws.role === 'remote' && control.owns(ws) && msg?.type === 'command' && validCommand(msg.command)) {
         broadcast(JSON.stringify({ type: 'command', command: msg.command }), (c) => c.role === 'host');
