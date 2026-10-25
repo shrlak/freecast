@@ -39,6 +39,25 @@ const control = (action: string, id?: string) => ({ type: 'remote-control', acti
 async function waitFor(test: () => boolean) { await expect.poll(test, { timeout: 2000 }).toBe(true); }
 
 describe('single remote controller enforced by the relay', () => {
+  it('compresses larger WAN packets, replays compact position updates, and delivers commands', async () => {
+    const f = await fixture();
+    try {
+      const host = await f.connect('host');
+      const phone = await f.connect('remote', 'private-token-for-phone-A');
+      expect(phone.ws.extensions).toContain('permessage-deflate');
+      host.send({ type: 'info', info: { all: [], upcoming: [], current: null, themes: {} } });
+      host.send({ type: 'info-position', current: { presentationId: 'first', seq: 0 }, upcoming: [] });
+      await waitFor(() => phone.packets.some((p) => p.type === 'info-position'));
+      const nextPhone = await f.connect('remote', 'private-token-for-phone-B');
+      expect(nextPhone.packets.some((p) => p.type === 'info')).toBe(true);
+      expect(nextPhone.packets.some((p) => p.type === 'info-position')).toBe(true);
+      phone.send(command);
+      await waitFor(() => host.packets.filter((p) => p.type === 'command').length === 1);
+      phone.send({ type: 'info-position', current: { presentationId: 'hijack', seq: 1 }, upcoming: [] });
+      await phone.flush();
+      expect(nextPhone.packets.filter((p) => p.type === 'info-position')).toHaveLength(1);
+    } finally { await f.close(); }
+  });
   it('blocks viewer commands, publishes requests, grants from the computer, and hands control back', async () => {
     const f = await fixture();
     try {
