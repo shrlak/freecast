@@ -32,7 +32,7 @@ describe('grow text boxes while preserving font sizes', () => {
     expect(edited.fontSize).toBe(80); expect(edited.paragraphs!.map((p) => p.fontSize)).toEqual([80, 50, 50]);
     expect(patchElement(el, { fontSize: 96 }).autoFit).toBe(true);
   });
-  it('exports resize-shape autofit, original font sizes and individually styled paragraphs instead of shrink-to-fit', async () => {
+  it('exports resize-shape autofit and one consistent font size inside a formerly mixed-size box', async () => {
     const lib = createSeedLibrary(), dir = await mkdtemp(join(tmpdir(), 'freecast-box-fit-'));
     const p = { id: 'test', title: 'Text fit', themeId: lib.themes[0].id, slides: [{ id: 'slide', group: 'Slide', text: 'BODY', style: { fontSize: 96 }, elements: [
       { id: 'box', kind: 'text' as const, text: 'LARGE\nSMALL', fontSize: 80, x: 300, y: 300, w: 800, h: 80, autoFit: true, paragraphs: [{ text: 'LARGE', fontSize: 80 }, { text: 'SMALL', fontSize: 50 }] },
@@ -45,7 +45,7 @@ describe('grow text boxes while preserving font sizes', () => {
       const shapes = [...xml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map(([s]) => s);
       expect(shapes.find((s) => s.includes('BODY'))).toContain('<a:spAutoFit/>');
       const box = shapes.find((s) => s.includes('LARGE'))!;
-      expect(box).toContain('<a:spAutoFit/>'); expect(box).toContain('sz="4000"'); expect(box).toContain('sz="2500"');
+      expect(box).toContain('<a:spAutoFit/>'); expect(box).toContain('sz="4000"'); expect(box).not.toContain('sz="2500"');
       expect(shapes.find((s) => s.includes('FIXED'))).not.toContain('<a:spAutoFit/>');
     } finally { await rm(dir, { recursive: true, force: true }); }
   });
