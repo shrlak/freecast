@@ -11,6 +11,9 @@ import { mediaUrl, peekMediaUrl } from '../domain/media';
 
 export { CANVAS_W, CANVAS_H } from '../domain/canvas';
 import { CANVAS_W, CANVAS_H } from '../domain/canvas';
+import { growTextBox } from '../domain/textBox';
+import { useAutoTextBoxes, useFontEpoch } from './textBoxLayout';
+import { elementTextStyle } from '../domain/textBoxLayout';
 
 export interface CanvasProps {
   slide: Slide | null;
@@ -207,17 +210,8 @@ export function ElementView({ el }: { el: SlideElement }) {
   return <TextElement el={el} box={box} />;
 }
 
-function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const key = `${el.text}|${el.w}|${el.h}|${el.fontSize}|${el.letterSpacing}|${el.list}|${el.indent}|${el.columns}|${el.vertical}|${el.lineHeight}|${JSON.stringify(el.paragraphs?.map((p) => p.fontSize))}`;
-  useLayoutEffect(() => setScale(1), [key]);
-  useLayoutEffect(() => {
-    const node = ref.current;
-    if (!el.autoFit || !node) return;
-    const k = Math.min(node.clientHeight / node.scrollHeight, node.clientWidth / node.scrollWidth);
-    if (k < 0.99 && scale > 0.3) setScale((v) => Math.max(0.3, v * k * 0.97));
-  }, [el.autoFit, key, scale]);
+function TextElement({ el: original, box }: { el: SlideElement; box: CSSProperties }) {
+  const [el] = useAutoTextBoxes([original]);
   const base = el.fontSize ?? 64;
   const lines = el.paragraphs ? el.paragraphs.map((p) => p.text) : (el.text ?? '').split('\n');
   const markers = listMarkers(lines, el.list);
@@ -226,20 +220,20 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
     <ListLine marker={markers[i]} highlight={text.trim() ? el.highlight : undefined}>{TOKEN.test(text) ? <DynamicText text={text} /> : text}</ListLine>
   );
   return (
-    <div ref={ref} style={{
-      ...box, display: 'flex', flexDirection: 'column', whiteSpace: 'pre-line',
+    <div data-text-element={el.id} style={{
+      ...box, left: el.x, top: el.y, width: el.w, height: el.h, ...elementTextStyle(el), display: 'flex', flexDirection: 'column', whiteSpace: 'pre-wrap',
       justifyContent: V_ALIGN[el.vAlign ?? 'middle'], textAlign: el.align ?? 'center',
-      fontSize: base * scale, fontFamily: el.fontFamily, color: el.color ?? '#fff',
+      fontSize: base, fontFamily: el.fontFamily, color: el.color ?? '#fff',
       fontWeight: el.bold ? 800 : el.paragraphs ? 400 : 500, fontStyle: el.italic ? 'italic' : undefined, lineHeight: el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25),
-      textDecoration: decoration(el), letterSpacing: el.letterSpacing ? el.letterSpacing * scale : undefined,
-      paddingLeft: el.indent ? el.indent * INDENT_PX * scale : undefined, ...columnsAndDirection(el),
+      textDecoration: decoration(el), letterSpacing: el.letterSpacing ? el.letterSpacing : undefined,
+      paddingLeft: el.indent ? el.indent * INDENT_PX : undefined, ...columnsAndDirection(el),
       textShadow: el.shadow ? '0 3px 12px rgba(0,0,0,.8)' : undefined, overflow: 'hidden',
     }}>
       {el.paragraphs
         ? el.paragraphs.map((p, i) => (
             <div key={i} style={{
-              fontSize: (p.fontSize ?? base) * scale, fontWeight: p.bold ? 700 : undefined, fontStyle: p.italic ? 'italic' : undefined,
-              color: p.color, textAlign: p.align, minHeight: '1.2em',
+              fontSize: (p.fontSize ?? base), fontWeight: p.bold ? 700 : undefined, fontStyle: p.italic ? 'italic' : undefined,
+              color: p.color, textAlign: p.align, minHeight: '1.2em', flexShrink: 0,
             }}>
               {lineBody(p.text, i)}
             </div>
@@ -253,20 +247,6 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
 /** The theme with this slide's own formatting applied on top. */
 export const slideTheme = (theme: Theme, slide: Slide): Theme => (slide.style ? { ...theme, ...slide.style } : theme);
 
-/** Bumps whenever web fonts finish loading, so text fitted with a fallback font is fitted again. */
-function useFontEpoch(): number {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    const fonts = document.fonts;
-    if (!fonts) return;
-    const bump = () => setN((v) => v + 1);
-    fonts.addEventListener('loadingdone', bump);
-    fonts.ready.then(bump).catch(() => undefined);
-    return () => fonts.removeEventListener('loadingdone', bump);
-  }, []);
-  return n;
-}
-
 function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const theme = slideTheme(base, slide);
   const fontEpoch = useFontEpoch();
@@ -274,38 +254,33 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const horizontalPad = slide.lyricBody && hasQr ? Math.max(theme.padding, 300) : theme.padding;
   const qrSpace = hasQr && !slide.lyricBody ? 300 : 0;
   const inner = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  // Lyric lines never wrap (a long line would leave one word alone on the next line): the text shrinks instead.
-  // A line too long to fit even at 60% size (a whole verse typed as one line) wraps as before.
-  const [tooLong, setTooLong] = useState(false);
   const lyricLines = theme.noWrap ?? theme.id === TEMPLATE_LYRICS_THEME;
-  const noWrap = lyricLines && !tooLong;
-  const content = `${slide.title}|${slide.text}|${slide.subtext}|${theme.id}|${theme.fontSize}|${theme.fontFamily}|${theme.fontWeight}|${theme.padding}|${theme.lineHeight}|${theme.italic}|${lyricLines}|${theme.letterSpacing}|${theme.list}|${theme.indent}|${theme.columns}|${theme.vertical}|${fontEpoch}`;
+  const baseBox = { x: horizontalPad, y: theme.padding, w: Math.max(1, CANVAS_W - horizontalPad * 2 - qrSpace), h: Math.max(1, CANVAS_H - theme.padding * 2) };
+  const key = JSON.stringify([slide.title, slide.text, slide.subtext, theme, horizontalPad, qrSpace, fontEpoch]);
+  const [layout, setLayout] = useState<{ key: string; box: typeof baseBox; wrap: boolean } | null>(null);
+  const frame = layout?.key === key ? layout.box : baseBox;
+  const noWrap = lyricLines && !(layout?.key === key && layout.wrap);
   useLayoutEffect(() => {
-    setScale(1);
-    setTooLong(false);
-  }, [content]);
-  useLayoutEffect(() => {
-    const el = inner.current;
-    if (!el || theme.autoFit === false) return;
-    const availH = CANVAS_H - theme.padding * 2;
-    const availW = CANVAS_W - horizontalPad * 2 - qrSpace;
-    const k = Math.min(availH / el.scrollHeight, availW / el.scrollWidth);
-    if (noWrap && scale * k < 0.6 && availW / el.scrollWidth < 0.99) {
-      setScale(1);
-      setTooLong(true);
-      return;
-    }
-    if (k < 0.99 && scale > 0.25) setScale((v) => Math.max(0.25, v * k * 0.98));
-  }, [scale, content, horizontalPad, qrSpace, theme.autoFit, theme.padding, noWrap]);
-  const t = scale === 1 ? theme : { ...theme, fontSize: theme.fontSize * scale, letterSpacing: theme.letterSpacing && theme.letterSpacing * scale };
+    const node = inner.current;
+    if (!node || theme.autoFit === false) return;
+    node.style.width = `${baseBox.w}px`;
+    node.style.whiteSpace = lyricLines ? 'pre' : 'pre-wrap';
+    const maxWidth = hasQr && slide.lyricBody ? baseBox.w : CANVAS_W - qrSpace;
+    const w = Math.max(baseBox.w, Math.min(maxWidth, node.scrollWidth));
+    node.style.width = `${w}px`;
+    const wrap = lyricLines && node.scrollWidth > w + 1;
+    if (wrap) node.style.whiteSpace = 'pre-wrap';
+    const box = growTextBox(baseBox, { w, h: node.scrollHeight }, theme.align, theme.vAlign, { w: CANVAS_W - qrSpace, h: CANVAS_H });
+    setLayout({ key, box, wrap });
+  }, [key]);
+  const t = theme;
   return (
     <>
       <div
         className="layer text-layer"
-        style={{ padding: theme.padding, paddingLeft: horizontalPad, paddingRight: horizontalPad + qrSpace, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
+        style={{ inset: 'auto', left: frame.x, top: frame.y, width: frame.w, height: frame.h, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
       >
-        <div ref={inner} style={{ ...textStyle(t), whiteSpace: noWrap ? 'pre' : undefined, marginLeft: theme.indent ? theme.indent * INDENT_PX * scale : undefined, alignSelf: theme.align === 'justify' ? 'stretch' : undefined }}>
+        <div ref={inner} data-slide-text-box style={{ ...textStyle(t), width: frame.w, flexShrink: 0, whiteSpace: noWrap ? 'pre' : 'pre-wrap', overflowWrap: 'anywhere', paddingLeft: theme.indent ? theme.indent * INDENT_PX : undefined }}>
           {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}
           {slide.text && <Lines text={slide.text} list={theme.list} highlight={theme.highlight} />}
           {slide.subtext && (
@@ -314,12 +289,12 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
             </div>
           )}
         </div>
-        {hasQr && (
+      </div>
+      {hasQr && (
           <div className="qr-stack">
             {slide.qr!.map((link) => <img key={link} src={qrDataUrl(link)} alt={link} />)}
           </div>
-        )}
-      </div>
+      )}
       {slide.elements?.map((el) => <ElementView key={el.id} el={el} />)}
       {slide.caption && <div className="slide-caption" style={{ fontFamily: theme.fontFamily, color: theme.color }}>{slide.caption}</div>}
     </>

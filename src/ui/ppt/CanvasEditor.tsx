@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import type { Background, BackgroundEffect, Slide, SlideElement, Theme } from '../../domain/types';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
 import { patchElement } from '../../domain/templates/convert';
 import { NO_GUIDES, snapMove, type SnapGuides } from '../../domain/snap';
 import { SlideCanvas, slideTheme } from '../SlideCanvas';
 import { useWidth } from '../hooks';
+import { useAutoTextBoxes } from '../textBoxLayout';
+import { AutoTextarea } from '../AutoTextarea';
 import { isPdfSlide } from '../../domain/importedSlides';
 
 /** The slide's own text (lyrics, scripture…) drawn by the theme, selectable like an object. */
@@ -52,8 +54,28 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     save?.();
   }, []);
   const theme = slideTheme(baseTheme, slide);
-  const elements = slide.elements ?? [];
-  const textBox: Box = { x: theme.padding, y: theme.padding, w: CANVAS_W - theme.padding * 2, h: CANVAS_H - theme.padding * 2 };
+  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }));
+  const defaultTextBox: Box = { x: theme.padding, y: theme.padding, w: CANVAS_W - theme.padding * 2, h: CANVAS_H - theme.padding * 2 };
+  const [bodyBox, setBodyBox] = useState<{ identity: string; box: Box } | null>(null);
+  const textBox = bodyBox?.identity === identity ? bodyBox.box : defaultTextBox;
+  useLayoutEffect(() => {
+    if (editing === SLIDE_TEXT || readOnly || isPdfSlide(slide) || !ref.current) return;
+    let node: HTMLElement | null = null;
+    const update = () => {
+      if (!node) return;
+      const box = { x: node.offsetLeft, y: node.offsetTop, w: node.offsetWidth, h: node.offsetHeight };
+      setBodyBox((old) => old?.identity === identity && Object.keys(box).every((k) => old.box[k as keyof Box] === box[k as keyof Box]) ? old : { identity, box });
+    };
+    const observer = new ResizeObserver(update);
+    const bind = () => {
+      const current = ref.current?.querySelector<HTMLElement>('.canvas .text-layer') ?? null;
+      if (current !== node) { observer.disconnect(); node = current; if (node) observer.observe(node); }
+      update();
+    };
+    // Background decoding can replace the previous slide after this editor has already mounted.
+    const mutations = new MutationObserver(bind); mutations.observe(ref.current, { childList: true, subtree: true }); bind();
+    return () => { observer.disconnect(); mutations.disconnect(); };
+  }, [identity, editing, theme.padding, theme.fontSize, theme.align, theme.vAlign, width, readOnly]);
 
   // A different slide: stop typing and drop the selection.
   useEffect(() => {
@@ -208,7 +230,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
         {guides.v.map((x) => <div key={`v${x}`} className="ce-guide ce-guide-v" style={{ left: x * k }} />)}
         {guides.h.map((y) => <div key={`h${y}`} className="ce-guide ce-guide-h" style={{ top: y * k }} />)}
         {editing && (
-          <textarea className="ce-typing" autoFocus value={draft} style={{ ...at(editing === SLIDE_TEXT ? textBox : boxOf(elements.find((e) => e.id === editing)!)), ...editorStyle(editing) }}
+          <AutoTextarea className="ce-typing" autoFocus value={draft} style={{ ...at(editing === SLIDE_TEXT ? textBox : boxOf(elements.find((e) => e.id === editing)!)), ...editorStyle(editing) }}
             onChange={(e) => type(e.target.value)} onBlur={stopEditing} onPointerDown={(e) => e.stopPropagation()}
             onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); stopEditing(); } }} />
         )}

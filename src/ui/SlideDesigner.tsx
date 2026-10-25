@@ -8,6 +8,7 @@ import { CANVAS_H, CANVAS_W, ElementView as SlideElementSlot, SlideCanvas } from
 import { useAutosave, useWidth } from './hooks';
 import { AutoTextarea } from './AutoTextarea';
 import { isPdfSlide, PDF_READ_ONLY } from '../domain/importedSlides';
+import { useAutoTextBoxes } from './textBoxLayout';
 import { PROTECTED_MESSAGE } from '../domain/materialProtection';
 
 interface Props {
@@ -25,6 +26,7 @@ interface Props {
 /** WYSIWYG slide editor: free-positioned text boxes, images and shapes on top of the slide. */
 export function SlideDesigner({ slide, theme, background, media, addMedia, onSave, onClose, readOnly }: Props) {
   const [els, setEls] = useState<SlideElement[]>(slide.elements ?? []);
+  useAutoTextBoxes(els, readOnly || isPdfSlide(slide) ? undefined : setEls);
   const [text, setText] = useState(slide.text);
   const [sel, setSel] = useState<string | null>(null);
   const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);

@@ -92,7 +92,7 @@ export function ThemeModal({ themes, initialId, background, dispatch, onClose }:
             </label>
             <label className="check"><input type="checkbox" checked={theme.shadow} onChange={(e) => set('shadow', e.target.checked)} /> Text shadow</label>
             <label className="check"><input type="checkbox" checked={theme.uppercase} onChange={(e) => set('uppercase', e.target.checked)} /> All caps</label>
-            <label className="check"><input type="checkbox" checked={theme.autoFit !== false} onChange={(e) => set('autoFit', e.target.checked)} /> Shrink text to fit</label>
+            <label className="check"><input type="checkbox" checked={theme.autoFit !== false} onChange={(e) => set('autoFit', e.target.checked)} /> 넘치면 텍스트 상자 크기 조정</label>
             <label>Outline <span className="muted">{theme.strokeWidth ?? 0}px</span>
               <div className="row gap-xs">
                 <input type="range" min={0} max={12} value={theme.strokeWidth ?? 0} onChange={(e) => set('strokeWidth', Number(e.target.value))} />
