@@ -1,4 +1,5 @@
 import type { Presentation, SlideElement } from './types';
+import { isFrontSlide } from './frontLayout';
 
 /** A text box has one size; individual lines can still keep bold, color and other emphasis. */
 export function uniformTextBoxFont(el: SlideElement, size = el.fontSize ?? el.paragraphs?.find((p) => p.text.trim())?.fontSize ?? 64): SlideElement {
@@ -17,6 +18,7 @@ export function hasMixedTextSizes(el: SlideElement): boolean {
 export function correctMixedTextSizes(p: Presentation): Presentation {
   if (p.protected) return p;
   const slides = p.slides.map((s) => {
+    if (isFrontSlide(s)) return s;
     const elements = s.elements?.map((el) => hasMixedTextSizes(el) ? { ...uniformTextBoxFont(el), maximizeFont: false } : el);
     return elements?.some((e, i) => e !== s.elements![i]) ? { ...s, elements } : s;
   });

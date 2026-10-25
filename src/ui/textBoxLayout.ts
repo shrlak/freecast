@@ -17,11 +17,12 @@ function subscribeFonts(listener: () => void) {
 export const useFontEpoch = () => useSyncExternalStore(subscribeFonts, () => fontEpoch, () => 0);
 
 /** Editors persist resized geometry; previews and output only draw it. Nothing writes protected content. */
-export function useAutoTextBoxes(elements: SlideElement[], onResize?: (elements: SlideElement[]) => void, hasQr = false): SlideElement[] {
+export function useAutoTextBoxes(elements: SlideElement[], onResize?: (elements: SlideElement[]) => void, hasQr = false, preserveLayout = false): SlideElement[] {
   const epoch = useFontEpoch(), key = JSON.stringify(elements);
   const latest = useRef({ elements, onResize }); latest.current = { elements, onResize };
   const [layout, setLayout] = useState<{ key: string; elements: SlideElement[] } | null>(null);
   useLayoutEffect(() => {
+    if (preserveLayout) { setLayout(null); return; }
     const { elements, onResize } = latest.current;
     const fitted = elements.map((el) => fitTextElement(el, textElementBounds(el, elements, hasQr)));
     if (fitted.some((el, i) => el !== elements[i])) {
@@ -29,6 +30,6 @@ export function useAutoTextBoxes(elements: SlideElement[], onResize?: (elements:
       if (document.fonts?.status !== 'loading') onResize?.(fitted);
     }
     else setLayout(null);
-  }, [key, epoch, hasQr]);
-  return layout?.key === key ? layout.elements : elements;
+  }, [key, epoch, hasQr, preserveLayout]);
+  return !preserveLayout && layout?.key === key ? layout.elements : elements;
 }

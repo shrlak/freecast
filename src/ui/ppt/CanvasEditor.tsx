@@ -1,3 +1,4 @@
+import { isFrontSlide } from '../../domain/frontLayout';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as RKeyboardEvent, type PointerEvent as RPointerEvent } from 'react';
 import type { Background, BackgroundEffect, Slide, SlideElement, Theme } from '../../domain/types';
 import { CANVAS_H, CANVAS_W } from '../../domain/canvas';
@@ -54,7 +55,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     save?.();
   }, []);
   const theme = slideTheme(baseTheme, slide);
-  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }), !!slide.qr?.length);
+  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }), !!slide.qr?.length, isFrontSlide(slide));
   const defaultTextBox: Box = { x: theme.padding, y: theme.padding, w: CANVAS_W - theme.padding * 2, h: CANVAS_H - theme.padding * 2 };
   const [bodyBox, setBodyBox] = useState<{ identity: string; box: Box } | null>(null);
   const latestBody = useRef({ slide, onChange }); latestBody.current = { slide, onChange };
@@ -67,7 +68,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
       const fitted = node.querySelector<HTMLElement>('[data-fitted-font-size]');
       const size = Number(fitted?.dataset.fittedFontSize), preferred = Number(fitted?.dataset.preferredFontSize);
       const latest = latestBody.current;
-      if (Number.isFinite(size) && size > 0 && size !== (latest.slide.style?.fontSize ?? theme.fontSize) && document.fonts?.status !== 'loading') latest.onChange({ maximizeFont: false, preferredFontSize: preferred, style: { ...latest.slide.style, fontSize: size } });
+      if (!isFrontSlide(latest.slide) && Number.isFinite(size) && size > 0 && size !== (latest.slide.style?.fontSize ?? theme.fontSize) && document.fonts?.status !== 'loading') latest.onChange({ maximizeFont: false, preferredFontSize: preferred, style: { ...latest.slide.style, fontSize: size } });
       const box = { x: node.offsetLeft, y: node.offsetTop, w: node.offsetWidth, h: node.offsetHeight };
       setBodyBox((old) => old?.identity === identity && Object.keys(box).every((k) => old.box[k as keyof Box] === box[k as keyof Box]) ? old : { identity, box });
     };

@@ -8,11 +8,11 @@ import { formatRef, type BibleRef } from '../bible/refs';
 import type { ScriptureChunk } from '../bible/slides';
 import type { Announcement } from '../sunday/announcements';
 import type { PrayerTopic } from '../sunday/prayer';
-import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
 import { splitEvenly } from '../sunday/songs';
-import { fillSlide, fillTokens, withElementText } from './convert';
-import { CANVAS_H, CANVAS_W } from '../canvas';
+import { fillSlide, fillTokens } from './convert';
+import { CANVAS_W } from '../canvas';
+import { keepFrontLayout } from '../frontLayout';
 import type { ServiceTemplates } from './serviceTemplates';
 import { centerSongLyrics } from '../songCentering';
 import { prepareAnnouncementSlide } from '../announcementSizing';
@@ -24,88 +24,27 @@ const DATE_LINE = /^\s*(?:\d{1,2}|m{1,2})\s*\/\s*(?:\d{1,2}|d{1,2})\s*\/\s*[\dy]
 const area = (e: SlideElement) => e.w * e.h;
 const texts = (s: Slide) => (s.elements ?? []).filter((e) => e.kind === 'text');
 
-/** Lines with their own weight, styled like the element's first (heading) / second (body) line. */
-function setLines(el: SlideElement, lines: { text: string; bold?: boolean }[]): SlideElement {
-  return {
-    ...el,
-    text: lines.map((l) => l.text).join('\n'),
-    paragraphs: lines.map((l) => ({ ...(el.paragraphs?.[l.bold ? 0 : 1] ?? el.paragraphs?.[0] ?? { text: '' }), text: l.text, bold: l.bold || undefined })),
-  };
+/** Update date text without changing the original text box or paragraph styling. */
+const withDate = (s: Slide, date: Date): Slide => {
+  const replace = (text: string) => text.replace(/\{date\}/g, mdy(date)).split('\n').map((line) => DATE_LINE.test(line) ? mdy(date) : line).join('\n');
+  return keepFrontLayout({ ...s, text: replace(s.text), ...(s.title ? { title: replace(s.title) } : {}), ...(s.subtext ? { subtext: replace(s.subtext) } : {}),
+    elements: s.elements?.map((e) => e.kind === 'text' && e.text && replace(e.text) !== e.text
+      ? { ...e, text: replace(e.text), paragraphs: e.paragraphs?.map((p) => ({ ...p, text: replace(p.text) })) } : e) });
+};
+
+/** Restore the source Front design, retaining page/object identities where possible. Only dates differ. */
+export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date, _topics: PrayerTopic[] = []): Slide[] {
+  return fillFront(tpl, date).map((s, i) => ({ ...s, id: slides[i]?.id ?? s.id,
+    elements: s.elements?.map((e, n) => ({ ...e, id: slides[i]?.elements?.[n]?.kind === e.kind ? slides[i].elements![n].id : e.id })) }));
 }
 
-const PRAYER_MARK = /기도제목\s*\d/;
-const copy = (s: Slide): Slide => fillSlide(s, (t) => t);
-const isPrayerSlide = (s: Slide) => texts(s).some((e) => e.role === 'prayer');
-
-const LINE_HEIGHT = 1.2;
-/** A copy of `design` (a 기도 준비 slide) printing `lines` in its 기도제목 box, at the template’s original font sizes. */
-function prayerCopy(design: Slide, lines: { text: string; bold?: boolean }[], group: string): Slide {
-  const c = copy(design);
-  return {
-    ...c, group,
-    elements: c.elements!.map((e) => {
-      if (e.role !== 'prayer') return e;
-      const filled = setLines(e, lines);
-      return { ...filled, autoFit: true, vAlign: 'middle', lineHeight: LINE_HEIGHT };
-    }),
-  };
+/** A faithful Front template copy, including all logos and original prayer text; replace dates only. */
+export function fillFront(tpl: ServiceTemplates, date: Date, _topics: PrayerTopic[] = []): Slide[] {
+  return tpl.front.map((s) => withDate({ ...s, id: uid('s'), elements: s.elements?.map((e) => ({ ...e, id: uid('e') })) }, date));
 }
 
-/**
- * The 기도 준비 slides for these topics, each a copy of `design` (one topic per slide, text boxes grown to fit it). With no topics, one slide with the template's own text (`emptyText`).
- */
-function prayerSlides(design: Slide, topics: PrayerTopic[], emptyText: string): Slide[] {
-  if (!topics.length) return [prayerCopy(design, emptyText.split('\n').map((text) => ({ text })), design.group === '기도제목' ? 'Front' : design.group)];
-  // As the ppt program prints them: numbered topics (any with points) are all "n. 제목" in bold with
-  // their points as ● lines; a plain list is one ● line per topic.
-  const structured = topics.some((t) => t.points.length);
-  let n = 1;
-  return planPrayerSlides(topics).map((group) => {
-    const lines = group.flatMap((t, i) =>
-      structured ? [{ text: `${n + i}. ${t.title}`, bold: true }, ...t.points.map((p) => ({ text: `● ${p}` }))] : [{ text: `● ${t.title}` }],
-    );
-    n += group.length;
-    return prayerCopy(design, lines, '기도제목');
-  });
-}
-
-const withDate = (s: Slide, date: Date): Slide => ({
-  ...s,
-  elements: s.elements?.map((e) => (e.kind === 'text' && e.text && e.text.split('\n').some((l) => DATE_LINE.test(l))
-    ? withElementText(e, e.text.split('\n').map((l) => (DATE_LINE.test(l) ? mdy(date) : l)).join('\n'))
-    : e)),
-});
-
-/** The template's 기도제목 box text ("기도제목 1\n기도제목 2"), printed when there are no topics. */
-const templatePrayerText = (tpl: ServiceTemplates) =>
-  tpl.front.flatMap((s) => texts(s)).find((e) => PRAYER_MARK.test(e.text ?? ''))?.text ?? '기도제목';
-
-/**
- * Bring an existing Front deck up to date — the date on the welcome slide and the 기도 준비
- * slides — while keeping everything else on it exactly as edited.
- */
-export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date, topics: PrayerTopic[]): Slide[] {
-  const at = slides.findIndex(isPrayerSlide);
-  const rest = slides.filter((s) => !isPrayerSlide(s)).map((s) => withDate(s, date));
-  if (at < 0) return rest;
-  const before = slides.slice(0, at).filter((s) => !isPrayerSlide(s)).length;
-  return [...rest.slice(0, before), ...prayerSlides(slides[at], topics, templatePrayerText(tpl)), ...rest.slice(before)];
-}
-
-/**
- * Front from the template: 기도제목 on the 기도 준비 slide (as many copies as they need, its corner
- * logo left off), the service date on the welcome slide.
- */
-export function fillFront(tpl: ServiceTemplates, date: Date, topics: PrayerTopic[]): Slide[] {
-  const slides = tpl.front.map((slide) => {
-    const c = copy(slide);
-    const box = texts(c).find((e) => PRAYER_MARK.test(e.text ?? ''));
-    if (!box) return c;
-    const topRight = (e: SlideElement) => e.kind === 'image' && e.x + e.w / 2 > CANVAS_W * 0.6 && e.y + e.h / 2 < CANVAS_H * 0.25;
-    return { ...c, elements: c.elements!.filter((e) => !topRight(e)).map((e) => (e === box ? { ...e, role: 'prayer' as const } : e)) };
-  });
-  return refreshFront(slides, tpl, date, topics);
-}
+/** Date-only fallback when the church source file is unavailable. */
+export const updateFrontDate = (slides: Slide[], date: Date): Slide[] => slides.map((s) => withDate(s, date));
 
 export const prayerSlide = (tpl: ServiceTemplates): Slide => fillSlide(tpl.prayer, (t) => t);
 

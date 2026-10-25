@@ -121,7 +121,7 @@ describe('service builder', () => {
     expect(headers).toEqual(['Front', '찬양', '성경 말씀', '설교 후 찬양', '광고', 'Back / End']);
     expect(playlist.name).toBe('0712 주일예배');
     const front = presentations.find((p) => p.title === '0712 Front')!;
-    expect(front.slides.filter((s) => s.text.includes('●')).length).toBe(4);
+    expect(front.slides.map((s) => s.text)).toEqual(lib.presentations.find((p) => p.id === lib.sunday.frontId)!.slides.map((s) => s.text.replaceAll('{date}', '07/12/2026')));
     expect(front.slides.some((s) => s.subtext === '07/12/2026')).toBe(true);
     const back = presentations.find((p) => p.title === '0712 Back')!;
     expect(back.slides[0].group).toMatch(/^공동체 고백/);
