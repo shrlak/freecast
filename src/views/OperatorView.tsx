@@ -42,7 +42,7 @@ import { runExternal } from '../domain/effects';
 import type { Macro, SlideAction } from '../domain/types';
 import { AudioPlayer } from '../ui/AudioPanel';
 import { filesToSlides } from '../ui/importFiles';
-import { remoteInfoMessages, remoteSlideInfo } from '../domain/remoteSlides';
+import { remoteInfoMessages, remotePositionMessage, remoteSlideInfo } from '../domain/remoteSlides';
 import { mediaIdsFor, resetSentMedia, sendMediaToRemotes } from '../domain/remoteMedia';
 import { useMidi } from '../ui/midi';
 import { ClassicToolbar } from '../ui/ClassicToolbar';
@@ -234,6 +234,7 @@ export function OperatorView() {
 
   const [remotes, setRemotes] = useState(0);
   const lastLibrary = useRef(state.library);
+  const lastRemoteCatalog = useRef<null | { snapshot: typeof state.library; selected: typeof state.selectedId; playlist: typeof state.activePlaylistId; connected: boolean }>(null);
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
     if (m.type === 'team-requests') {
       const entries = m.requests as TeamRequest[];
@@ -268,7 +269,13 @@ export function OperatorView() {
   useEffect(() => {
     let cancelled = false;
     const info = remoteSlideInfo(rehearsalPreview ?? state, rehearsalPreview?.selectedId ?? state.selectedId);
-    const messages = remoteInfoMessages(info);
+    const source = rehearsalPreview ?? state;
+    const stamp = { snapshot: source.library, selected: source.selectedId, playlist: source.activePlaylistId, connected: relay.connected };
+    const previous = lastRemoteCatalog.current;
+    const unchanged = previous?.snapshot === stamp.snapshot && previous.selected === stamp.selected &&
+      previous.playlist === stamp.playlist && previous.connected === stamp.connected;
+    const position = unchanged ? remotePositionMessage(info) : null;
+    const messages = position ? [position] : remoteInfoMessages(info);
     // Current/next previews arrive first; earlier slides also need their media for browsing.
     const previews = [...info.upcoming, ...(info.all ?? [])];
     const ids = mediaIdsFor({ slides: previews.map((x) => x.slide), backgrounds: previews.map((x) => x.background) });
@@ -277,6 +284,7 @@ export function OperatorView() {
     const t = setTimeout(() => {
       if (cancelled) return;
       for (const message of messages) relay.send(message);
+      if (!position) lastRemoteCatalog.current = stamp;
       if (remotes > 0) sendMediaToRemotes(ids);
     }, edited ? 300 : 0);
     return () => {

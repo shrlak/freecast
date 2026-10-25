@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createSeedLibrary } from '../src/domain/defaults';
 import { createInitialState, reducer } from '../src/domain/reducer';
-import { RemoteInfoReader, remoteInfoMessages, remoteSlideInfo, remoteSlideKey } from '../src/domain/remoteSlides';
+import { RemoteInfoReader, remoteInfoMessages, remotePositionMessage, remoteSlideInfo, remoteSlideKey } from '../src/domain/remoteSlides';
 
 function service() {
   const lib = createSeedLibrary();
@@ -67,6 +67,23 @@ describe('remote full slide catalog', () => {
       if (index < packets.length - 1) expect(received).toBeNull();
       else expect(received).toEqual(info);
     });
+  });
+
+  it('sends only current position and upcoming keys when the slide catalog is unchanged', () => {
+    const state = service();
+    const initial = remoteSlideInfo(state, 'front');
+    const reader = new RemoteInfoReader();
+    const changed = remoteSlideInfo(reducer(state, { type: 'live/go', presentationId: 'song', seq: 3, playlistIndex: 4 }), 'front');
+    const position = remotePositionMessage(changed);
+    expect(position).not.toBeNull();
+    expect(JSON.stringify(position).length).toBeLessThan(JSON.stringify(remoteInfoMessages(changed)[0]).length);
+    expect(reader.accept(position!)).toBeNull(); // Full catalog required on a fresh connection.
+    expect(reader.accept({ type: 'info', info: initial })).toEqual(initial);
+    const next = reader.accept(position!);
+    expect(next?.current).toEqual(changed.current);
+    expect(next?.upcoming).toEqual(changed.upcoming);
+    expect(next?.all).toBe(initial.all);
+    expect(reader.accept({ ...position!, upcoming: [{ key: 'unknown:0:', heading: false }] })).toBeNull();
   });
 
   it('ignores stale or out-of-order chunks and accepts a fresh complete catalog', () => {

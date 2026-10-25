@@ -72,6 +72,8 @@ export function RemoteView() {
   useEffect(() => {
     document.title = 'FreeCast Remote';
   }, []);
+  // Do not carry an old host/controller state over a disconnected relay session.
+  useEffect(() => { if (!connected) { setHostConnected(false); setControl(null); } }, [connected]);
   const live = rehearsal?.active ? rehearsal.state ?? actualLive : actualLive;
   const ready = connected && hostConnected;
   const embedded = window.self !== window.top;
@@ -131,6 +133,13 @@ export function RemoteView() {
       <section className="remote-access" aria-label="리모컨 조작권">
         <details className="remote-identity"><summary>기기</summary><label>기기 이름 <input aria-label="리모컨 기기 이름" maxLength={80} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} onBlur={() => { localStorage.setItem('freecast.remote.deviceName', deviceName); send({ type: 'remote-control', action: 'rename', name: deviceName }); }} /></label></details>
         <button onClick={() => setRequestsOpen(true)}>요청</button>
+        <details className="remote-status-details"><summary>연결 상태</summary><div className="remote-status-popover" role="status">
+          <p><strong>컴퓨터:</strong> {connectionLabel}</p>
+          <p><strong>통신 품질:</strong> {!ready ? '연결 대기 중' : quality.level === 'good' ? '양호' : quality.level === 'fair' ? '지연 있음' : quality.level === 'poor' ? '불안정' : '측정 중'}</p>
+          <p><strong>응답 속도:</strong> {ready && quality.latencyMs !== null ? `${quality.latencyMs}ms` : '측정 중'}</p>
+          <p><strong>조작권:</strong> {!ready ? '연결 대기 중' : control?.canControl ? '조작 가능' : '보기 전용'}</p>
+          <small>휴대폰과 컴퓨터가 모두 인터넷에 연결되어 있으면 다른 Wi-Fi나 모바일 데이터에서도 사용할 수 있습니다.</small>
+        </div></details>
         <span role="status">{control?.canControl ? '● 내가 조작 중' : `보기 전용 · ${control?.clients.find((c) => c.id === control.controllerId)?.name ?? '조작권 없음'}`}</span>
         {!control?.canControl && <button disabled={!ready || control?.clients.find((c) => c.id === control.selfId)?.requested} onClick={() => send({ type: 'remote-control', action: 'request' })}>조작권 요청</button>}
         {control?.canControl && <select aria-label="조작권 넘기기" value="" onChange={(e) => { if (e.target.value) send({ type: 'remote-control', action: 'handoff', id: e.target.value }); }}><option value="">{control.clients.some((c) => c.requested && c.id !== control.selfId) ? '조작권 요청 있음' : '조작권 넘기기…'}</option>{control.clients.filter((c) => c.connected && c.id !== control.selfId).map((c) => <option key={c.id} value={c.id}>{c.name}{c.requested ? ' (요청)' : ''}</option>)}</select>}
