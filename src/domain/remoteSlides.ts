@@ -69,15 +69,15 @@ export function remoteSlideInfo(state: NavState, selectedId: string | null): Rem
   return { all, upcoming, themes, current, name: usePlaylist ? playlist.name : findPres(state.library, focusId ?? '')?.title };
 }
 
-export type RemotePositionMessage = { type: 'info-position'; current: Cursor | null; upcomingKeys: string[] };
+export type RemotePositionMessage = { type: 'info-position'; current: Cursor | null; upcoming: { key: string; heading: boolean; section?: string }[] };
 export type RemoteInfoMessage = { type: 'info'; info: RemoteInfo } | { type: 'info-chunk'; id: string; index: number; total: number; data: string } | RemotePositionMessage;
 
 /** Cursor updates are tiny; unchanged slide catalogs should not cross a slow WAN on every click. */
 export function remotePositionMessage(info: RemoteInfo): RemotePositionMessage | null {
   if (!info.all) return null;
   const available = new Set(info.all.map(remoteSlideKey));
-  const upcomingKeys = info.upcoming.map(remoteSlideKey);
-  return upcomingKeys.every((key) => available.has(key)) ? { type: 'info-position', current: info.current ?? null, upcomingKeys } : null;
+  const upcoming = info.upcoming.map((slide) => ({ key: remoteSlideKey(slide), heading: slide.heading, section: slide.section }));
+  return upcoming.every(({ key }) => available.has(key)) ? { type: 'info-position', current: info.current ?? null, upcoming } : null;
 }
 
 /** Split large catalogs without losing slides or exceeding the relay's 4 MB UTF-8 frame limit. */
@@ -96,10 +96,14 @@ export class RemoteInfoReader {
   accept(message: Record<string, unknown>): RemoteInfo | null {
     if (message.type === 'info') { this.pending = null; this.catalog = message.info as RemoteInfo; return this.catalog; }
     if (message.type === 'info-position') {
-      if (!this.catalog?.all || !Array.isArray(message.upcomingKeys) || message.upcomingKeys.length > 100 ||
-          !message.upcomingKeys.every((key) => typeof key === 'string')) return null;
+      if (!this.catalog?.all || !Array.isArray(message.upcoming) || message.upcoming.length > 100 ||
+          !message.upcoming.every((item) => item && typeof item.key === 'string' && typeof item.heading === 'boolean' &&
+            (item.section === undefined || typeof item.section === 'string'))) return null;
       const slides = new Map(this.catalog.all.map((slide) => [remoteSlideKey(slide), slide]));
-      const upcoming = message.upcomingKeys.map((key) => slides.get(key as string));
+      const upcoming = message.upcoming.map((item) => {
+        const slide = slides.get(item.key as string);
+        return slide ? { ...slide, heading: item.heading as boolean, section: item.section as string | undefined } : undefined;
+      });
       if (upcoming.some((slide) => !slide)) return null;
       const current = message.current;
       if (current !== null && (typeof current !== 'object' || !current || typeof (current as Cursor).presentationId !== 'string' ||
