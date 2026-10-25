@@ -62,9 +62,9 @@ describe('tunnel recovery', () => {
   it('replaces a live process whose tunnel repeatedly returns HTTP 530', async () => {
     const state = await running(vi.fn(async () => new Response('tunnel disconnected', { status: 530 })));
     try {
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(15_000);
       expect(state.spawnFn).toHaveBeenCalledTimes(1);
-      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(15_000);
       expect(state.processes[0].kill).toHaveBeenCalledOnce();
       expect(state.spawnFn).toHaveBeenCalledTimes(2);
       state.ready(1, 'two');
@@ -80,7 +80,7 @@ describe('tunnel recovery', () => {
     fetchFn.mockRejectedValueOnce(new Error('temporary network drop'));
     const state = await running(fetchFn);
     try {
-      await vi.advanceTimersByTimeAsync(90_000);
+      await vi.advanceTimersByTimeAsync(45_000);
       expect(fetchFn).toHaveBeenCalledTimes(3);
       expect(state.spawnFn).toHaveBeenCalledTimes(1);
       expect(state.processes[0].kill).not.toHaveBeenCalled();
