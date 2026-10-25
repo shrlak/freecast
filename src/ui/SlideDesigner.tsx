@@ -26,7 +26,7 @@ interface Props {
 /** WYSIWYG slide editor: free-positioned text boxes, images and shapes on top of the slide. */
 export function SlideDesigner({ slide, theme, background, media, addMedia, onSave, onClose, readOnly }: Props) {
   const [els, setEls] = useState<SlideElement[]>(slide.elements ?? []);
-  useAutoTextBoxes(els, readOnly || isPdfSlide(slide) ? undefined : setEls);
+  useAutoTextBoxes(els, readOnly || isPdfSlide(slide) ? undefined : setEls, !!slide.qr?.length);
   const [text, setText] = useState(slide.text);
   const [sel, setSel] = useState<string | null>(null);
   const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);

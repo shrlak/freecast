@@ -1,13 +1,12 @@
 import type { CSSProperties } from 'react';
 import type { SlideElement } from './types';
-import { growTextBox } from './textBox';
+import { textElementBounds, type TextBounds } from './textBox';
 import { INDENT_PX, listMarkers } from './textFormat';
-import { maximumFontFromNode } from './maximizeFont';
+import { fitTextNode } from './boundedTextLayout';
 import { uniformTextBoxFont } from './textBoxFonts';
 
-const cache = new Map<string, ReturnType<typeof growTextBox>>();
-const maximums = new Map<string, SlideElement>();
-export const clearTextBoxLayoutCache = () => { cache.clear(); maximums.clear(); };
+const cache = new Map<string, SlideElement>();
+export const clearTextBoxLayoutCache = () => cache.clear();
 
 /** Shared by measurement and drawing, so line wrapping uses the actual loaded font and spacing. */
 export function elementTextStyle(el: SlideElement): CSSProperties {
@@ -43,34 +42,25 @@ function measurementNode(el: SlideElement): HTMLDivElement {
   return node;
 }
 
-/** Resolve an explicit initial font fit once, then grow the box while preserving that font. */
-export function fitTextElement(el: SlideElement): SlideElement {
-  if (el.kind !== 'text' || typeof document === 'undefined' || !document.body) return el;
-  if (el.maximizeFont) {
-    const request = JSON.stringify(el);
-    let sized = maximums.get(request);
-    if (!sized) {
-      const uniform = uniformTextBoxFont(el);
-      const node = measurementNode(uniform);
-      try {
-        const size = maximumFontFromNode(node, el.w, el.h);
-        sized = { ...uniformTextBoxFont(uniform, size), maximizeFont: false };
-      } finally { node.remove(); }
-      if (maximums.size >= 500) maximums.clear();
-      maximums.set(request, sized);
+/** Keep the requested font and grow inside the slide; shrink only when no more space remains. */
+export function fitTextElement(el: SlideElement, bounds: TextBounds = textElementBounds(el)): SlideElement {
+  if (el.kind !== 'text' || el.autoFit === false || typeof document === 'undefined' || !document.body) return el;
+  const key = JSON.stringify([el, bounds]);
+  const cached = cache.get(key);
+  if (cached) return cached;
+  const preferred = el.preferredFontSize ?? el.fontSize ?? 64;
+  const source = el.preferredFontSize === undefined ? el : uniformTextBoxFont(el, preferred);
+  const node = measurementNode(source);
+  let next = el;
+  try {
+    const { box, fontSize } = fitTextNode(node, el, bounds, el.align, el.vAlign);
+    const fontChanged = fontSize !== (el.fontSize ?? 64);
+    if (fontChanged || el.maximizeFont || Object.entries(box).some(([k, v]) => el[k as 'x' | 'y' | 'w' | 'h'] !== v)) {
+      next = { ...(fontChanged ? uniformTextBoxFont(el, fontSize) : el), ...box, maximizeFont: false,
+        ...(fontSize < preferred ? { preferredFontSize: preferred } : {}) };
     }
-    return fitTextElement(sized);
-  }
-  if (el.autoFit === false) return el;
-  const key = JSON.stringify(el);
-  let box = cache.get(key);
-  if (!box) {
-    const node = measurementNode(el);
-    try { box = growTextBox(el, { w: node.scrollWidth, h: node.scrollHeight }, el.align, el.vAlign); }
-    finally { node.remove(); }
-    if (cache.size >= 1000) cache.clear();
-    cache.set(key, box);
-  }
-  return box.x === el.x && box.y === el.y && box.w === el.w && box.h === el.h ? el : { ...el, ...box };
+  } finally { node.remove(); }
+  if (cache.size >= 1000) cache.clear();
+  cache.set(key, next);
+  return next;
 }
-

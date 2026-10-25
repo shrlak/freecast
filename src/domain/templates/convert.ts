@@ -155,7 +155,7 @@ export function fillTokens(text: string, values: Record<string, string | undefin
  */
 export function patchElement(el: SlideElement, patch: Partial<SlideElement>): SlideElement {
   let next: SlideElement = { ...el, ...patch };
-  if (patch.fontSize !== undefined && patch.maximizeFont === undefined) next.maximizeFont = false;
+  if (patch.fontSize !== undefined) { next.maximizeFont = false; next.preferredFontSize = undefined; }
   const was = el.fontSize ?? el.paragraphs?.find((p) => p.text.trim())?.fontSize;
   const ratio = patch.fontSize && was ? patch.fontSize / was : 1;
   // The box follows the text size: a bigger / smaller font grows / shrinks the box around its centre.

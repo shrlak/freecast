@@ -99,8 +99,10 @@ export interface ElementParagraph {
 
 /** A free-positioned object on a slide (slide editor), in 1440×1080 canvas pixels. */
 export interface SlideElement {
-  /** One-time request to maximize the font inside this box; false records completion/manual sizing. */
+  /** Legacy maximum-fit request; automatic layout no longer enlarges fonts. */
   maximizeFont?: boolean;
+  /** Original/manual size retained when extreme overflow needs a temporary smaller font. */
+  preferredFontSize?: number;
   id: string;
   kind: ElementKind;
   x: number;
@@ -148,8 +150,10 @@ export interface SlideElement {
 export type SlideAction = MacroStep | { type: 'runMacro'; macroId: string };
 
 export interface Slide {
-  /** One-time request to maximize theme-styled text inside the slide's text area. */
+  /** Legacy maximum-fit request; automatic layout no longer enlarges fonts. */
   maximizeFont?: boolean;
+  /** Original/manual size retained when extreme overflow needs a temporary smaller font. */
+  preferredFontSize?: number;
   id: string;
   /** Original import type: PowerPoint objects remain editable; PDF page content is read-only. */
   importSource?: { format: 'pptx' | 'ppt' | 'pdf'; name: string; page: number };

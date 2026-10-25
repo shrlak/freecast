@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { SlideElement } from '../domain/types';
 import { clearTextBoxLayoutCache, fitTextElement } from '../domain/textBoxLayout';
+import { textElementBounds } from '../domain/textBox';
 
 let fontEpoch = 0;
 const listeners = new Set<() => void>();
@@ -16,18 +17,18 @@ function subscribeFonts(listener: () => void) {
 export const useFontEpoch = () => useSyncExternalStore(subscribeFonts, () => fontEpoch, () => 0);
 
 /** Editors persist resized geometry; previews and output only draw it. Nothing writes protected content. */
-export function useAutoTextBoxes(elements: SlideElement[], onResize?: (elements: SlideElement[]) => void): SlideElement[] {
+export function useAutoTextBoxes(elements: SlideElement[], onResize?: (elements: SlideElement[]) => void, hasQr = false): SlideElement[] {
   const epoch = useFontEpoch(), key = JSON.stringify(elements);
   const latest = useRef({ elements, onResize }); latest.current = { elements, onResize };
   const [layout, setLayout] = useState<{ key: string; elements: SlideElement[] } | null>(null);
   useLayoutEffect(() => {
     const { elements, onResize } = latest.current;
-    const fitted = elements.map(fitTextElement);
+    const fitted = elements.map((el) => fitTextElement(el, textElementBounds(el, elements, hasQr)));
     if (fitted.some((el, i) => el !== elements[i])) {
       setLayout({ key, elements: fitted });
-      if (!elements.some((e) => e.maximizeFont) || document.fonts?.status !== 'loading') onResize?.(fitted);
+      if (document.fonts?.status !== 'loading') onResize?.(fitted);
     }
     else setLayout(null);
-  }, [key, epoch]);
+  }, [key, epoch, hasQr]);
   return layout?.key === key ? layout.elements : elements;
 }

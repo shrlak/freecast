@@ -7,7 +7,8 @@ import { stripChords } from '../lyrics';
 import { pptxFont } from '../fonts';
 import { CANVAS_W } from '../canvas';
 import { fitTextElement } from '../textBoxLayout';
-import { maximumSlideFont } from '../maximizeFont';
+import { fitSlideText } from '../slideTextLayout';
+import { textElementBounds } from '../textBox';
 import { correctMixedTextSizes } from '../textBoxFonts';
 import { resolveBackground } from '../autoBackground';
 
@@ -70,7 +71,8 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
   for (const { slide } of sequence(p)) {
     if (slide.disabled) continue;
     const original: Theme = slide.style ? { ...baseTheme, ...slide.style } : baseTheme;
-    const theme = slide.maximizeFont ? { ...original, fontSize: maximumSlideFont(slide, original) } : original;
+    const layout = fitSlideText(slide, original);
+    const theme = { ...original, fontSize: layout.fontSize };
     const s = pptx.addSlide();
     const bg = resolveBackground(slide, p);
     if (bg?.kind === 'image') {
@@ -83,8 +85,6 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
     } else {
       s.background = { color: firstColor(bg) };
     }
-    const pad = theme.padding * PX;
-    const horizontalPad = slide.lyricBody && slide.qr?.length ? Math.max(pad, 2.1) : pad;
     const color = theme.color.replace('#', '');
     const valign = theme.vAlign === 'middle' ? 'middle' : theme.vAlign;
     const runs: PptxGenJS.TextProps[] = [];
@@ -101,22 +101,22 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
     // visible words above the middle of an otherwise centered PowerPoint box.
     if (p.lyricsCentered && slide.group !== 'Title' && runs.length) runs[runs.length - 1].options = { ...runs[runs.length - 1].options, breakLine: false };
     s.addText(runs, {
-      x: horizontalPad, y: pad, w: W - horizontalPad * 2 - (slide.qr?.length && !slide.lyricBody ? 2 : 0), h: H - pad * 2,
+      x: layout.box.x * PX, y: layout.box.y * PX, w: layout.box.w * PX, h: layout.box.h * PX,
       fontFace: fontFace(theme), fontSize: theme.fontSize * 0.5, color, italic: theme.italic, underline: theme.underline ? { style: 'sng' } : undefined,
       ...textOptions(theme),
       align: theme.align, valign, lineSpacingMultiple: theme.lineHeight,
       shadow: theme.shadow ? { type: 'outer', blur: 6, offset: 2, angle: 45, color: '000000', opacity: 0.6 } : undefined,
-      fit: theme.autoFit === false ? undefined : 'resize',
+      fit: undefined,
     });
     slide.qr?.forEach((link, i) => {
       s.addImage({ data: qrDataUrl(link), x: W - 2.1, y: H - 2.1 - i * 2.1, w: 1.8, h: 1.8 });
     });
     for (const original of slide.elements ?? []) {
-      const el = fitTextElement(original);
+      const el = fitTextElement(original, textElementBounds(original, slide.elements, !!slide.qr?.length));
       const box = { x: el.x * PX, y: el.y * PX, w: el.w * PX, h: el.h * PX, rotate: el.rotation };
       if (el.kind === 'text' && el.text) {
         const content = el.paragraphs?.length ? el.paragraphs.map((p, i) => ({ text: p.text, options: { fontSize: (p.fontSize ?? el.fontSize ?? 64) * 0.5, bold: p.bold ?? el.bold, italic: p.italic ?? el.italic, color: (p.color ?? el.color ?? '#ffffff').replace('#', ''), align: p.align ?? el.align, breakLine: i < el.paragraphs!.length - 1 } })) : el.text;
-        s.addText(content, { ...box, fontFace: pptxFont(el.fontFamily ?? baseTheme.fontFamily), lineSpacingMultiple: el.lineHeight, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: el.autoFit === false ? undefined : 'resize' });
+        s.addText(content, { ...box, fontFace: pptxFont(el.fontFamily ?? baseTheme.fontFamily), lineSpacingMultiple: el.lineHeight, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: undefined });
       } else if (el.kind === 'image' && el.mediaId) {
         const data = await dataUrl(el.mediaId);
         if (data) s.addImage({ ...box, data, sizing: { type: el.fit === 'cover' ? 'cover' : 'contain', w: box.w, h: box.h } });

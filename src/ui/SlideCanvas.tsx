@@ -3,7 +3,6 @@ import type { Background, ListStyle, Prop, Screen, Slide, SlideElement, Theme, T
 import { INDENT_PX, listMarkers } from '../domain/textFormat';
 import { stripChords } from '../domain/lyrics';
 import { CHURCH_LOGO_URL } from '../domain/defaults';
-import { TEMPLATE_LYRICS_THEME } from '../domain/templates/fill';
 import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
 import { isDecoded, preloadImage, useMediaUrl, useNow, useReadyImage, useWidth } from './hooks';
@@ -11,10 +10,10 @@ import { mediaUrl, peekMediaUrl } from '../domain/media';
 
 export { CANVAS_W, CANVAS_H } from '../domain/canvas';
 import { CANVAS_W, CANVAS_H } from '../domain/canvas';
-import { growTextBox } from '../domain/textBox';
 import { useAutoTextBoxes, useFontEpoch } from './textBoxLayout';
 import { elementTextStyle } from '../domain/textBoxLayout';
-import { maximumFontFromNode } from '../domain/maximizeFont';
+import { fitTextNode, type TextLayout } from '../domain/boundedTextLayout';
+import { slideTextFrame } from '../domain/slideTextLayout';
 
 export interface CanvasProps {
   slide: Slide | null;
@@ -211,8 +210,7 @@ export function ElementView({ el }: { el: SlideElement }) {
   return <TextElement el={el} box={box} />;
 }
 
-function TextElement({ el: original, box }: { el: SlideElement; box: CSSProperties }) {
-  const [el] = useAutoTextBoxes([original]);
+function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
   const base = el.fontSize ?? 64;
   const lines = el.paragraphs ? el.paragraphs.map((p) => p.text) : (el.text ?? '').split('\n');
   const markers = listMarkers(lines, el.list);
@@ -249,36 +247,20 @@ function TextElement({ el: original, box }: { el: SlideElement; box: CSSProperti
 export const slideTheme = (theme: Theme, slide: Slide): Theme => (slide.style ? { ...theme, ...slide.style } : theme);
 
 function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
-  const originalTheme = slideTheme(base, slide);
+  const originalTheme = { ...slideTheme(base, slide), ...(slide.preferredFontSize !== undefined ? { fontSize: slide.preferredFontSize } : {}) };
   const fontEpoch = useFontEpoch();
-  const request = JSON.stringify([slide.id, slide.title, slide.text, slide.subtext, originalTheme, slide.maximizeFont, fontEpoch]);
-  const [maximum, setMaximum] = useState<{ key: string; size: number } | null>(null);
-  const theme = slide.maximizeFont && maximum?.key === request ? { ...originalTheme, fontSize: maximum.size } : originalTheme;
+  const { box: baseBox, bounds, noWrap: lyricLines } = slideTextFrame(slide, originalTheme);
   const hasQr = !!slide.qr?.length;
-  const horizontalPad = slide.lyricBody && hasQr ? Math.max(theme.padding, 300) : theme.padding;
-  const qrSpace = hasQr && !slide.lyricBody ? 300 : 0;
+  const elements = useAutoTextBoxes(slide.elements ?? [], undefined, hasQr);
+  const key = JSON.stringify([slide.id, slide.title, slide.text, slide.subtext, originalTheme, bounds, fontEpoch]);
+  const [layout, setLayout] = useState<{ key: string; result: TextLayout } | null>(null);
+  const resolved = layout?.key === key ? layout.result : { box: baseBox, fontSize: originalTheme.fontSize, wrap: false };
+  const frame = resolved.box, noWrap = lyricLines && !resolved.wrap;
+  const theme = { ...originalTheme, fontSize: resolved.fontSize };
   const inner = useRef<HTMLDivElement>(null);
-  const lyricLines = theme.noWrap ?? theme.id === TEMPLATE_LYRICS_THEME;
-  const baseBox = { x: horizontalPad, y: theme.padding, w: Math.max(1, CANVAS_W - horizontalPad * 2 - qrSpace), h: Math.max(1, CANVAS_H - theme.padding * 2) };
   useLayoutEffect(() => {
-    if (slide.maximizeFont && inner.current) setMaximum({ key: request, size: maximumFontFromNode(inner.current, baseBox.w, baseBox.h) });
-  }, [request]);
-  const key = JSON.stringify([slide.title, slide.text, slide.subtext, theme, horizontalPad, qrSpace, fontEpoch]);
-  const [layout, setLayout] = useState<{ key: string; box: typeof baseBox; wrap: boolean } | null>(null);
-  const frame = layout?.key === key ? layout.box : baseBox;
-  const noWrap = lyricLines && !(layout?.key === key && layout.wrap);
-  useLayoutEffect(() => {
-    const node = inner.current;
-    if (!node || theme.autoFit === false) return;
-    node.style.width = `${baseBox.w}px`;
-    node.style.whiteSpace = lyricLines ? 'pre' : 'pre-wrap';
-    const maxWidth = hasQr && slide.lyricBody ? baseBox.w : CANVAS_W - qrSpace;
-    const w = Math.max(baseBox.w, Math.min(maxWidth, node.scrollWidth));
-    node.style.width = `${w}px`;
-    const wrap = lyricLines && node.scrollWidth > w + 1;
-    if (wrap) node.style.whiteSpace = 'pre-wrap';
-    const box = growTextBox(baseBox, { w, h: node.scrollHeight }, theme.align, theme.vAlign, { w: CANVAS_W - qrSpace, h: CANVAS_H });
-    setLayout({ key, box, wrap });
+    if (!inner.current || originalTheme.autoFit === false) return;
+    setLayout({ key, result: fitTextNode(inner.current, baseBox, bounds, originalTheme.align, originalTheme.vAlign, lyricLines) });
   }, [key]);
   const t = theme;
   return (
@@ -287,7 +269,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
         className="layer text-layer"
         style={{ inset: 'auto', left: frame.x, top: frame.y, width: frame.w, height: frame.h, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
       >
-        <div ref={inner} data-slide-text-box data-initial-font-size={slide.maximizeFont && maximum?.key === request ? maximum.size : undefined} style={{ ...textStyle(t), width: frame.w, flexShrink: 0, whiteSpace: noWrap ? 'pre' : 'pre-wrap', overflowWrap: 'anywhere', paddingLeft: theme.indent ? theme.indent * INDENT_PX : undefined }}>
+        <div ref={inner} data-slide-text-box data-fitted-font-size={resolved.fontSize} data-preferred-font-size={originalTheme.fontSize} style={{ ...textStyle(t), width: frame.w, flexShrink: 0, whiteSpace: noWrap ? 'pre' : 'pre-wrap', overflowWrap: 'anywhere', paddingLeft: theme.indent ? theme.indent * INDENT_PX : undefined }}>
           {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}
           {slide.text && <Lines text={slide.text} list={theme.list} highlight={theme.highlight} />}
           {slide.subtext && (
@@ -302,7 +284,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
             {slide.qr!.map((link) => <img key={link} src={qrDataUrl(link)} alt={link} />)}
           </div>
       )}
-      {slide.elements?.map((el) => <ElementView key={el.id} el={el} />)}
+      {elements.map((el) => <ElementView key={el.id} el={el} />)}
       {slide.caption && <div className="slide-caption" style={{ fontFamily: theme.fontFamily, color: theme.color }}>{slide.caption}</div>}
     </>
   );

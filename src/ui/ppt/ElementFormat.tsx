@@ -64,7 +64,7 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
       {el.kind === 'text' && (
         <>
           <label className="stack">텍스트<AutoTextarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
-          <button onClick={() => onChange({ maximizeFont: true })}>상자 안 최대 크기</button>
+          <button title="원래 글자 크기로 상자를 늘리고, 슬라이드 안에 들어가지 않을 때만 글자를 줄입니다." onClick={() => onChange({ autoFit: true, maximizeFont: false })}>넘친 내용 맞추기</button>
           <button onClick={() => onChange({ fontSize: sizeOf(el), x: el.x, y: el.y, w: el.w, h: el.h })}>글자 크기 통일</button>
           <TextFormatPanel
             value={textValue(el)}

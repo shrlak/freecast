@@ -60,14 +60,14 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
   const setStyle = (patch: SlideStyle) => {
     const next: SlideStyle = { ...st, ...patch };
     for (const k of Object.keys(next) as (keyof SlideStyle)[]) if (next[k] === undefined || next[k] === base[k as keyof Theme]) delete next[k];
-    upd({ style: Object.keys(next).length ? next : undefined, ...(patch.fontSize !== undefined ? { maximizeFont: false } : {}) });
+    upd({ style: Object.keys(next).length ? next : undefined, ...(patch.fontSize !== undefined ? { maximizeFont: false, preferredFontSize: undefined } : {}) });
   };
   const flash = (msg: string) => {
     setApplied(msg);
     setTimeout(() => setApplied(null), 1800);
   };
   const applyToAll = (what: 'style' | 'background') => {
-    const slides = p.slides.map((s) => (what === 'style' ? { ...s, style: slide.style } : { ...s, background: slide.background }));
+    const slides = p.slides.map((s) => (what === 'style' ? { ...s, style: slide.style, preferredFontSize: slide.preferredFontSize } : { ...s, background: slide.background }));
     dispatch({ type: 'presentation/update', id: p.id, patch: { slides } });
     flash(what === 'style' ? '글꼴 서식을 모든 슬라이드에 적용했습니다' : '배경을 모든 슬라이드에 적용했습니다');
   };
@@ -99,7 +99,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
     <div className="slide-format">
       {showContent && <Section title="내용 · 이 슬라이드만"><SlideContentEditor slide={slide} onChange={upd} /></Section>}
       {applied && <div className="fmt-flash">✓ {applied}</div>}
-      {!selected && <button onClick={() => boxMode ? upd({ elements: elements.map((e) => e.kind === 'text' ? { ...e, maximizeFont: true } : e) }) : upd({ maximizeFont: true })}>상자 안 최대 크기</button>}
+      {!selected && <button title="원래 글자 크기로 상자를 늘리고, 슬라이드 안에 들어가지 않을 때만 글자를 줄입니다." onClick={() => boxMode ? upd({ elements: elements.map((e) => e.kind === 'text' ? { ...e, autoFit: true, maximizeFont: false } : e) }) : setStyle({ autoFit: true })}>넘친 내용 맞추기</button>}
       {!selected && boxMode && <button onClick={() => patchBoxes((e) => ({ fontSize: sizeOf(e), x: e.x, y: e.y, w: e.w, h: e.h }))}>글자 크기 통일</button>}
       {selected ? (
         <ElementFormat
@@ -123,7 +123,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
           }}
           onChange={boxMode ? (patch) => patchBoxes((e) => elementPatch(e, patch)) : ({ bold, ...rest }) => setStyle({ ...rest, ...(bold === undefined ? {} : { fontWeight: bold ? 700 : 400 }) })}
           onChangeCase={boxMode ? (kind) => patchBoxes((e) => ({ text: changeCase(e.text ?? '', kind) })) : (kind) => upd({ text: changeCase(slide.text, kind), ...(slide.title ? { title: changeCase(slide.title, kind) } : {}), ...(slide.subtext ? { subtext: changeCase(slide.subtext, kind) } : {}) })}
-          onClear={boxMode ? () => patchBoxes(() => CLEAR_TEXT_FORMAT) : () => upd({ style: undefined })}
+          onClear={boxMode ? () => patchBoxes(() => CLEAR_TEXT_FORMAT) : () => upd({ style: undefined, preferredFontSize: undefined })}
           shortcuts={!selected}
         />
       </Section>
