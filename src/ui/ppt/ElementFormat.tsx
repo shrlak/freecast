@@ -20,9 +20,9 @@ export const textValue = (el: SlideElement): TextFormatValue => ({
   list: el.list, indent: el.indent ?? 0, columns: el.columns ?? 1, vertical: !!el.vertical, autoFit: el.autoFit !== false,
 });
 
-/** A panel edit as a change to the element; a size becomes a scale of the box's own size (`from` = the size the panel showed). */
-export const elementPatch = (el: SlideElement, { fontSize, ...rest }: Partial<TextFormatValue>, from = sizeOf(el)): Partial<SlideElement> =>
-  ({ ...rest, ...(fontSize === undefined ? {} : { fontSize: fontSize * (el.fontSize ?? sizeOf(el)) / from }) });
+/** A chosen size applies equally to every paragraph in this box. */
+export const elementPatch = (_el: SlideElement, { fontSize, ...rest }: Partial<TextFormatValue>): Partial<SlideElement> =>
+  ({ ...rest, ...(fontSize === undefined ? {} : { fontSize }) });
 
 export const CLEAR_TEXT_FORMAT: Partial<SlideElement> = { bold: false, italic: false, underline: undefined, strike: undefined, shadow: false, letterSpacing: undefined, highlight: undefined, list: undefined, indent: undefined, columns: undefined, vertical: undefined, lineHeight: undefined };
 
@@ -65,6 +65,7 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
         <>
           <label className="stack">텍스트<AutoTextarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
           <button onClick={() => onChange({ maximizeFont: true })}>상자 안 최대 크기</button>
+          <button onClick={() => onChange({ fontSize: sizeOf(el), x: el.x, y: el.y, w: el.w, h: el.h })}>글자 크기 통일</button>
           <TextFormatPanel
             value={textValue(el)}
             onChange={(patch) => onChange(elementPatch(el, patch))}

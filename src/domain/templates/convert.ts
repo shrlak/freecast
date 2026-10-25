@@ -150,7 +150,7 @@ export function fillTokens(text: string, values: Record<string, string | undefin
 
 /**
  * Apply an edit from the slide designer to an element that may carry per-line formatting:
- * new text keeps each line's style, a new size scales every line, and a colour / weight /
+ * new text keeps each line's style, a new size applies equally to every line, and a colour / weight /
  * alignment set on the whole box replaces the per-line ones.
  */
 export function patchElement(el: SlideElement, patch: Partial<SlideElement>): SlideElement {
@@ -168,9 +168,9 @@ export function patchElement(el: SlideElement, patch: Partial<SlideElement>): Sl
   if (!el.paragraphs) return next;
   if (patch.text !== undefined) next = withElementText(next, patch.text);
   const whole = (['color', 'bold', 'italic', 'align'] as const).filter((k) => k in patch);
-  if (ratio !== 1 || whole.length) {
+  if (patch.fontSize !== undefined || whole.length) {
     next.paragraphs = next.paragraphs!.map((p) => {
-      const q = { ...p, fontSize: p.fontSize ? Math.round(p.fontSize * ratio * 10) / 10 : p.fontSize };
+      const q = { ...p, fontSize: patch.fontSize !== undefined ? patch.fontSize : p.fontSize };
       for (const k of whole) delete q[k];
       return q;
     });

@@ -68,7 +68,7 @@ describe('PPTX slide conversion', () => {
     const next = withElementText(el, '새 제목\n줄 1\n줄 2');
     expect(next.paragraphs!.map((p) => [p.text, p.fontSize])).toEqual([['새 제목', 60], ['줄 1', 40], ['줄 2', 40]]);
     const bigger = patchElement({ ...el, fontSize: 60 }, { fontSize: 120 });
-    expect(bigger.paragraphs!.map((p) => p.fontSize)).toEqual([120, 80]);
+    expect(bigger.paragraphs!.map((p) => p.fontSize)).toEqual([120, 120]);
     expect(patchElement(el, { color: '#ff0000' }).paragraphs!.every((p) => p.color === undefined)).toBe(true);
     // The box grows with the font, around its centre.
     expect(patchElement({ ...el, fontSize: 60 }, { fontSize: 120 })).toMatchObject({ x: -350, y: 0, w: 2600, h: 400 });

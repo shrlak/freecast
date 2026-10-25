@@ -3,6 +3,7 @@ import type { SlideElement } from './types';
 import { growTextBox } from './textBox';
 import { INDENT_PX, listMarkers } from './textFormat';
 import { maximumFontFromNode } from './maximizeFont';
+import { uniformTextBoxFont } from './textBoxFonts';
 
 const cache = new Map<string, ReturnType<typeof growTextBox>>();
 const maximums = new Map<string, SlideElement>();
@@ -49,11 +50,11 @@ export function fitTextElement(el: SlideElement): SlideElement {
     const request = JSON.stringify(el);
     let sized = maximums.get(request);
     if (!sized) {
-      const node = measurementNode(el);
+      const uniform = uniformTextBoxFont(el);
+      const node = measurementNode(uniform);
       try {
-        const base = el.fontSize ?? 64, size = maximumFontFromNode(node, el.w, el.h), ratio = size / base;
-        sized = { ...el, fontSize: size, maximizeFont: false,
-          paragraphs: el.paragraphs?.map((p) => ({ ...p, fontSize: (p.fontSize ?? base) * ratio })) };
+        const size = maximumFontFromNode(node, el.w, el.h);
+        sized = { ...uniformTextBoxFont(uniform, size), maximizeFont: false };
       } finally { node.remove(); }
       if (maximums.size >= 500) maximums.clear();
       maximums.set(request, sized);

@@ -1,5 +1,6 @@
 import type { Presentation, Slide } from './types';
 import { CANVAS_H, CANVAS_W } from './canvas';
+import { correctMixedTextSizes } from './textBoxFonts';
 
 const announcement = /광고|announcements?/i;
 const fixedHeading = /^광고\s*(?:announcements?)?$/i;
@@ -22,6 +23,7 @@ export function prepareAnnouncementSlide(s: Slide): Slide {
 /** New and existing announcement content gets one initial fit. Completed and manual sizes stay. */
 export function prepareAnnouncementSizing(p: Presentation): Presentation {
   if (p.protected) return p;
+  p = correctMixedTextSizes(p);
   const slides = p.slides.map((s): Slide => {
     if (!announcement.test(s.group) && !announcement.test(p.title) && !s.elements?.some((e) => e.kind === 'text' && fixedHeading.test(e.text?.trim() ?? ''))) return s;
     return prepareAnnouncementSlide(s);

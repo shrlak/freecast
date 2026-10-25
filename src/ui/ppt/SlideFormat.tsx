@@ -100,6 +100,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
       {showContent && <Section title="내용 · 이 슬라이드만"><SlideContentEditor slide={slide} onChange={upd} /></Section>}
       {applied && <div className="fmt-flash">✓ {applied}</div>}
       {!selected && <button onClick={() => boxMode ? upd({ elements: elements.map((e) => e.kind === 'text' ? { ...e, maximizeFont: true } : e) }) : upd({ maximizeFont: true })}>상자 안 최대 크기</button>}
+      {!selected && boxMode && <button onClick={() => patchBoxes((e) => ({ fontSize: sizeOf(e), x: e.x, y: e.y, w: e.w, h: e.h }))}>글자 크기 통일</button>}
       {selected ? (
         <ElementFormat
           el={selected}
@@ -120,7 +121,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
             align: t.align, vAlign: t.vAlign, lineHeight: t.lineHeight, list: t.list, indent: t.indent ?? 0, columns: t.columns ?? 1,
             vertical: !!t.vertical, autoFit: t.autoFit !== false,
           }}
-          onChange={boxMode ? (patch) => patchBoxes((e) => elementPatch(e, patch, sizeOf(ref))) : ({ bold, ...rest }) => setStyle({ ...rest, ...(bold === undefined ? {} : { fontWeight: bold ? 700 : 400 }) })}
+          onChange={boxMode ? (patch) => patchBoxes((e) => elementPatch(e, patch)) : ({ bold, ...rest }) => setStyle({ ...rest, ...(bold === undefined ? {} : { fontWeight: bold ? 700 : 400 }) })}
           onChangeCase={boxMode ? (kind) => patchBoxes((e) => ({ text: changeCase(e.text ?? '', kind) })) : (kind) => upd({ text: changeCase(slide.text, kind), ...(slide.title ? { title: changeCase(slide.title, kind) } : {}), ...(slide.subtext ? { subtext: changeCase(slide.subtext, kind) } : {}) })}
           onClear={boxMode ? () => patchBoxes(() => CLEAR_TEXT_FORMAT) : () => upd({ style: undefined })}
           shortcuts={!selected}
