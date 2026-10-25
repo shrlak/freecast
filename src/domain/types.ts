@@ -150,6 +150,8 @@ export interface SlideElement {
 export type SlideAction = MacroStep | { type: 'runMacro'; macroId: string };
 
 export interface Slide {
+  /** Front template: preserve original fonts/paragraph sizes/geometry; only its date is refreshed. */
+  preserveTextLayout?: boolean;
   /** Legacy maximum-fit request; automatic layout no longer enlarges fonts. */
   maximizeFont?: boolean;
   /** Original/manual size retained when extreme overflow needs a temporary smaller font. */

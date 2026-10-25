@@ -13,11 +13,10 @@ import { loadScriptureChunks } from '../../domain/bible/slides';
 import { uid } from '../../domain/lyrics';
 import { loadServiceTemplates, type ServiceTemplates } from '../../domain/templates/serviceTemplates';
 import { templateDeckUpdates } from '../../domain/templates/register';
-import { announcementSlides, refreshFront, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
+import { announcementSlides, scriptureSlides, sermonTitleSlide, songInTemplate, songStyleUpdates, templateLyricsTheme } from '../../domain/templates/fill';
 import { createLiveService, findLiveService, ensureServiceSection, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { withSharedSongs } from '../../domain/online';
-import { parsePrayerTopics } from '../../domain/sunday/prayer';
 import { parseAnnouncements } from '../../domain/sunday/announcements';
 import { applyConfessionSong, pickConfessionSong } from '../../domain/templates/confession';
 import { loadTranslations } from '../BibleModal';
@@ -414,9 +413,6 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
           await setDeck(SECTION.sermon, `${mmdd(date)} 설교`, [...kept, ...d.sermonSlides]);
         } else if (part === 'prayer') {
           dispatch({ type: 'sunday/settings', patch: { prayerText: d.prayer.trim() } });
-          const front = deckOf(SECTION.front);
-          // The library's own Front deck follows the setting by itself; a service copy is refreshed here.
-          if (front && t && !front.templateKey?.startsWith('front:')) dispatch({ type: 'presentation/update', id: front.id, patch: { slides: refreshFront(front.slides, t, date, parsePrayerTopics(d.prayer)) } });
         } else if (part === 'announcements') {
           const items = parseAnnouncements(d.announcements);
           const slides = t

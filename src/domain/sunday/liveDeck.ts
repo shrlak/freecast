@@ -51,8 +51,7 @@ export function createLiveService(lib: Library, tpl: ServiceTemplates | null, da
   const created: Presentation[] = [];
   const add = (p: Presentation) => (created.push(p), p);
 
-  // The library's Front deck already shows this Sunday's date and 기도제목 (templates/register.ts);
-  // the service uses it directly, so later 기도제목 changes show up here too.
+  // The library Front keeps the original design and this Sunday's date; the service reuses it.
   const libFront = byId(lib.sunday.frontId);
   const synced = libFront?.templateKey?.startsWith('front:') && libFront.templateKey.includes(`|${mdy(date)}|`);
   const front = synced || !tpl ? libFront : add(make(`${tag} Front`, fillFront(tpl, date, parsePrayerTopics(lib.sunday.prayerText ?? ''))));

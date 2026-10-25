@@ -9,7 +9,8 @@ import { CANVAS_W } from '../canvas';
 import { fitTextElement } from '../textBoxLayout';
 import { fitSlideText } from '../slideTextLayout';
 import { textElementBounds } from '../textBox';
-import { correctMixedTextSizes } from '../textBoxFonts';
+import { prepareAnnouncementSizing } from '../announcementSizing';
+import { isFrontPresentation, isFrontSlide } from '../frontLayout';
 import { resolveBackground } from '../autoBackground';
 
 const W = 10;
@@ -66,12 +67,13 @@ const fontFace = (t: Theme) => pptxFont(t.fontFamily);
 const stripBold = (s: string) => stripChords(s.replace(/\*\*/g, ''));
 
 async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
-  p = correctMixedTextSizes(p);
+  p = prepareAnnouncementSizing(p);
   const baseTheme = lib.themes.find((t) => t.id === p.themeId) ?? lib.themes[0];
   for (const { slide } of sequence(p)) {
     if (slide.disabled) continue;
     const original: Theme = slide.style ? { ...baseTheme, ...slide.style } : baseTheme;
-    const layout = fitSlideText(slide, original);
+    const fixed = isFrontPresentation(p) || isFrontSlide(slide);
+    const layout = fitSlideText(fixed ? { ...slide, preserveTextLayout: true } : slide, original);
     const theme = { ...original, fontSize: layout.fontSize };
     const s = pptx.addSlide();
     const bg = resolveBackground(slide, p);
@@ -112,10 +114,11 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       s.addImage({ data: qrDataUrl(link), x: W - 2.1, y: H - 2.1 - i * 2.1, w: 1.8, h: 1.8 });
     });
     for (const original of slide.elements ?? []) {
-      const el = fitTextElement(original, textElementBounds(original, slide.elements, !!slide.qr?.length));
+      const el = fixed ? original : fitTextElement(original, textElementBounds(original, slide.elements, !!slide.qr?.length));
       const box = { x: el.x * PX, y: el.y * PX, w: el.w * PX, h: el.h * PX, rotate: el.rotation };
       if (el.kind === 'text' && el.text) {
-        const content = el.paragraphs?.length ? el.paragraphs.map((p, i) => ({ text: p.text, options: { fontSize: (p.fontSize ?? el.fontSize ?? 64) * 0.5, bold: p.bold ?? el.bold, italic: p.italic ?? el.italic, color: (p.color ?? el.color ?? '#ffffff').replace('#', ''), align: p.align ?? el.align, breakLine: i < el.paragraphs!.length - 1 } })) : el.text;
+        // Empty Front paragraphs also carry a source font size (and therefore spacer height).
+        const content = el.paragraphs?.length ? el.paragraphs.map((p, i) => ({ text: fixed ? p.text.split('\n').map((line) => line || '\u00a0').join('\n') : p.text, options: { fontSize: (p.fontSize ?? el.fontSize ?? 64) * 0.5, bold: p.bold ?? el.bold, italic: p.italic ?? el.italic, color: (p.color ?? el.color ?? '#ffffff').replace('#', ''), align: p.align ?? el.align, breakLine: i < el.paragraphs!.length - 1 } })) : el.text;
         s.addText(content, { ...box, fontFace: pptxFont(el.fontFamily ?? baseTheme.fontFamily), lineSpacingMultiple: el.lineHeight, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: undefined });
       } else if (el.kind === 'image' && el.mediaId) {
         const data = await dataUrl(el.mediaId);

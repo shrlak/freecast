@@ -1,13 +1,13 @@
 import type { Library, Playlist, PlaylistItem, Presentation, Slide } from '../types';
 import { uid } from '../lyrics';
-import { CHURCH_BACKGROUNDS, DEFAULT_CONFESSION_SONG, PRAYER_PREP_TITLE } from '../defaults';
+import { CHURCH_BACKGROUNDS, DEFAULT_CONFESSION_SONG } from '../defaults';
 import { findSong, songToPresentation, withProgression, type SongDraft } from './songs';
-import { planPrayerSlides, prayerSlideText, type PrayerTopic } from './prayer';
+import type { PrayerTopic } from './prayer';
 import type { Announcement } from './announcements';
-import { mdy, mmdd } from './notice';
+import { mmdd } from './notice';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
 import { applyConfessionSong, pickConfessionSong } from '../templates/confession';
-import { announcementSlides, backSlides, fillFront, isPlaceholderBack, prayerSlide, scriptureSlides, sermonTitleSlide, songInTemplate, type ScriptureFill } from '../templates/fill';
+import { announcementSlides, backSlides, fillFront, updateFrontDate, isPlaceholderBack, prayerSlide, scriptureSlides, sermonTitleSlide, songInTemplate, type ScriptureFill } from '../templates/fill';
 
 export interface ServiceInput {
   date: Date;
@@ -32,7 +32,6 @@ export interface BuiltService {
 }
 
 const cloneSlides = (slides: Slide[]) => slides.map((s) => ({ ...s, id: uid('s') }));
-const fill = (s: string | undefined, date: string) => s?.split('{date}').join(date);
 
 /**
  * Build this Sunday's presentations and playlist in the fixed order:
@@ -42,7 +41,6 @@ const fill = (s: string | undefined, date: string) => s?.split('{date}').join(da
 export function buildService(lib: Library, input: ServiceInput): BuiltService {
   const { sunday } = lib;
   const folder = `${mmdd(input.date)} 주일예배`;
-  const dateText = mdy(input.date);
   const created: Presentation[] = [];
   const items: PlaylistItem[] = [];
   const warnings: string[] = [];
@@ -65,24 +63,13 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
     prayerAdded = true;
   };
 
-  // Front: prayer-prep slide(s) filled with this week's topics, date on the welcome slide.
+  // Front keeps the source design and text; only its date changes.
   const front = byId(sunday.frontId);
   if (tpl) {
     header('Front');
     add(make(`${mmdd(input.date)} Front`, fillFront(tpl, input.date, input.prayerTopics), 'theme_classic', { background: { kind: 'color', value: '#000000' } }), true);
   } else if (front) {
-    const slides: Slide[] = [];
-    for (const s of front.slides) {
-      if (s.title === PRAYER_PREP_TITLE && input.prayerTopics.length) {
-        let n = 1;
-        for (const group of planPrayerSlides(input.prayerTopics)) {
-          slides.push({ ...s, id: uid('s'), text: prayerSlideText(group, n) });
-          n += group.length;
-        }
-      } else {
-        slides.push({ ...s, id: uid('s'), text: fill(s.text, dateText)!, subtext: fill(s.subtext, dateText), title: fill(s.title, dateText) });
-      }
-    }
+    const slides = updateFrontDate(front.slides.map((s) => ({ ...s, id: uid('s') })), input.date);
     header('Front');
     add({ ...front, id: uid('p'), title: `${mmdd(input.date)} Front`, folder, slides }, true);
   }

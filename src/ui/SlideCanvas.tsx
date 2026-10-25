@@ -1,3 +1,4 @@
+import { isFrontSlide } from '../domain/frontLayout';
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Background, ListStyle, Prop, Screen, Slide, SlideElement, Theme, Timer, Transition } from '../domain/types';
 import { INDENT_PX, listMarkers } from '../domain/textFormat';
@@ -247,11 +248,11 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
 export const slideTheme = (theme: Theme, slide: Slide): Theme => (slide.style ? { ...theme, ...slide.style } : theme);
 
 function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
-  const originalTheme = { ...slideTheme(base, slide), ...(slide.preferredFontSize !== undefined ? { fontSize: slide.preferredFontSize } : {}) };
+  const originalTheme = { ...slideTheme(base, slide), ...(!isFrontSlide(slide) && slide.preferredFontSize !== undefined ? { fontSize: slide.preferredFontSize } : {}), ...(isFrontSlide(slide) ? { autoFit: false } : {}) };
   const fontEpoch = useFontEpoch();
   const { box: baseBox, bounds, noWrap: lyricLines } = slideTextFrame(slide, originalTheme);
   const hasQr = !!slide.qr?.length;
-  const elements = useAutoTextBoxes(slide.elements ?? [], undefined, hasQr);
+  const elements = useAutoTextBoxes(slide.elements ?? [], undefined, hasQr, isFrontSlide(slide));
   const key = JSON.stringify([slide.id, slide.title, slide.text, slide.subtext, originalTheme, bounds, fontEpoch]);
   const [layout, setLayout] = useState<{ key: string; result: TextLayout } | null>(null);
   const resolved = layout?.key === key ? layout.result : { box: baseBox, fontSize: originalTheme.fontSize, wrap: false };

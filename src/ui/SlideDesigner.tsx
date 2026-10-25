@@ -1,3 +1,4 @@
+import { isFrontSlide } from '../domain/frontLayout';
 import { useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Background, MediaMeta, Slide, SlideElement, Theme } from '../domain/types';
 import { uid } from '../domain/lyrics';
@@ -26,7 +27,7 @@ interface Props {
 /** WYSIWYG slide editor: free-positioned text boxes, images and shapes on top of the slide. */
 export function SlideDesigner({ slide, theme, background, media, addMedia, onSave, onClose, readOnly }: Props) {
   const [els, setEls] = useState<SlideElement[]>(slide.elements ?? []);
-  useAutoTextBoxes(els, readOnly || isPdfSlide(slide) ? undefined : setEls, !!slide.qr?.length);
+  useAutoTextBoxes(els, readOnly || isPdfSlide(slide) ? undefined : setEls, !!slide.qr?.length, isFrontSlide(slide));
   const [text, setText] = useState(slide.text);
   const [sel, setSel] = useState<string | null>(null);
   const [guides, setGuides] = useState<SnapGuides>(NO_GUIDES);

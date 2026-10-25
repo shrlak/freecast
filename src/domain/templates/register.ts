@@ -1,14 +1,14 @@
 // Keeps the library's 주일예배 Front and Back decks the same as the church's current
 // templates (front-slides.pptx / back-slides.pptx): the Front shows this coming Sunday's date
-// and this week's 기도제목, the Back this season's 공동체 고백송.
-// A deck built from the same church file is only refreshed in place (date, 기도제목, 고백송 block),
-// so edits made to it in FreeCast stay; it is rebuilt from the template when the church file
-// itself changes, or when it is still FreeCast's built-in placeholder.
+// with the original fonts/layout and only the date changed; the Back shows this season's 고백송.
+// Front is restored from the source template with only its date replaced. Back refreshes its
+// 고백송 block in place and preserves edits outside that block.
 import type { Library, Presentation } from '../types';
 import { DEFAULT_CONFESSION_SONG } from '../defaults';
 import { fillSlide } from './convert';
-import { fillFront, refreshFront } from './fill';
-import { parsePrayerTopics } from '../sunday/prayer';
+import { refreshFront } from './fill';
+import { isFrontPresentation } from '../frontLayout';
+import { serviceEnd } from '../sunday/cleanup';
 import { mdy, upcomingSunday } from '../sunday/notice';
 import { applyConfessionSong, findConfessionSong, songChunks } from './confession';
 import type { ServiceTemplates } from './serviceTemplates';
@@ -37,15 +37,15 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
   const byId = (id: string | null) => (id ? lib.presentations.find((p) => p.id === id) : undefined);
   const base = { themeId: 'theme_classic', background: { kind: 'color', value: '#000000' } } as const;
 
-  const front = byId(lib.sunday.frontId);
   const sunday = upcomingSunday(now);
-  const prayer = (lib.sunday.prayerText ?? '').trim();
-  const frontKey = `front:${tpl.keys.front}|${mdy(sunday)}|${hash(prayer)}`;
-  if (front && !front.protected && front.templateKey !== frontKey) {
-    const topics = parsePrayerTopics(prayer);
-    // Same church file as before: only the date and the 기도 준비 slides change, edits stay.
-    if (front.templateKey?.startsWith(`front:${tpl.keys.front}|`)) out.push({ id: front.id, patch: { templateKey: frontKey, slides: refreshFront(front.slides, tpl, sunday, topics) } });
-    else if (isPlaceholder(front, 'front') || fromTemplates(front, 'front')) out.push({ id: front.id, patch: { ...base, templateKey: frontKey, slides: fillFront(tpl, sunday, topics) } });
+  for (const front of lib.presentations.filter((p) => p.id === lib.sunday.frontId || isFrontPresentation(p))) {
+    if (front.protected) continue;
+    const date = front.id === lib.sunday.frontId ? sunday : serviceEnd(front.folder ?? '', now) ?? serviceEnd(`${front.title.slice(0, 4)} 주일예배`, now) ?? sunday;
+    const frontKey = `front:${tpl.keys.front}|${mdy(date)}|original-fonts-v1`;
+    const slides = refreshFront(front.slides, tpl, date);
+    if (front.templateKey === frontKey && JSON.stringify(front.slides) === JSON.stringify(slides)) continue;
+    if (front.id !== lib.sunday.frontId || isPlaceholder(front, 'front') || fromTemplates(front, 'front'))
+      out.push({ id: front.id, patch: { ...base, templateKey: frontKey, slides } });
   }
 
   const back = byId(lib.sunday.backId);
