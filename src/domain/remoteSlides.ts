@@ -69,7 +69,16 @@ export function remoteSlideInfo(state: NavState, selectedId: string | null): Rem
   return { all, upcoming, themes, current, name: usePlaylist ? playlist.name : findPres(state.library, focusId ?? '')?.title };
 }
 
-export type RemoteInfoMessage = { type: 'info'; info: RemoteInfo } | { type: 'info-chunk'; id: string; index: number; total: number; data: string };
+export type RemotePositionMessage = { type: 'info-position'; current: Cursor | null; upcomingKeys: string[] };
+export type RemoteInfoMessage = { type: 'info'; info: RemoteInfo } | { type: 'info-chunk'; id: string; index: number; total: number; data: string } | RemotePositionMessage;
+
+/** Cursor updates are tiny; unchanged slide catalogs should not cross a slow WAN on every click. */
+export function remotePositionMessage(info: RemoteInfo): RemotePositionMessage | null {
+  if (!info.all) return null;
+  const available = new Set(info.all.map(remoteSlideKey));
+  const upcomingKeys = info.upcoming.map(remoteSlideKey);
+  return upcomingKeys.every((key) => available.has(key)) ? { type: 'info-position', current: info.current ?? null, upcomingKeys } : null;
+}
 
 /** Split large catalogs without losing slides or exceeding the relay's 4 MB UTF-8 frame limit. */
 export function remoteInfoMessages(info: RemoteInfo): RemoteInfoMessage[] {
@@ -83,8 +92,21 @@ export function remoteInfoMessages(info: RemoteInfo): RemoteInfoMessage[] {
 /** Replace the visible list only when all chunks of the new catalog have arrived. */
 export class RemoteInfoReader {
   private pending: { id: string; total: number; parts: string[] } | null = null;
+  private catalog: RemoteInfo | null = null;
   accept(message: Record<string, unknown>): RemoteInfo | null {
-    if (message.type === 'info') { this.pending = null; return message.info as RemoteInfo; }
+    if (message.type === 'info') { this.pending = null; this.catalog = message.info as RemoteInfo; return this.catalog; }
+    if (message.type === 'info-position') {
+      if (!this.catalog?.all || !Array.isArray(message.upcomingKeys) || message.upcomingKeys.length > 100 ||
+          !message.upcomingKeys.every((key) => typeof key === 'string')) return null;
+      const slides = new Map(this.catalog.all.map((slide) => [remoteSlideKey(slide), slide]));
+      const upcoming = message.upcomingKeys.map((key) => slides.get(key as string));
+      if (upcoming.some((slide) => !slide)) return null;
+      const current = message.current;
+      if (current !== null && (typeof current !== 'object' || !current || typeof (current as Cursor).presentationId !== 'string' ||
+          !Number.isInteger((current as Cursor).seq))) return null;
+      this.catalog = { ...this.catalog, current: current as Cursor | null, upcoming: upcoming as RemoteSlide[] };
+      return this.catalog;
+    }
     if (message.type !== 'info-chunk' || typeof message.id !== 'string' || typeof message.data !== 'string' || !Number.isInteger(message.index) || !Number.isInteger(message.total)) return null;
     const { id, data } = message, index = message.index as number, total = message.total as number;
     if (total < 1 || index < 0 || index >= total) return null;
@@ -94,6 +116,6 @@ export class RemoteInfoReader {
     pending.parts.push(data);
     if (pending.parts.length !== total) return null;
     this.pending = null;
-    try { return JSON.parse(pending.parts.join('')) as RemoteInfo; } catch { return null; }
+    try { this.catalog = JSON.parse(pending.parts.join('')) as RemoteInfo; return this.catalog; } catch { return null; }
   }
 }
