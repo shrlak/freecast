@@ -31,12 +31,17 @@ function validCommand(c) {
  * it is long and random, and a new one can be made at any time.
  */
 export function attachRelay(httpServer, { publicOpen = () => false, teamKey = () => '' } = {}) {
-  const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  // Compress bulky slide catalogs over slow WAN links, keeping tiny control messages uncompressed.
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024, perMessageDeflate: {
+    threshold: 1024, serverNoContextTakeover: true, clientNoContextTakeover: true,
+    zlibDeflateOptions: { level: 1 }, concurrencyLimit: 4,
+  } });
   const control = remoteControl(wss);
   const team = teamRequests(wss);
   let rehearsal = null;
   let lastState = null;
   let lastInfo = [];
+  let lastPosition = null;
   let pendingInfo = null;
 
   httpServer.on('upgrade', (req, socket, head) => {
@@ -101,6 +106,7 @@ export function attachRelay(httpServer, { publicOpen = () => false, teamKey = ()
             if (rehearsal) ws.send(rehearsal);
             for (const packet of lastInfo) ws.send(packet);
             for (const packet of pendingInfo?.packets ?? []) ws.send(packet);
+            if (lastPosition) ws.send(lastPosition);
           }
         }
         return;
@@ -118,16 +124,23 @@ export function attachRelay(httpServer, { publicOpen = () => false, teamKey = ()
         broadcast(lastState, (c) => c.role === 'viewer' || c.role === 'remote' || c.role === 'team');
       } else if (ws.role === 'host' && msg?.type === 'info') {
         pendingInfo = null;
+        lastPosition = null;
         lastInfo = [String(raw)];
         broadcast(lastInfo[0], (c) => c.role === 'remote');
       } else if (ws.role === 'host' && msg?.type === 'info-chunk') {
         if (typeof msg.id !== 'string' || msg.id.length > 100 || typeof msg.data !== 'string' || !Number.isInteger(msg.total) || msg.total < 1 || !Number.isInteger(msg.index) || msg.index < 0 || msg.index >= msg.total) return;
-        if (msg.index === 0) pendingInfo = { owner: ws, id: msg.id, total: msg.total, packets: [] };
+        if (msg.index === 0) { lastPosition = null; pendingInfo = { owner: ws, id: msg.id, total: msg.total, packets: [] }; }
         if (!pendingInfo || pendingInfo.owner !== ws || pendingInfo.id !== msg.id || pendingInfo.total !== msg.total || pendingInfo.packets.length !== msg.index) return;
         const packet = String(raw);
         pendingInfo.packets.push(packet);
         broadcast(packet, (c) => c.role === 'remote');
         if (pendingInfo.packets.length === pendingInfo.total) { lastInfo = pendingInfo.packets; pendingInfo = null; }
+      } else if (ws.role === 'host' && msg?.type === 'info-position') {
+        if (!Array.isArray(msg.upcomingKeys) || msg.upcomingKeys.length > 100 ||
+            !msg.upcomingKeys.every((key) => typeof key === 'string' && key.length <= 256) ||
+            (msg.current !== null && (!msg.current || typeof msg.current.presentationId !== 'string' || !Number.isInteger(msg.current.seq)))) return;
+        lastPosition = JSON.stringify({ type: 'info-position', current: msg.current, upcomingKeys: msg.upcomingKeys });
+        broadcast(lastPosition, (c) => c.role === 'remote');
       } else if (ws.role === 'remote' && control.owns(ws) && msg?.type === 'command' && validCommand(msg.command)) {
         broadcast(JSON.stringify({ type: 'command', command: msg.command }), (c) => c.role === 'host');
       }
