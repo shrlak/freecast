@@ -155,8 +155,6 @@ export function fillTokens(text: string, values: Record<string, string | undefin
  */
 export function patchElement(el: SlideElement, patch: Partial<SlideElement>): SlideElement {
   let next: SlideElement = { ...el, ...patch };
-  // Typing a size is a choice: the box must not shrink the text back to fit.
-  if (patch.fontSize && patch.autoFit === undefined) next.autoFit = false;
   const was = el.fontSize ?? el.paragraphs?.find((p) => p.text.trim())?.fontSize;
   const ratio = patch.fontSize && was ? patch.fontSize / was : 1;
   // The box follows the text size: a bigger / smaller font grows / shrinks the box around its centre.

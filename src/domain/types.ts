@@ -22,9 +22,9 @@ export interface Theme {
   /** Secondary line (translation / second Bible version). */
   subColor?: string;
   subScale?: number;
-  /** Shrink text that would overflow the slide (default on). */
+  /** Grow the text box to fit its content without changing font sizes (default on). */
   autoFit?: boolean;
-  /** Keep each line on one line and shrink instead of wrapping (lyrics; default on for the template lyrics theme). */
+  /** Prefer unwrapped lyric lines: widen the box, wrapping only if the slide width is exhausted. */
   noWrap?: boolean;
   /** Text effects. */
   strokeColor?: string;
@@ -126,7 +126,7 @@ export interface SlideElement {
   deviceId?: string;
   /** Per-line formatting; `text` stays the plain text (lines joined by \n). */
   paragraphs?: ElementParagraph[];
-  /** Shrink the text until it fits the box. */
+  /** Grow the box to fit its text, preserving font sizes (default on). */
   autoFit?: boolean;
   /** PowerPoint text options, as on the slide text (see Theme). */
   underline?: boolean;

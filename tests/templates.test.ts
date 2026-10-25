@@ -96,8 +96,8 @@ describe('church template filling', () => {
     expect(els(withTopics[1])[1]).toBe('2. 선교');
     const box = withTopics[0].elements![1];
     expect(box.autoFit).toBe(true);
-    expect(box.fontSize!).toBeGreaterThan(60); // enlarged to fill the slide
-    expect(box.paragraphs!.every((p) => p.fontSize === box.fontSize)).toBe(true);
+    expect(box.fontSize).toBeUndefined(); // preserve the original per-paragraph sizes; the box grows instead
+    expect(box.paragraphs!.map((p) => p.fontSize)).toEqual([60, 40]);
     expect(withTopics[0].id).not.toBe(TPL.front[0].id);
   });
 

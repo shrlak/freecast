@@ -25,11 +25,10 @@ const texts = (s: Slide) => (s.elements ?? []).filter((e) => e.kind === 'text');
 
 /** Lines with their own weight, styled like the element's first (heading) / second (body) line. */
 function setLines(el: SlideElement, lines: { text: string; bold?: boolean }[]): SlideElement {
-  const style = el.paragraphs?.[0] ?? { text: '' };
   return {
     ...el,
     text: lines.map((l) => l.text).join('\n'),
-    paragraphs: lines.map((l) => ({ ...style, text: l.text, bold: l.bold || undefined })),
+    paragraphs: lines.map((l) => ({ ...(el.paragraphs?.[l.bold ? 0 : 1] ?? el.paragraphs?.[0] ?? { text: '' }), text: l.text, bold: l.bold || undefined })),
   };
 }
 
@@ -38,38 +37,21 @@ const copy = (s: Slide): Slide => fillSlide(s, (t) => t);
 const isPrayerSlide = (s: Slide) => texts(s).some((e) => e.role === 'prayer');
 
 const LINE_HEIGHT = 1.2;
-const MAX_PRAYER_SIZE = 150;
-const MIN_PRAYER_SIZE = 36;
-
-/** Largest font size (canvas px) at which `lines` wrap to fit a w×h box; Korean glyphs are ~1 em wide, Latin ~0.55 em. */
-function fillFontSize(lines: string[], w: number, h: number): number {
-  const em = (t: string) => [...t].reduce((n, ch) => n + (ch.charCodeAt(0) < 0x2e80 ? 0.55 : 1), 0);
-  const fits = (size: number) => {
-    const perLine = w / size;
-    const rows = lines.reduce((n, l) => n + Math.max(1, Math.ceil(em(l) / perLine)), 0);
-    return rows * size * LINE_HEIGHT <= h;
-  };
-  let lo = MIN_PRAYER_SIZE;
-  for (let size = MAX_PRAYER_SIZE; size > MIN_PRAYER_SIZE; size -= 2) if (fits(size)) { lo = size; break; }
-  return lo;
-}
-
-/** A copy of `design` (a 기도 준비 slide) printing `lines` in its 기도제목 box, as large as the box allows. */
+/** A copy of `design` (a 기도 준비 slide) printing `lines` in its 기도제목 box, at the template’s original font sizes. */
 function prayerCopy(design: Slide, lines: { text: string; bold?: boolean }[], group: string): Slide {
   const c = copy(design);
   return {
     ...c, group,
     elements: c.elements!.map((e) => {
       if (e.role !== 'prayer') return e;
-      const size = fillFontSize(lines.map((l) => l.text), e.w, e.h);
       const filled = setLines(e, lines);
-      return { ...filled, autoFit: true, vAlign: 'middle', lineHeight: LINE_HEIGHT, fontSize: size, paragraphs: filled.paragraphs!.map((p) => ({ ...p, fontSize: size })) };
+      return { ...filled, autoFit: true, vAlign: 'middle', lineHeight: LINE_HEIGHT };
     }),
   };
 }
 
 /**
- * The 기도 준비 slides for these topics, each a copy of `design` (one topic per slide, text sized to fill it). With no topics, one slide with the template's own text (`emptyText`).
+ * The 기도 준비 slides for these topics, each a copy of `design` (one topic per slide, text boxes grown to fit it). With no topics, one slide with the template's own text (`emptyText`).
  */
 function prayerSlides(design: Slide, topics: PrayerTopic[], emptyText: string): Slide[] {
   if (!topics.length) return [prayerCopy(design, emptyText.split('\n').map((text) => ({ text })), design.group === '기도제목' ? 'Front' : design.group)];

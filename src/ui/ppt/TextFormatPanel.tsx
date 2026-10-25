@@ -236,7 +236,7 @@ export function TextFormatPanel({ value: f, onChange, onChangeCase, onClear, sho
           ))}
         </Drop>
       </div>
-      <label className="check small ppt-autofit"><input type="checkbox" checked={f.autoFit} onChange={(e) => onChange({ autoFit: e.target.checked })} /> 넘치면 텍스트 크기 조정 (자동 맞춤)</label>
+      <label className="check small ppt-autofit"><input type="checkbox" checked={f.autoFit} onChange={(e) => onChange({ autoFit: e.target.checked })} /> 넘치면 텍스트 상자 크기 조정</label>
     </div>
   );
 }

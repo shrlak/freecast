@@ -66,7 +66,7 @@ export function RemoteView() {
     if (m.type === 'welcome') send({ type: 'remote-control', action: 'rename', name: deviceName });
     if (m.type === 'host-status') setHostConnected(m.connected === true);
     if (m.type === 'state') setLive(m.state as LiveState);
-    if (m.type === 'info' || m.type === 'info-chunk') { const updated = reader.current.accept(m); if (updated) setInfo(updated); }
+    if (m.type === 'info' || m.type === 'info-chunk' || m.type === 'info-position') { const updated = reader.current.accept(m); if (updated) setInfo(updated); }
     if (m.type === 'error') setError(String(m.error));
   });
   useEffect(() => {

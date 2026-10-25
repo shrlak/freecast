@@ -6,6 +6,7 @@ import { qrDataUrl } from './qr';
 import { stripChords } from '../lyrics';
 import { pptxFont } from '../fonts';
 import { CANVAS_W } from '../canvas';
+import { fitTextElement } from '../textBoxLayout';
 import { resolveBackground } from '../autoBackground';
 
 const W = 10;
@@ -101,15 +102,17 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       ...textOptions(theme),
       align: theme.align, valign, lineSpacingMultiple: theme.lineHeight,
       shadow: theme.shadow ? { type: 'outer', blur: 6, offset: 2, angle: 45, color: '000000', opacity: 0.6 } : undefined,
-      fit: 'shrink',
+      fit: theme.autoFit === false ? undefined : 'resize',
     });
     slide.qr?.forEach((link, i) => {
       s.addImage({ data: qrDataUrl(link), x: W - 2.1, y: H - 2.1 - i * 2.1, w: 1.8, h: 1.8 });
     });
-    for (const el of slide.elements ?? []) {
+    for (const original of slide.elements ?? []) {
+      const el = fitTextElement(original);
       const box = { x: el.x * PX, y: el.y * PX, w: el.w * PX, h: el.h * PX, rotate: el.rotation };
       if (el.kind === 'text' && el.text) {
-        s.addText(el.text, { ...box, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: 'shrink' });
+        const content = el.paragraphs?.length ? el.paragraphs.map((p, i) => ({ text: p.text, options: { fontSize: (p.fontSize ?? el.fontSize ?? 64) * 0.5, bold: p.bold ?? el.bold, italic: p.italic ?? el.italic, color: (p.color ?? el.color ?? '#ffffff').replace('#', ''), align: p.align ?? el.align, breakLine: i < el.paragraphs!.length - 1 } })) : el.text;
+        s.addText(content, { ...box, fontFace: pptxFont(el.fontFamily ?? baseTheme.fontFamily), lineSpacingMultiple: el.lineHeight, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: el.autoFit === false ? undefined : 'resize' });
       } else if (el.kind === 'image' && el.mediaId) {
         const data = await dataUrl(el.mediaId);
         if (data) s.addImage({ ...box, data, sizing: { type: el.fit === 'cover' ? 'cover' : 'contain', w: box.w, h: box.h } });
