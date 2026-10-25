@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { textElementBounds } from '../src/domain/textBox';
 import { largestFittingFont } from '../src/domain/maximizeFont';
 import { prepareAnnouncementSizing, prepareAnnouncementSlide } from '../src/domain/announcementSizing';
 import { patchElement } from '../src/domain/templates/convert';
@@ -21,41 +22,41 @@ describe('initial maximum text size', () => {
     expect(largestFittingFont((n) => n < 2, 500)).toBe(1.5);
     expect(largestFittingFont(() => false, 500)).toBe(1);
   });
-  it('prepares announcement titles/body once while retaining the fixed section heading and other decks', () => {
-    const p = deck(), next = prepareAnnouncementSizing(p);
-    expect(next.slides[0].elements![0]).toBe(p.slides[0].elements![0]);
-    expect(next.slides[0].elements!.slice(1).every((e) => e.maximizeFont)).toBe(true);
+  it('retains original announcement sizes and clears legacy enlargement requests', () => {
+    const p = deck();
+    expect(prepareAnnouncementSizing(p)).toBe(p);
+    p.slides[0].maximizeFont = true;
+    p.slides[0].elements![1].maximizeFont = true;
+    const next = prepareAnnouncementSizing(p);
+    expect(next.slides[0].maximizeFont).toBe(false);
+    expect(next.slides[0].elements![1]).toMatchObject({ fontSize: 32, maximizeFont: false, w: 1200, h: 100 });
     expect(prepareAnnouncementSizing(next)).toBe(next);
-    const completed = { ...next, slides: [{ ...next.slides[0], elements: next.slides[0].elements!.map((e) => ({ ...e, maximizeFont: false })) }] };
-    expect(prepareAnnouncementSizing(completed)).toBe(completed);
-    const normal = { ...p, title: '설교', slides: p.slides.map((s) => ({ ...s, group: 'Sermon', elements: s.elements!.filter((e) => e.id !== 'heading') })) };
-    expect(prepareAnnouncementSizing(normal)).toBe(normal);
-    const protectedDeck = { ...p, protected: true }; expect(prepareAnnouncementSizing(protectedDeck)).toBe(protectedDeck);
-    const fixed = deck(); fixed.slides[0].elements!.forEach((e) => { e.autoFit = false; });
-    expect(prepareAnnouncementSizing(fixed)).toBe(fixed);
-    const imported = { ...p, title: '주일 PPT', slides: p.slides.map((s) => ({ ...s, group: '예배' })) };
-    expect(prepareAnnouncementSizing(imported).slides[0].elements![2].maximizeFont).toBe(true);
+    const protectedDeck = { ...p, protected: true };
+    expect(prepareAnnouncementSizing(protectedDeck)).toBe(protectedDeck);
   });
-  it('keeps initial content clear of the next text box, slide edge and QR area', () => {
-    const s: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [box('title', '제목', 180, 300), box('body', '본문', 320, 800)] };
-    const next = prepareAnnouncementSlide(s), [title, body] = next.elements!;
-    expect(title.y + title.h).toBeLessThan(body.y); expect(body.y + body.h).toBeLessThan(1080);
-    expect(body.x + body.w).toBeLessThanOrEqual(1140);
+  it('reserves neighbor and QR space at layout time rather than resizing short content on load', () => {
+    const s: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [box('title', '제목', 180), box('body', '본문', 320, 600)] };
+    expect(prepareAnnouncementSlide(s)).toBe(s);
+    const [title, body] = s.elements!;
+    const titleBounds = textElementBounds(title, s.elements, true), bodyBounds = textElementBounds(body, s.elements, true);
+    expect((titleBounds.y ?? 0) + titleBounds.h).toBeLessThan(body.y);
+    expect(bodyBounds.y).toBeGreaterThan(title.y + title.h);
+    expect(bodyBounds.w).toBe(1140);
   });
-  it('also requests an initial fit for plain-text ads and preserves manual font choices', () => {
-    const p = deck(); p.slides = [{ id: 'plain', group: '광고', text: '광고 본문' }];
-    expect(prepareAnnouncementSizing(p).slides[0].maximizeFont).toBe(true);
-    const manual = patchElement(box('body', '수정한 본문', 320), { fontSize: 64 });
-    expect(manual.maximizeFont).toBe(false);
-    const next = prepareAnnouncementSizing({ ...deck(), slides: [{ id: 'manual', group: '광고', text: '', elements: [manual] }] });
-    expect(next.slides[0].elements![0]).toBe(manual);
+  it('preserves plain-text ads and explicit manual font choices', () => {
+    const p = deck(); p.slides = [{ id: 'plain', group: '광고', text: '광고 본문', style: { fontSize: 32 } }];
+    expect(prepareAnnouncementSizing(p)).toBe(p);
+    const manual = patchElement({ ...box('body', '수정한 본문', 320), fontSize: 40, preferredFontSize: 80 }, { fontSize: 64 });
+    expect(manual).toMatchObject({ fontSize: 64, maximizeFont: false });
+    expect(manual.preferredFontSize).toBeUndefined();
   });
-  it('applies to existing and newly imported ads, persists completion, and never changes protected material', () => {
+  it('preserves font sizes for loaded/imported ads and retains preferred sizes after reload', () => {
     const lib = createSeedLibrary(); lib.presentations = [deck()];
-    const state = createInitialState(lib); expect(state.library.presentations[0].slides[0].elements![1].maximizeFont).toBe(true);
+    const state = createInitialState(lib);
+    expect(state.library.presentations[0].slides[0].elements![1].fontSize).toBe(32);
     const created = reducer(createInitialState(createSeedLibrary()), { type: 'presentation/create', presentation: deck() });
-    expect(created.library.presentations.at(-1)!.slides[0].elements![1].maximizeFont).toBe(true);
-    state.library.presentations[0].slides[0].elements![1].maximizeFont = false;
-    expect(normalizeLibrary(JSON.parse(JSON.stringify(state.library)))!.presentations[0].slides[0].elements![1].maximizeFont).toBe(false);
+    expect(created.library.presentations.at(-1)!.slides[0].elements![1].maximizeFont).toBeUndefined();
+    state.library.presentations[0].slides[0].elements![1].preferredFontSize = 64;
+    expect(normalizeLibrary(JSON.parse(JSON.stringify(state.library)))!.presentations[0].slides[0].elements![1].preferredFontSize).toBe(64);
   });
 });

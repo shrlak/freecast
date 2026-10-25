@@ -13,10 +13,10 @@ const deck = (): Presentation => ({ id: 'ads', title: '광고', themeId: 'theme_
 ] }] });
 
 describe('one font size per text box', () => {
-  it('repairs an already maximized mixed body without changing a separate heading or emphasis', () => {
+  it('repairs an already saved mixed body without enlarging it without changing a separate heading or emphasis', () => {
     const original = deck(), corrected = prepareAnnouncementSizing(original), [heading, box] = corrected.slides[0].elements!;
     expect(heading).toBe(original.slides[0].elements![0]);
-    expect(box.fontSize).toBe(80); expect(box.maximizeFont).toBe(true);
+    expect(box.fontSize).toBe(80); expect(box.maximizeFont).toBe(false);
     expect(box.paragraphs!.map((p) => p.fontSize)).toEqual([80, 80]);
     expect(box.paragraphs![0].bold).toBe(true);
     expect(box.paragraphs![1]).toMatchObject({ color: '#123456', italic: true });
@@ -28,7 +28,7 @@ describe('one font size per text box', () => {
     const p = deck(); p.title = '주일예배.pptx'; p.slides[0].group = '예배';
     const lib = createSeedLibrary(); lib.presentations = [p];
     expect(normalizeLibrary(JSON.parse(JSON.stringify(lib)))!.presentations[0].slides[0].elements![1].paragraphs!.map((p) => p.fontSize)).toEqual([80, 80]);
-    expect(correctMixedTextSizes(p).slides[0].elements![1].maximizeFont).toBe(true);
+    expect(correctMixedTextSizes(p).slides[0].elements![1].maximizeFont).toBe(false);
     const protectedDeck = { ...p, protected: true }; expect(correctMixedTextSizes(protectedDeck)).toBe(protectedDeck);
   });
   it('does not maximize again after a completed correction is saved and reloaded', () => {

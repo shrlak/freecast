@@ -54,7 +54,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     save?.();
   }, []);
   const theme = slideTheme(baseTheme, slide);
-  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }));
+  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }), !!slide.qr?.length);
   const defaultTextBox: Box = { x: theme.padding, y: theme.padding, w: CANVAS_W - theme.padding * 2, h: CANVAS_H - theme.padding * 2 };
   const [bodyBox, setBodyBox] = useState<{ identity: string; box: Box } | null>(null);
   const latestBody = useRef({ slide, onChange }); latestBody.current = { slide, onChange };
@@ -64,9 +64,10 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     let node: HTMLElement | null = null;
     const update = () => {
       if (!node) return;
-      const size = Number(node.querySelector<HTMLElement>('[data-initial-font-size]')?.dataset.initialFontSize);
+      const fitted = node.querySelector<HTMLElement>('[data-fitted-font-size]');
+      const size = Number(fitted?.dataset.fittedFontSize), preferred = Number(fitted?.dataset.preferredFontSize);
       const latest = latestBody.current;
-      if (latest.slide.maximizeFont && Number.isFinite(size) && size > 0 && document.fonts?.status !== 'loading') latest.onChange({ maximizeFont: false, style: { ...latest.slide.style, fontSize: size } });
+      if (Number.isFinite(size) && size > 0 && size !== (latest.slide.style?.fontSize ?? theme.fontSize) && document.fonts?.status !== 'loading') latest.onChange({ maximizeFont: false, preferredFontSize: preferred, style: { ...latest.slide.style, fontSize: size } });
       const box = { x: node.offsetLeft, y: node.offsetTop, w: node.offsetWidth, h: node.offsetHeight };
       setBodyBox((old) => old?.identity === identity && Object.keys(box).every((k) => old.box[k as keyof Box] === box[k as keyof Box]) ? old : { identity, box });
     };
@@ -77,7 +78,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
       update();
     };
     // Background decoding can replace the previous slide after this editor has already mounted.
-    const mutations = new MutationObserver(bind); mutations.observe(ref.current, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-initial-font-size'] }); bind();
+    const mutations = new MutationObserver(bind); mutations.observe(ref.current, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-fitted-font-size'] }); bind();
     return () => { observer.disconnect(); mutations.disconnect(); };
   }, [identity, editing, theme.padding, theme.fontSize, theme.align, theme.vAlign, width, readOnly]);
 

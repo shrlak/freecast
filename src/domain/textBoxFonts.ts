@@ -17,7 +17,7 @@ export function hasMixedTextSizes(el: SlideElement): boolean {
 export function correctMixedTextSizes(p: Presentation): Presentation {
   if (p.protected) return p;
   const slides = p.slides.map((s) => {
-    const elements = s.elements?.map((el) => hasMixedTextSizes(el) ? { ...uniformTextBoxFont(el), maximizeFont: true } : el);
+    const elements = s.elements?.map((el) => hasMixedTextSizes(el) ? { ...uniformTextBoxFont(el), maximizeFont: false } : el);
     return elements?.some((e, i) => e !== s.elements![i]) ? { ...s, elements } : s;
   });
   return slides.some((s, i) => s !== p.slides[i]) ? { ...p, slides } : p;
