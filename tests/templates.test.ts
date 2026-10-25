@@ -412,9 +412,9 @@ describe('editable slides that keep their edits', async () => {
   const welcome = slide('Front', [img('w', 0, 300), text('d', '빛주사랑\n대학청년부\nmm/dd/202y', 800)]);
   const tpl = { ...TPL, front: [prayerSlide, welcome], keys: { front: 'f1', song: 's1' } };
 
-  it('preserves the original corner logo and prayer text', () => {
+  it('omits only the prayer page corner logo and preserves the welcome logo and prayer text', () => {
     const out = fillFront(tpl, new Date(2026, 9, 25), []);
-    expect(out[0].elements!.some((e) => e.kind === 'image')).toBe(true);
+    expect(out[0].elements!.some((e) => e.kind === 'image')).toBe(false);
     expect(out[0].elements!.find((e) => e.text?.includes('기도제목'))!.text).toBe('기도제목 1\n기도제목 2');
     expect(out[1].elements!.some((e) => e.kind === 'image')).toBe(true);
   });
