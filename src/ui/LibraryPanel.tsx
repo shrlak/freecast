@@ -1,4 +1,5 @@
 import { isServicePlaylist, nextServiceCleanup } from '../domain/sunday/cleanup';
+import { isSaturdayDawnImage, isSaturdayDawnName } from '../domain/saturdayDawn';
 import { useState, type Dispatch } from 'react';
 import type { AppState, Action } from '../domain/reducer';
 import { activePlaylist } from '../domain/live';
@@ -20,6 +21,7 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const { presentations, playlists } = state.library;
   const playlist = activePlaylist(state);
+  const cleanupPlaylist = isServicePlaylist(playlist?.name ?? '') || isSaturdayDawnName(playlist?.name ?? '');
   const q = query.trim().toLowerCase();
   const filtered = presentations
     .filter((p) => !q || p.title.toLowerCase().includes(q) || p.slides.some((s) => `${s.title ?? ''} ${s.text}`.toLowerCase().includes(q)))
@@ -30,6 +32,7 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
     folders.set(f, [...(folders.get(f) ?? []), p]);
   }
   const byId = new Map(presentations.map((p) => [p.id, p]));
+  const saturdayImages = playlist?.items.some((i) => i.kind !== 'header' && byId.has(i.presentationId) && isSaturdayDawnImage(state.library, byId.get(i.presentationId)!, playlist.name));
   const liveId = state.cursor?.presentationId;
 
   const saveName = (name: string): string | void => {
@@ -104,13 +107,14 @@ export function LibraryPanel({ state, dispatch, onNew, online, onReloadOnline }:
             <button className="mini-btn" title="Add section header" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'header', playlistId: playlist.id, initialValue: 'Section', title: '헤더 이름' })}>H</button>
             <button className="mini-btn" title="Duplicate as template (e.g. next week's service)" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'duplicate', playlistId: playlist.id, initialValue: `${playlist.name} copy`, title: '템플릿으로 복제' })}>⧉</button>
             <button className="mini-btn" title="Rename playlist" disabled={!playlist} onClick={() => playlist && setNameRequest({ kind: 'rename', playlistId: playlist.id, initialValue: playlist.name, title: '재생목록 이름 변경' })}>✎</button>
-            <button className="mini-btn" title="Delete playlist" disabled={playlists.length <= 1 && !isServicePlaylist(playlist?.name ?? "")} onClick={() => playlist && confirm(isServicePlaylist(playlist.name) ? `“${playlist.name}” 예배 자료를 휴지통으로 옮길까요? 전용 미디어는 30일 후 삭제되며 찬양 목록·라이브러리와 공유 미디어는 보존됩니다.` : `Delete playlist “${playlist.name}”?`) && dispatch({ type: 'playlist/delete', id: playlist.id })}>🗑</button>
+            <button className="mini-btn" title="Delete playlist" disabled={playlists.length <= 1 && !cleanupPlaylist} onClick={() => playlist && confirm(cleanupPlaylist || saturdayImages ? `“${playlist.name}” 재생목록과 전용 예배 자료를 삭제할까요? 토요새벽 예배 이미지도 함께 휴지통으로 이동합니다. 전용 미디어는 30일 후 삭제되며 찬양 목록·라이브러리와 공유 미디어는 보존됩니다.` : `Delete playlist “${playlist.name}”?`) && dispatch({ type: 'playlist/delete', id: playlist.id })}>🗑</button>
           </div>
         </div>
         {playlist && isServicePlaylist(playlist.name) && <div className="playlist-retention">
           <label><input type="checkbox" checked={!!playlist.autoDeleteAfter && playlist.autoDeleteAfter > Date.now()} onChange={(e) => dispatch({ type: 'playlist/retention', id: playlist.id, until: e.target.checked ? nextServiceCleanup(playlist.name, new Date()) : undefined })} /> 다음 자동 삭제까지 보관</label>
           <p className="hint">{playlist.autoDeleteAfter && playlist.autoDeleteAfter > Date.now() ? `${new Date(playlist.autoDeleteAfter).toLocaleString()}까지 예배 자료와 미디어를 보관합니다.` : '예배 종료 후 자료는 휴지통으로 옮기고, 전용 미디어는 30일 후 삭제합니다.'}</p>
         </div>}
+        {playlist && (isSaturdayDawnName(playlist.name) || saturdayImages) && <p className="hint">이미지 항목의 ✕ 또는 재생목록 삭제 시 전용 이미지 자료도 휴지통으로 옮깁니다. 30일간 복원할 수 있으며, 다른 재생목록에서 사용하는 자료는 유지합니다.</p>}
         <ol className="list">
           {playlist?.items.map((item, i) => {
             const isHeader = item.kind === 'header';
