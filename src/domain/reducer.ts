@@ -10,6 +10,7 @@ import { sequence } from './arrangement';
 import { deleteSlides, deleteSlidesAt, editSlide, editSlideAt } from './slideEditing';
 import { centerAddedLyricSlides, centerSongLyrics } from './songCentering';
 import { preservePdfPages } from './importedSlides';
+import { prepareAnnouncementSizing } from './announcementSizing';
 import { blockedProtectedAction, isProtected, keepProtectedMaterials, protectionWinners, mergeProtectionChanges } from './materialProtection';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
@@ -118,6 +119,8 @@ type DomainAction =
 export type Action = DomainAction & { actor?: DeviceIdentity; account?: string | null; eventId?: string; occurredAt?: number };
 
 export function createInitialState(library: Library): AppState {
+  const prepared = library.presentations.map(prepareAnnouncementSizing);
+  if (prepared.some((p, i) => p !== library.presentations[i])) library = { ...library, presentations: prepared };
   const pl = library.playlists[0];
   const first = pl?.items.find((i): i is Extract<PlaylistItem, { presentationId: string }> => i.kind !== 'header');
   return {
@@ -266,10 +269,10 @@ function core(s: AppState, a: Action): AppState {
     case 'select':
       return { ...s, selectedId: a.id, playlistIndex: null };
     case 'presentation/create':
-      return { ...setLib(s, { presentations: [...lib.presentations, centerSongLyrics(a.presentation)] }), selectedId: a.presentation.id, playlistIndex: null };
+      return { ...setLib(s, { presentations: [...lib.presentations, prepareAnnouncementSizing(centerSongLyrics(a.presentation))] }), selectedId: a.presentation.id, playlistIndex: null };
     case 'presentation/createMany': {
       const next = setLib(s, {
-        presentations: [...lib.presentations, ...a.presentations.map(centerSongLyrics)],
+        presentations: [...lib.presentations, ...a.presentations.map((p) => prepareAnnouncementSizing(centerSongLyrics(p)))],
         playlists: a.playlist ? [...lib.playlists, a.playlist] : lib.playlists,
       });
       return a.playlist ? { ...next, activePlaylistId: a.playlist.id, playlistIndex: null } : next;

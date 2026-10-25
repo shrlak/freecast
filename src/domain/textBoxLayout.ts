@@ -2,9 +2,11 @@ import type { CSSProperties } from 'react';
 import type { SlideElement } from './types';
 import { growTextBox } from './textBox';
 import { INDENT_PX, listMarkers } from './textFormat';
+import { maximumFontFromNode } from './maximizeFont';
 
 const cache = new Map<string, ReturnType<typeof growTextBox>>();
-export const clearTextBoxLayoutCache = () => cache.clear();
+const maximums = new Map<string, SlideElement>();
+export const clearTextBoxLayoutCache = () => { cache.clear(); maximums.clear(); };
 
 /** Shared by measurement and drawing, so line wrapping uses the actual loaded font and spacing. */
 export function elementTextStyle(el: SlideElement): CSSProperties {
@@ -22,26 +24,47 @@ function applyStyle(node: HTMLElement, styles: CSSProperties) {
   for (const [key, value] of Object.entries(styles)) if (value != null) (node.style as unknown as Record<string, string>)[key] = typeof value === 'number' && px.has(key) ? `${value}px` : String(value);
 }
 
-/** Measure without mutating a live slide or reducing font sizes. Browser-less exports use PPT's resize mode. */
+function measurementNode(el: SlideElement): HTMLDivElement {
+  const node = document.createElement('div');
+  applyStyle(node, elementTextStyle(el));
+  Object.assign(node.style, { position: 'fixed', left: '-100000px', top: '0', visibility: 'hidden', pointerEvents: 'none',
+    width: el.vertical ? 'max-content' : `${Math.max(1, el.w)}px`, height: el.vertical ? `${Math.max(1, el.h)}px` : 'max-content', margin: '0' });
+  const lines = el.paragraphs?.map((p) => p.text) ?? (el.text ?? '').split('\n');
+  const markers = listMarkers(lines, el.list);
+  lines.forEach((text, i) => {
+    const line = document.createElement('div'), p = el.paragraphs?.[i];
+    if (p) applyStyle(line, { fontSize: p.fontSize ?? el.fontSize ?? 64, fontWeight: p.bold ? 700 : undefined, fontStyle: p.italic ? 'italic' : undefined, minHeight: '1.2em' });
+    line.style.flexShrink = '0';
+    if (markers[i]) { const marker = document.createElement('span'); marker.className = 'list-marker'; marker.textContent = markers[i]; line.append(marker); }
+    line.append(document.createTextNode(text || '\u00a0')); node.append(line);
+  });
+  document.body.append(node);
+  return node;
+}
+
+/** Resolve an explicit initial font fit once, then grow the box while preserving that font. */
 export function fitTextElement(el: SlideElement): SlideElement {
-  if (el.kind !== 'text' || el.autoFit === false || typeof document === 'undefined' || !document.body) return el;
+  if (el.kind !== 'text' || typeof document === 'undefined' || !document.body) return el;
+  if (el.maximizeFont) {
+    const request = JSON.stringify(el);
+    let sized = maximums.get(request);
+    if (!sized) {
+      const node = measurementNode(el);
+      try {
+        const base = el.fontSize ?? 64, size = maximumFontFromNode(node, el.w, el.h), ratio = size / base;
+        sized = { ...el, fontSize: size, maximizeFont: false,
+          paragraphs: el.paragraphs?.map((p) => ({ ...p, fontSize: (p.fontSize ?? base) * ratio })) };
+      } finally { node.remove(); }
+      if (maximums.size >= 500) maximums.clear();
+      maximums.set(request, sized);
+    }
+    return fitTextElement(sized);
+  }
+  if (el.autoFit === false) return el;
   const key = JSON.stringify(el);
   let box = cache.get(key);
   if (!box) {
-    const node = document.createElement('div');
-    applyStyle(node, elementTextStyle(el));
-    Object.assign(node.style, { position: 'fixed', left: '-100000px', top: '0', visibility: 'hidden', pointerEvents: 'none',
-      width: el.vertical ? 'max-content' : `${Math.max(1, el.w)}px`, height: el.vertical ? `${Math.max(1, el.h)}px` : 'max-content', margin: '0' });
-    const lines = el.paragraphs?.map((p) => p.text) ?? (el.text ?? '').split('\n');
-    const markers = listMarkers(lines, el.list);
-    lines.forEach((text, i) => {
-      const line = document.createElement('div'), p = el.paragraphs?.[i];
-      if (p) applyStyle(line, { fontSize: p.fontSize ?? el.fontSize ?? 64, fontWeight: p.bold ? 700 : undefined, fontStyle: p.italic ? 'italic' : undefined, minHeight: '1.2em' });
-      line.style.flexShrink = '0';
-      if (markers[i]) { const marker = document.createElement('span'); marker.className = 'list-marker'; marker.textContent = markers[i]; line.append(marker); }
-      line.append(document.createTextNode(text || '\u00a0')); node.append(line);
-    });
-    document.body.append(node);
+    const node = measurementNode(el);
     try { box = growTextBox(el, { w: node.scrollWidth, h: node.scrollHeight }, el.align, el.vAlign); }
     finally { node.remove(); }
     if (cache.size >= 1000) cache.clear();

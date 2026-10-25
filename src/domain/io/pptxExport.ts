@@ -7,6 +7,7 @@ import { stripChords } from '../lyrics';
 import { pptxFont } from '../fonts';
 import { CANVAS_W } from '../canvas';
 import { fitTextElement } from '../textBoxLayout';
+import { maximumSlideFont } from '../maximizeFont';
 import { resolveBackground } from '../autoBackground';
 
 const W = 10;
@@ -66,7 +67,8 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
   const baseTheme = lib.themes.find((t) => t.id === p.themeId) ?? lib.themes[0];
   for (const { slide } of sequence(p)) {
     if (slide.disabled) continue;
-    const theme: Theme = slide.style ? { ...baseTheme, ...slide.style } : baseTheme;
+    const original: Theme = slide.style ? { ...baseTheme, ...slide.style } : baseTheme;
+    const theme = slide.maximizeFont ? { ...original, fontSize: maximumSlideFont(slide, original) } : original;
     const s = pptx.addSlide();
     const bg = resolveBackground(slide, p);
     if (bg?.kind === 'image') {

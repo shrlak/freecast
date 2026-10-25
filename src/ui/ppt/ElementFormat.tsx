@@ -64,6 +64,7 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
       {el.kind === 'text' && (
         <>
           <label className="stack">텍스트<AutoTextarea rows={Math.min(8, Math.max(2, (el.text ?? '').split('\n').length))} value={el.text ?? ''} onChange={(e) => onChange({ text: e.target.value })} /></label>
+          <button onClick={() => onChange({ maximizeFont: true })}>상자 안 최대 크기</button>
           <TextFormatPanel
             value={textValue(el)}
             onChange={(patch) => onChange(elementPatch(el, patch))}

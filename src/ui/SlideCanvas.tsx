@@ -14,6 +14,7 @@ import { CANVAS_W, CANVAS_H } from '../domain/canvas';
 import { growTextBox } from '../domain/textBox';
 import { useAutoTextBoxes, useFontEpoch } from './textBoxLayout';
 import { elementTextStyle } from '../domain/textBoxLayout';
+import { maximumFontFromNode } from '../domain/maximizeFont';
 
 export interface CanvasProps {
   slide: Slide | null;
@@ -248,14 +249,20 @@ function TextElement({ el: original, box }: { el: SlideElement; box: CSSProperti
 export const slideTheme = (theme: Theme, slide: Slide): Theme => (slide.style ? { ...theme, ...slide.style } : theme);
 
 function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
-  const theme = slideTheme(base, slide);
+  const originalTheme = slideTheme(base, slide);
   const fontEpoch = useFontEpoch();
+  const request = JSON.stringify([slide.id, slide.title, slide.text, slide.subtext, originalTheme, slide.maximizeFont, fontEpoch]);
+  const [maximum, setMaximum] = useState<{ key: string; size: number } | null>(null);
+  const theme = slide.maximizeFont && maximum?.key === request ? { ...originalTheme, fontSize: maximum.size } : originalTheme;
   const hasQr = !!slide.qr?.length;
   const horizontalPad = slide.lyricBody && hasQr ? Math.max(theme.padding, 300) : theme.padding;
   const qrSpace = hasQr && !slide.lyricBody ? 300 : 0;
   const inner = useRef<HTMLDivElement>(null);
   const lyricLines = theme.noWrap ?? theme.id === TEMPLATE_LYRICS_THEME;
   const baseBox = { x: horizontalPad, y: theme.padding, w: Math.max(1, CANVAS_W - horizontalPad * 2 - qrSpace), h: Math.max(1, CANVAS_H - theme.padding * 2) };
+  useLayoutEffect(() => {
+    if (slide.maximizeFont && inner.current) setMaximum({ key: request, size: maximumFontFromNode(inner.current, baseBox.w, baseBox.h) });
+  }, [request]);
   const key = JSON.stringify([slide.title, slide.text, slide.subtext, theme, horizontalPad, qrSpace, fontEpoch]);
   const [layout, setLayout] = useState<{ key: string; box: typeof baseBox; wrap: boolean } | null>(null);
   const frame = layout?.key === key ? layout.box : baseBox;
@@ -280,7 +287,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
         className="layer text-layer"
         style={{ inset: 'auto', left: frame.x, top: frame.y, width: frame.w, height: frame.h, justifyContent: V_ALIGN[theme.vAlign], alignItems: H_ALIGN[theme.align] }}
       >
-        <div ref={inner} data-slide-text-box style={{ ...textStyle(t), width: frame.w, flexShrink: 0, whiteSpace: noWrap ? 'pre' : 'pre-wrap', overflowWrap: 'anywhere', paddingLeft: theme.indent ? theme.indent * INDENT_PX : undefined }}>
+        <div ref={inner} data-slide-text-box data-initial-font-size={slide.maximizeFont && maximum?.key === request ? maximum.size : undefined} style={{ ...textStyle(t), width: frame.w, flexShrink: 0, whiteSpace: noWrap ? 'pre' : 'pre-wrap', overflowWrap: 'anywhere', paddingLeft: theme.indent ? theme.indent * INDENT_PX : undefined }}>
           {slide.title && <div className="slide-title" style={{ fontSize: t.fontSize * 0.72, marginBottom: t.fontSize * 0.35 }}>{slide.title}</div>}
           {slide.text && <Lines text={slide.text} list={theme.list} highlight={theme.highlight} />}
           {slide.subtext && (
