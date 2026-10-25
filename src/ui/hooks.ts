@@ -164,7 +164,7 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       if (closed) return;
       // Network switching (Wi-Fi / mobile data) may leave the old socket in a stale state.
       if (socket.current?.readyState === WebSocket.OPEN) socket.current.close();
-      else if (socket.current?.readyState !== WebSocket.CONNECTING) { clearTimeout(retry); connect(); }
+      else if (!socket.current || socket.current.readyState === WebSocket.CLOSED) { clearTimeout(retry); connect(); }
     };
     window.addEventListener('offline', offline);
     window.addEventListener('online', online);
