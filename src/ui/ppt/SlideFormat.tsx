@@ -60,7 +60,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
   const setStyle = (patch: SlideStyle) => {
     const next: SlideStyle = { ...st, ...patch };
     for (const k of Object.keys(next) as (keyof SlideStyle)[]) if (next[k] === undefined || next[k] === base[k as keyof Theme]) delete next[k];
-    upd({ style: Object.keys(next).length ? next : undefined });
+    upd({ style: Object.keys(next).length ? next : undefined, ...(patch.fontSize !== undefined ? { maximizeFont: false } : {}) });
   };
   const flash = (msg: string) => {
     setApplied(msg);
@@ -99,6 +99,7 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
     <div className="slide-format">
       {showContent && <Section title="내용 · 이 슬라이드만"><SlideContentEditor slide={slide} onChange={upd} /></Section>}
       {applied && <div className="fmt-flash">✓ {applied}</div>}
+      {!selected && <button onClick={() => boxMode ? upd({ elements: elements.map((e) => e.kind === 'text' ? { ...e, maximizeFont: true } : e) }) : upd({ maximizeFont: true })}>상자 안 최대 크기</button>}
       {selected ? (
         <ElementFormat
           el={selected}

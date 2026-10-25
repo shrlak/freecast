@@ -15,6 +15,7 @@ import { fillSlide, fillTokens, withElementText } from './convert';
 import { CANVAS_H, CANVAS_W } from '../canvas';
 import type { ServiceTemplates } from './serviceTemplates';
 import { centerSongLyrics } from '../songCentering';
+import { prepareAnnouncementSlide } from '../announcementSizing';
 
 export const TEMPLATE_LYRICS_THEME = 'theme_tpl_lyrics';
 
@@ -120,9 +121,12 @@ export function announcementSlides(tpl: ServiceTemplates, items: Announcement[])
   const [, titleBox, bodyBox] = [...texts(tpl.announceItem)].sort((a, b) => a.y - b.y);
   return [
     fillSlide(tpl.announceTitle, (t) => t),
-    ...items.map((a, i) =>
-      fillSlide(tpl.announceItem, (t, el) => (el.id === titleBox?.id ? `${i + 1}. <${a.title}>` : el.id === bodyBox?.id ? a.body.join('\n') : t), { qr: a.links.length ? a.links : undefined }),
-    ),
+    ...items.map((a, i) => {
+      const slide = fillSlide(tpl.announceItem, (t, el) => (el.id === titleBox?.id ? `${i + 1}. <${a.title}>` : el.id === bodyBox?.id ? a.body.join('\n') : t), { qr: a.links.length ? a.links : undefined });
+      const ids = new Set([titleBox?.id, bodyBox?.id]);
+      slide.elements = slide.elements?.map((e, n) => ids.has(tpl.announceItem.elements?.[n]?.id ?? '') && e.text?.trim() ? { ...e, maximizeFont: true } : e);
+      return prepareAnnouncementSlide(slide);
+    }),
   ];
 }
 

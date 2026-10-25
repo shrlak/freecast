@@ -23,7 +23,10 @@ export function useAutoTextBoxes(elements: SlideElement[], onResize?: (elements:
   useLayoutEffect(() => {
     const { elements, onResize } = latest.current;
     const fitted = elements.map(fitTextElement);
-    if (fitted.some((el, i) => el !== elements[i])) { setLayout({ key, elements: fitted }); onResize?.(fitted); }
+    if (fitted.some((el, i) => el !== elements[i])) {
+      setLayout({ key, elements: fitted });
+      if (!elements.some((e) => e.maximizeFont) || document.fonts?.status !== 'loading') onResize?.(fitted);
+    }
     else setLayout(null);
   }, [key, epoch]);
   return layout?.key === key ? layout.elements : elements;

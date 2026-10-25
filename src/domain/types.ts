@@ -99,6 +99,8 @@ export interface ElementParagraph {
 
 /** A free-positioned object on a slide (slide editor), in 1440×1080 canvas pixels. */
 export interface SlideElement {
+  /** One-time request to maximize the font inside this box; false records completion/manual sizing. */
+  maximizeFont?: boolean;
   id: string;
   kind: ElementKind;
   x: number;
@@ -146,6 +148,8 @@ export interface SlideElement {
 export type SlideAction = MacroStep | { type: 'runMacro'; macroId: string };
 
 export interface Slide {
+  /** One-time request to maximize theme-styled text inside the slide's text area. */
+  maximizeFont?: boolean;
   id: string;
   /** Original import type: PowerPoint objects remain editable; PDF page content is read-only. */
   importSource?: { format: 'pptx' | 'ppt' | 'pdf'; name: string; page: number };
