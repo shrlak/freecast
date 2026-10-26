@@ -77,8 +77,9 @@ export function relayUrl(): string {
 /**
  * A WebSocket to the FreeCast relay that reconnects on its own.
  * Returns a send function; `onMessage` receives parsed JSON.
+ * `address` connects to another computer's relay instead of this one's (a standby watching the main computer).
  */
-export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: Record<string, unknown>) => void) {
+export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: Record<string, unknown>) => void, address?: string) {
   const handler = useRef(onMessage);
   handler.current = onMessage;
   const socket = useRef<WebSocket | null>(null);
@@ -101,7 +102,7 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       setConnected(false);
       setStatus(navigator.onLine ? (attempted ? 'reconnecting' : 'connecting') : 'offline');
       attempted = true;
-      const ws = new WebSocket(relayUrl());
+      const ws = new WebSocket(address ?? relayUrl());
       let lastReply = Date.now(), serial = 0;
       let probe: { id: number; start: number } | null = null;
       let samples: (number | null)[] = [];
@@ -180,7 +181,7 @@ export function useRelay(hello: Record<string, unknown> | null, onMessage: (m: R
       socket.current?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [helloKey]);
+  }, [helloKey, address]);
   const send = (m: unknown) => {
     if (navigator.onLine && socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(m));
   };
