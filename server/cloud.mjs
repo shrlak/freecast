@@ -8,6 +8,8 @@ import { aiConfig } from './aiProviders.mjs';
 
 const cloudBase = () => (process.env.FREECAST_CLOUD_URL || aiConfig().proxyUrl).replace(/\/+$/, '');
 
+const MAX_FEEDBACK_BYTES = 64 * 1024; // 5000 characters of Korean is ~15 KB
+
 /**
  * Feedback: the Worker saves it and hands back the formsubmit.co email to send, which goes out
  * from this computer (formsubmit.co rate-limits Cloudflare's shared addresses).
@@ -20,7 +22,12 @@ async function sendFeedback(req, res) {
   };
   try {
     const chunks = [];
-    for await (const c of req) chunks.push(c);
+    let size = 0;
+    for await (const c of req) {
+      size += c.length;
+      if (size > MAX_FEEDBACK_BYTES) return reply(413, { error: '피드백이 너무 깁니다.' });
+      chunks.push(c);
+    }
     const saved = await fetch(`${cloudBase()}/freecast/feedback`, { method: 'POST', headers, body: Buffer.concat(chunks), signal: AbortSignal.timeout(30_000) });
     const data = await saved.json().catch(() => ({}));
     if (!saved.ok || !data.relay) return reply(saved.status, data.relay ? data : { ...data, emailed: false });
