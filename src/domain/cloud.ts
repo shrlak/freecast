@@ -14,6 +14,10 @@ export interface CloudSession {
   version: number;
 }
 
+export interface CloudClearPreview {
+  server: string; revision: string; version: number; presentations: number; playlists: number; trash: number; mediaCount: number; mediaBytes: number;
+}
+
 export function loadSession(): CloudSession | null {
   try {
     const s = JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
@@ -50,6 +54,12 @@ async function call<T>(path: string, init: RequestInit & { token?: string } = {}
 }
 
 export const cloudApi = {
+  clearPreview: (token: string) => call<CloudClearPreview>('clear', { token }).then((r) => r.data),
+  clearAll: async (token: string, password: string, revision: string) => {
+    const r = await call<{ ok: boolean; token: string; username: string; version: number; data: Library; deleted: CloudClearPreview; error?: string }>('clear', { method: 'POST', token, body: JSON.stringify({ password, revision }) });
+    if (r.status !== 200) throw Object.assign(new Error(r.data.error ?? '서버 자료가 변경되었습니다. 삭제 대상을 다시 확인하세요.'), { status: r.status });
+    return r.data;
+  },
   register: (username: string, password: string, adminPassword: string) =>
     call<{ ok: boolean }>('register', { method: 'POST', body: JSON.stringify({ username, password, adminPassword }) }),
   login: (username: string, password: string) =>
@@ -63,8 +73,8 @@ export const cloudApi = {
   putLibrary: (token: string, baseVersion: number, data: Library) =>
     call<{ version: number; conflict?: boolean; data?: unknown }>('library', { method: 'PUT', token, body: JSON.stringify({ baseVersion, data }) }),
   listMedia: (token: string) => call<{ items: { id: string; size: number; type?: string }[] }>('media', { token }).then((r) => r.data.items),
-  uploadMedia: (token: string, id: string, blob: Blob) =>
-    call(`media/${encodeURIComponent(id)}`, { method: 'PUT', token, body: blob, headers: { 'content-type': blob.type || 'application/octet-stream' } }),
+  uploadMedia: (token: string, id: string, blob: Blob, resetId?: string) =>
+    call(`media/${encodeURIComponent(id)}`, { method: 'PUT', token, body: blob, headers: { 'content-type': blob.type || 'application/octet-stream', ...(resetId ? { 'X-Freecast-Reset-Id': resetId } : {}) } }),
   deleteMedia: (token: string, id: string) => call(`media/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
   downloadMedia: (token: string, id: string) => call<Blob>(`media/${encodeURIComponent(id)}`, { token }).then((r) => r.data),
 };
@@ -91,7 +101,7 @@ export async function syncMedia(token: string, lib: Library, onProgress: (msg: s
     if (local && !remote.has(m.id)) {
       if (local.size > 50 * 1024 * 1024) continue;
       onProgress(`미디어 올리는 중: ${m.name}`);
-      await cloudApi.uploadMedia(token, m.id, local);
+      await cloudApi.uploadMedia(token, m.id, local, lib.cloudResetId);
       remote.add(m.id); items.push({ id: m.id, size: local.size });
     } else if (!local && remote.has(m.id)) {
       onProgress(`미디어 받는 중: ${m.name}`);

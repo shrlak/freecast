@@ -47,6 +47,7 @@ export function normalizeLibrary(value: unknown): Library | null {
   const own = value.transitionsReset === true ? laidOut : clearTransitions(laidOut);
   return {
     version: 1,
+    cloudResetId: typeof value.cloudResetId === 'string' ? value.cloudResetId : undefined,
     aspect: '4:3',
     transitionsReset: true,
     trash: arr<import('./types').TrashEntry>(value.trash, []).filter((e) => !!e && typeof e.id === 'string' && typeof e.presentation?.title === 'string' && (e.slides == null || (Array.isArray(e.slides) && e.slides.every((s) => !!s?.slide && typeof s.slide.id === 'string' && Number.isInteger(s.seq) && s.seq >= 0))) && (e.placements == null || Array.isArray(e.placements)) && Number.isFinite(e.deletedAt) && Number.isFinite(e.expiresAt) && !!e.presentation?.id && Array.isArray(e.presentation.slides) && ['presentation', 'slides'].includes(e.kind)),

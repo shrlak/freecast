@@ -56,7 +56,7 @@ export async function cloudMiddleware(req, res, next) {
     ? `${aiConfig().proxyUrl.replace(/\/+$/, '')}/libraries/lyrics`
     : `${cloudBase()}/freecast/${req.url.slice('/api/cloud/'.length)}`;
   const headers = { Origin: aiConfig().proxyOrigin };
-  for (const h of ['authorization', 'content-type', 'x-admin-password']) if (req.headers[h]) headers[h] = req.headers[h];
+  for (const h of ['authorization', 'content-type', 'x-admin-password', 'x-freecast-reset-id']) if (req.headers[h]) headers[h] = req.headers[h];
   try {
     const hasBody = !['GET', 'HEAD'].includes(req.method ?? 'GET');
     const upstream = await fetch(target, {

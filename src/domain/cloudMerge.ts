@@ -59,6 +59,7 @@ export interface MergeResult {
 
 /** Merge the cloud library into this computer's library (both without online songs). */
 export function mergeLibrary(base0: Library | null, local0: Library, remote0: Library): MergeResult {
+  if (remote0.cloudResetId && remote0.cloudResetId !== local0.cloudResetId) return { library: remote0, conflicts: [], conflictPairs: [] };
   const conflicts: string[] = [];
   const conflictPairs: MergeResult['conflictPairs'] = [];
   // A copy from before transitions were reset (an older app) must not bring its transitions back.
@@ -90,6 +91,7 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
     conflictPairs,
     library: keepProtectedMaterials({
       version: 1,
+      cloudResetId: remote.cloudResetId ?? local.cloudResetId,
       aspect: '4:3',
       transitionsReset: true,
       backgroundLibraryReset: local.backgroundLibraryReset || remote.backgroundLibraryReset,

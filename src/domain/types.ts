@@ -478,6 +478,8 @@ export interface TrashEntry {
 }
 
 export interface Library {
+  /** Server-issued generation: a complete clear replaces old local content instead of merging it. */
+  cloudResetId?: string;
   /** Explicit protection changes survive deletion so another device can honor an unlocked deletion. */
   protectionChanges?: { id: string; on: boolean; at: number }[];
   version: 1;
