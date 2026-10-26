@@ -17,7 +17,9 @@ export function FeedbackModal({ onClose, notify }: { onClose: () => void; notify
     try {
       const r = await sendFeedback(message, name);
       localStorage.setItem(NAME_KEY, name.trim());
-      notify(`피드백 #${r.id}을(를) 보냈습니다 — 반영되면 FreeCast가 자동으로 업데이트됩니다. 감사합니다!`);
+      notify(r.emailed
+        ? `피드백 #${r.id}을(를) 보냈습니다 — 반영되면 FreeCast가 자동으로 업데이트됩니다. 감사합니다!`
+        : `피드백 #${r.id}을(를) 저장했습니다 (이메일 전달은 지연될 수 있습니다). 감사합니다!`);
       onClose();
     } catch (e) {
       setError((e as Error).message);
