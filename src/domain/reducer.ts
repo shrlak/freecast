@@ -4,8 +4,9 @@ import { deletedServices, isServicePlaylist } from './sunday/cleanup';
 import { isSaturdayDawnName, saturdayDawnImageCleanup } from './saturdayDawn';
 import type {
   Arrangement, Background, Library, MacroStep, MediaMeta, MessageTemplate, Macro, Playlist, PlaylistItem,
-  Presentation, Prop, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer, DeviceIdentity, DeviceRegistration, ActivityEntry,
+  Presentation, Prop, RetreatLook, Schedule, Screen, Slide, SlideAction, SundaySettings, Theme, Timer, DeviceIdentity, DeviceRegistration, ActivityEntry,
 } from './types';
+import { retreatBackground } from './motion';
 import { attributeChange, mergeActivity } from './activity';
 import { sequence } from './arrangement';
 import { deleteSlides, deleteSlidesAt, editSlide, editSlideAt } from './slideEditing';
@@ -15,7 +16,7 @@ import { prepareAnnouncementSizing } from './announcementSizing';
 import { blockedProtectedAction, isProtected, keepProtectedMaterials, protectionWinners, mergeProtectionChanges } from './materialProtection';
 import { uid } from './lyrics';
 import { extraReducer, isExtra, type ExtraAction } from './reducerExtra';
-import { createEmptyLive } from './defaults';
+import { CHURCH_BACKGROUNDS, createEmptyLive } from './defaults';
 import { activePlaylist, findPres, goLive, nextCursor, playlistIndexFor, prevCursor, themeFor, type Cursor, type NavState } from './live';
 import { dedupeSongs } from './sunday/dedupe';
 import { resetTimer, startTimer, stopTimer } from './timers';
@@ -81,6 +82,8 @@ type DomainAction =
   | { type: 'screen/upsert'; screen: Screen }
   | { type: 'screen/delete'; id: string }
   | { type: 'sunday/settings'; patch: Partial<SundaySettings> }
+  /** Save the 수련회 moving background; `apply` (default) puts it on every deck that follows it. */
+  | { type: 'retreat/look'; look: RetreatLook; apply?: boolean }
   | { type: 'library/replace'; library: Library }
   | { type: 'usage/clear' }
   | { type: 'live/go'; presentationId: string; seq: number; playlistIndex?: number | null; now?: number }
@@ -528,7 +531,7 @@ function core(s: AppState, a: Action): AppState {
     case 'live/stageMessage':
       return { ...s, live: { ...s.live, stageMessage: a.message?.trim() ? a.message.trim() : null } };
     case 'live/chords':
-      return { ...s, live: { ...s.live, chordShift: a.shift ?? s.live.chordShift ?? 0, capo: Math.min(11, Math.max(0, a.capo ?? s.live.capo ?? 0)) } };
+      return { ...s, live: { ...s.live, chordShift: Math.min(11, Math.max(-11, Math.round(a.shift ?? s.live.chordShift ?? 0))), capo: Math.min(11, Math.max(0, a.capo ?? s.live.capo ?? 0)) } };
     case 'live/messageScroll':
       return { ...s, live: { ...s.live, messageScroll: a.on } };
     case 'live/videoSeek':
@@ -553,6 +556,16 @@ function core(s: AppState, a: Action): AppState {
     }
     case 'slide/runActions':
       return runActions(s, a.actions, a.now);
+    case 'retreat/look': {
+      const saved = setLib(s, { retreat: a.look });
+      const follows = (p: Presentation) => p.retreatBg === true && !isProtected(p);
+      if (a.apply === false || !lib.presentations.some(follows)) return saved;
+      const moving = retreatBackground(a.look);
+      const applied = setLib(saved, { presentations: lib.presentations.map((p) => !follows(p) ? p : {
+        ...p, background: moving ?? CHURCH_BACKGROUNDS.nightSky, bgEffect: moving ? { dim: a.look.dim, blur: 0 } : undefined,
+      }) });
+      return applied.cursor ? refreshLive(applied, applied.cursor.presentationId) : applied;
+    }
     default:
       return s;
   }

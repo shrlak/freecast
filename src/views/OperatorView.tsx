@@ -37,6 +37,10 @@ import { ScreensModal } from '../ui/ScreensModal';
 import { SongLibraryModal } from '../ui/sunday/SongLibraryModal';
 import { SundayWizard } from '../ui/sunday/SundayWizard';
 import { RetreatWizard } from '../ui/RetreatWizard';
+import { RetreatBackgroundModal } from '../ui/RetreatBackgroundModal';
+import { ChordSheetModal } from '../ui/ChordSheetModal';
+import { SyncStatusModal } from '../ui/SyncStatusModal';
+import { buildVerseDeck, loadVerseDefaults, verseActions } from '../domain/bible/liveVerse';
 import { fetchOnlineSongs } from '../domain/online';
 import { runExternal } from '../domain/effects';
 import type { Macro, SlideAction } from '../domain/types';
@@ -235,6 +239,7 @@ export function OperatorView() {
   const [remotes, setRemotes] = useState(0);
   const lastLibrary = useRef(state.library);
   const lastRemoteCatalog = useRef<null | { snapshot: typeof state.library; selected: typeof state.selectedId; playlist: typeof state.activePlaylistId; connected: boolean }>(null);
+  const showVerseRef = useRef<(refs: string, live: boolean) => Promise<void>>(async () => undefined);
   const relay = useRelay({ type: 'hello', role: 'host' }, (m) => {
     if (m.type === 'team-requests') {
       const entries = m.requests as TeamRequest[];
@@ -250,6 +255,12 @@ export function OperatorView() {
     const show = (m.command as { type: string }).type;
     if (show === 'show/start') return startShowRef.current(false);
     if (show === 'show/end') return endShowRef.current();
+    // A verse called for from a tablet (pastor view): built here, placed after the slide on screen.
+    if (show === 'bible/show') {
+      const { refs, live: goLive } = m.command as { refs?: unknown; live?: unknown };
+      if (typeof refs === 'string') void showVerseRef.current(refs, goLive !== false);
+      return;
+    }
     if (c.type === 'macro/run') {
       const id = c.id;
       const macro = latestLib.current.macros.find((x) => x.id === id) ?? latestLib.current.macros.find((x) => x.name.toLowerCase() === id.toLowerCase());
@@ -404,6 +415,15 @@ export function OperatorView() {
     setView('normal');
     desktop?.endShow();
   };
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const showVerse = async (refs: string, live: boolean) => {
+    const built = await buildVerseDeck(refs, loadVerseDefaults());
+    if ('error' in built) { notify(`📖 ${built.error}`); return; }
+    for (const action of verseActions(stateRef.current, built.deck, live)) dispatch(action);
+    notify(`📖 ${built.label}${live ? '' : ' — 준비됨'}`);
+  };
+  showVerseRef.current = showVerse;
   const startShowRef = useRef(startShow);
   startShowRef.current = startShow;
   const endShowRef = useRef(endShow);
@@ -600,6 +620,9 @@ export function OperatorView() {
       )}
       {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}
       {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
+      {modal === 'chords' && <ChordSheetModal state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
+      {modal === 'retreatBg' && <RetreatBackgroundModal library={state.library} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
+      {modal === 'sync' && <SyncStatusModal cloud={cloud} library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} onAccount={() => setModal('account')} />}
       {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} onActivity={() => setModal('activity')} />}
       {(modal === 'song' || modal === 'songNew') && (
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />

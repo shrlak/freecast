@@ -1024,3 +1024,133 @@ body[data-view='team'][data-remote-appearance='light'] { --bg: #f5f6f8; --panel:
   .team-preview > .canvas-frame { width: 90%; }
 }
 .team-console .remote-head > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 수련회 moving background ---------- */
+.retreat-look { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(220px, 360px); gap: 16px; align-items: start; }
+.retreat-look-modal { width: min(920px, 96vw); }
+.retreat-look-preview { position: sticky; top: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #000; }
+.retreat-look-off { aspect-ratio: 4 / 3; display: grid; place-items: center; color: var(--muted); }
+.motion-styles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.motion-style { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 4px; font-size: 12px; }
+.motion-style.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.motion-style-swatch { display: block; height: 38px; border-radius: 4px; }
+@media (max-width: 760px) { .retreat-look { grid-template-columns: 1fr; } }
+
+/* ---------- 코드 · 키 악보 ---------- */
+.chord-modal { max-height: 92vh; }
+.chord-body { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 0; flex: 1; }
+.chord-songs { border-right: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.chord-song-list { overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.chord-song-list button { display: flex; justify-content: space-between; gap: 6px; text-align: left; border-color: transparent; background: transparent; }
+.chord-song-list button.on { background: var(--panel-2); border-color: var(--accent); }
+.chord-main { padding: 12px 16px; overflow: auto; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.chord-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.chord-controls label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.chord-controls label.row { flex-direction: row; color: var(--text); font-size: 13px; }
+.chord-bpm { width: 64px; }
+.chord-capos { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chord-capos button { padding: 2px 7px; font-size: 12px; }
+.chord-capos button.easy { border-color: #2e7d4f; }
+.chord-capos button.on { background: var(--accent); border-color: var(--accent); color: #111; }
+.chart { color: #e6e9f0; display: flex; flex-direction: column; gap: 10px; background: #0e1118; border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+.chart h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.chart-line { display: flex; flex-wrap: wrap; align-items: flex-end; margin-bottom: 3px; }
+.chart-seg { display: inline-flex; flex-direction: column; padding-right: 2px; }
+.chart-chord { font-weight: 800; font-size: 15px; color: #fbbf24; min-height: 1.2em; white-space: pre; }
+.chart-words { font-size: 16px; white-space: pre; }
+@media (max-width: 760px) { .chord-body { grid-template-columns: 1fr; } .chord-songs { border-right: 0; border-bottom: 1px solid var(--line); max-height: 30vh; } }
+
+/* ---------- Stage chords (stage displays) ---------- */
+.stage-chords { display: flex; flex-direction: column; gap: .12em; }
+.stage-chords .chart-line { margin: 0; }
+.stage-chords .chart-chord { color: #fbbf24; font-size: .62em; font-weight: 800; line-height: 1.1; }
+.stage-chords .chart-words { font-size: 1em; line-height: 1.2; }
+
+/* ---------- 목사님 무대 화면 (tablet) ---------- */
+body[data-view='remote'] .pastor-root { position: fixed; inset: 0; z-index: 5; }
+.pastor-root {
+  --pastor-scale: 1; --pastor-gold: #fbbf24;
+  position: fixed; inset: 0; background: #000; color: #fff; display: flex; flex-direction: column; gap: 8px;
+  padding: max(8px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  font-size: 15px; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.pastor-root button { background: #20242d; border: 1px solid #3a4150; color: #fff; border-radius: 12px; padding: 0 16px; min-height: 48px; font-size: 16px; }
+.pastor-root button:hover:not(:disabled) { background: #2b303b; }
+.pastor-root button:disabled { opacity: .35; }
+.pastor-root button.primary { background: #1f9d63; border-color: #1f9d63; color: #fff; font-weight: 700; }
+.pastor-root button.on { background: var(--accent); border-color: var(--accent); color: #111; font-weight: 700; }
+.pastor-top { display: flex; align-items: center; gap: 12px; flex: none; min-height: 48px; font-variant-numeric: tabular-nums; }
+.pastor-clock { font-size: 30px; font-weight: 800; }
+.pastor-title { flex: 1; color: #9ca3af; font-size: 18px; }
+.pastor-chip { background: #3b2f08; color: var(--pastor-gold); border-radius: 999px; padding: 6px 14px; font-weight: 800; font-size: 17px; white-space: nowrap; }
+.pastor-timer { min-height: 44px !important; color: var(--pastor-gold) !important; font-weight: 800; font-size: 20px !important; }
+.pastor-timer small { font-size: 12px; color: #9ca3af; font-weight: 500; }
+.pastor-timer.over { color: #f87171 !important; }
+.pastor-small { min-height: 44px !important; padding: 0 12px !important; font-size: 15px !important; }
+.pastor-conn { width: 14px; height: 14px; border-radius: 50%; display: inline-grid; place-items: center; background: #3f3f46; flex: none; }
+.pastor-conn.on { background: #34c759; } .pastor-conn.off { background: #ef4444; }
+.pastor-conn span { display: none; }
+.pastor-banner { flex: none; background: #7f1d1d; border-radius: 10px; padding: 8px 14px; display: flex; gap: 12px; align-items: center; justify-content: center; }
+.pastor-banner.view-only { background: #1e3a5f; }
+.pastor-banner button { min-height: 36px; font-size: 14px; }
+.pastor-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.pastor-body.with-side { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+.pastor-current { min-height: 0; overflow: auto; display: flex; align-items: center; padding: 8px 4px; font-size: calc(clamp(22px, 6.4vmin, 66px) * var(--pastor-scale)); line-height: 1.25; font-weight: 600; }
+.pastor-current > * { width: 100%; }
+.pastor-plain { white-space: pre-line; }
+.pastor-dim { color: #6b7280; }
+.pastor-side { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; border-left: 2px solid #262b38; padding-left: 14px; }
+.pastor-preview { border: 2px solid #333; border-radius: 6px; overflow: hidden; flex: none; }
+.pastor-next, .pastor-note { font-size: calc(clamp(16px, 3.6vmin, 36px) * var(--pastor-scale)); line-height: 1.3; white-space: pre-line; }
+.pastor-next { color: var(--pastor-gold); }
+.pastor-note { color: #a5f3fc; }
+.pastor-side label { display: block; font-size: 12px; letter-spacing: .18em; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; }
+.pastor-message { flex: none; background: #b91c1c; border-radius: 10px; padding: 10px 16px; text-align: center; font-size: 26px; }
+.pastor-message.stage-only { background: #1d4ed8; }
+.pastor-controls { flex: none; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pastor-nav { min-width: 150px; min-height: 68px !important; font-size: 22px !important; font-weight: 700; }
+.pastor-tool { min-height: 56px !important; }
+.pastor-key { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; background: #14171f; border: 1px solid #2d3340; border-radius: 14px; padding: 4px 8px; font-weight: 700; }
+.pastor-key button { min-height: 44px; min-width: 44px; padding: 0 10px; }
+.pastor-key span { min-width: 3em; text-align: center; color: var(--pastor-gold); }
+.pastor-drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; justify-content: flex-end; z-index: 30; }
+.pastor-drawer { width: min(760px, 100%); height: 100%; background: #12151c; display: flex; flex-direction: column; border-left: 1px solid #2d3340; }
+.pastor-drawer > header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #2d3340; }
+.pastor-drawer h2 { margin: 0; font-size: 18px; }
+.pastor-drawer-body { padding: 14px 16px 24px; overflow: auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1; }
+.pastor-check { display: flex; align-items: center; gap: 10px; font-size: 17px; min-height: 40px; }
+.pastor-check input { width: 22px; height: 22px; }
+.pastor-scale { display: flex; align-items: center; gap: 12px; font-size: 18px; }
+.pastor-hint { color: #8a92a6; font-size: 13px; line-height: 1.5; margin: 0; }
+.pastor-warn { color: #fca5a5; margin: 0; }
+.pastor-sent { color: #86efac; margin: 0; font-weight: 700; }
+.pastor-slides { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.pastor-section { grid-column: 1 / -1; margin-top: 6px; font-weight: 700; color: #4bc789; }
+.pastor-slide { position: relative; padding: 0 !important; min-height: 0 !important; border: 3px solid transparent !important; overflow: hidden; }
+.pastor-slide[aria-current='true'] { border-color: #ef4444 !important; }
+.pastor-bible-form { display: flex; gap: 8px; }
+.pastor-bible-form input { flex: 1; min-height: 52px; font-size: 20px; background: #0e1118; border: 1px solid #3a4150; border-radius: 10px; padding: 0 14px; color: #fff; user-select: text; -webkit-user-select: text; }
+.pastor-listen { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pastor-heard { min-height: 4.5em; font-size: 17px; background: #0e1118; border: 1px solid #3a4150; border-radius: 10px; padding: 10px 12px; color: #fff; user-select: text; -webkit-user-select: text; }
+.pastor-found { display: flex; flex-direction: column; gap: 8px; }
+.pastor-found-item { display: flex; align-items: center; gap: 8px; background: #1a1e28; border-radius: 10px; padding: 8px 12px; font-size: 20px; }
+.pastor-found-item strong { flex: 1; }
+@media (max-width: 900px), (orientation: portrait) {
+  .pastor-body.with-side { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr); }
+  .pastor-side { border-left: 0; padding-left: 0; border-top: 2px solid #262b38; padding-top: 10px; }
+  .pastor-clock { font-size: 24px; }
+  .pastor-nav { min-width: 120px; }
+  .pastor-key { margin-left: 0; }
+}
+
+/* ---------- 동기화 상태 ---------- */
+.sync-modal { width: min(680px, 96vw); }
+.sync-state { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+.sync-icon { font-size: 24px; width: 32px; text-align: center; }
+.sync-synced .sync-icon { color: #34c759; } .sync-offline .sync-icon { color: #f59e0b; } .sync-error .sync-icon { color: #ef4444; }
+.sync-offline { border-color: #f59e0b; }
+.sync-conflict .sync-versions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sync-conflict .sync-versions > div { background: rgba(127,127,127,.12); border-radius: 6px; padding: 6px 8px; }
+.pastor-written h3 { margin: 4px 0 8px; font-size: 14px; color: #8a92a6; font-weight: 600; }
+.pastor-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pastor-chips button { min-height: 44px; font-size: 16px; }

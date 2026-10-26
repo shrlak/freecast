@@ -12,6 +12,7 @@ import { textElementBounds } from '../textBox';
 import { prepareAnnouncementSizing } from '../announcementSizing';
 import { isFrontPresentation, isFrontSlide } from '../frontLayout';
 import { resolveBackground } from '../autoBackground';
+import { motionFlatColor } from '../motion';
 
 const W = 10;
 const H = 7.5;
@@ -21,6 +22,7 @@ function firstColor(b: Background | undefined | null): string {
   if (!b) return '000000';
   if (b.kind === 'color') return b.value.replace('#', '').slice(0, 6);
   if (b.kind === 'gradient') return (/#([0-9a-f]{6})/i.exec(b.value)?.[1] ?? '000000');
+  if (b.kind === 'motion') return motionFlatColor(b).replace('#', '');
   return '000000';
 }
 

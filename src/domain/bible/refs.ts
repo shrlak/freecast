@@ -9,7 +9,7 @@ export interface BibleRef {
 }
 
 // Common English abbreviations in addition to the full names.
-const EN_ABBR: Record<string, string[]> = {
+export const EN_ABBR: Record<string, string[]> = {
   Genesis: ['gen', 'gn'], Exodus: ['ex', 'exod'], Leviticus: ['lev'], Numbers: ['num'], Deuteronomy: ['deut', 'dt'],
   Joshua: ['josh'], Judges: ['judg'], '1 Samuel': ['1sam'], '2 Samuel': ['2sam'], '1 Kings': ['1kgs', '1ki'], '2 Kings': ['2kgs', '2ki'],
   '1 Chronicles': ['1chr'], '2 Chronicles': ['2chr'], Nehemiah: ['neh'], Esther: ['esth'], Psalms: ['ps', 'psa', 'psalm'],

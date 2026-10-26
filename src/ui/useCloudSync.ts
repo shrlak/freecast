@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from 'react';
 import type { Action } from '../domain/reducer';
 import type { Library } from '../domain/types';
 import { cloudApi, loadBase, loadSession, saveBase, saveSession, syncMedia, getCloudStorageUsage, type CloudSession } from '../domain/cloud';
@@ -7,10 +7,13 @@ import { getDevice, initializeDevice, saveDeviceProfile } from '../domain/device
 import { type CloudStorageUsage } from '../domain/cloudStorage';
 import { saveSyncRestorePoint } from '../domain/restorePoints';
 import { normalizeLibrary } from '../domain/persistence';
+import { addConflicts, isOfflineError, loadConflicts, openConflicts, pendingChanges, retryDelay, saveConflicts, type PendingChanges, type SyncState } from '../domain/syncStatus';
 
 export interface CloudStatus {
   session: CloudSession | null;
-  state: 'off' | 'syncing' | 'synced' | 'error';
+  state: SyncState;
+  /** Edits not sent to the church server yet (counted while offline or after an error). */
+  pending?: PendingChanges | null;
   message: string | null;
   lastSync: number | null;
   storageUsage?: CloudStorageUsage | null;
@@ -18,11 +21,14 @@ export interface CloudStatus {
 }
 
 const PUSH_DELAY = 1000;
-const POLL_EVERY = 20_000;
 
 /**
  * Keeps this computer's library in step with the church cloud library while signed in:
  * pull + merge on start and every 20 s, push 1 s after any change, media both ways.
+ * Offline-first: the library is always saved on this computer first, so nothing waits on the network.
+ * Without a connection it just says so and keeps the edits; it asks again when the connection returns
+ * (and less often while the server stays unreachable). A presentation that two computers changed at the
+ * same time is kept twice and listed in `conflicts` until someone chooses.
  */
 export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notify: (m: string) => void) {
   const notifyRef = useRef(notify);
@@ -30,6 +36,9 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
   const [storage, setStorage] = useState<{ loading: boolean; usage: CloudStorageUsage | null; error: string | null }>({ loading: false, usage: null, error: null });
   const [status, setStatus] = useState<CloudStatus>(() => ({ session: loadSession(), state: loadSession() ? 'syncing' : 'off', message: null, lastSync: null }));
   const [device, setDevice] = useState(getDevice);
+  const failures = useRef(0);
+  const [pending, setPending] = useState<PendingChanges | null>(null);
+  const [savedConflicts, setSavedConflicts] = useState(loadConflicts);
   const resumedToken = useRef(loadSession()?.token ?? null);
   useEffect(() => {
     if (!status.session || resumedToken.current !== status.session.token) return;
@@ -85,17 +94,20 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
     if (!remote) return { merged: syncable(libRef.current), version: remoteVersion };
     const base = await loadBase();
     const local = syncable(libRef.current);
-    const { library: merged, conflicts } = mergeLibrary(base, local, remote);
+    const { library: merged, conflicts, conflictPairs } = mergeLibrary(base, local, remote);
     dispatch({ type: 'library/merge', library: merged });
+    if (conflictPairs.length) setSavedConflicts((prev) => { const next = addConflicts(prev, conflictPairs, Date.now()); saveConflicts(next); return next; });
     await saveBase(remote);
     setSession({ ...session, version: remoteVersion });
-    if (conflicts.length) notifyRef.current(`두 기기에서 동시에 고친 프레젠테이션은 둘 다 남겼습니다: ${conflicts.join(', ')}`);
+    if (conflicts.length) notifyRef.current(`두 기기에서 동시에 고친 프레젠테이션은 둘 다 남겼습니다: ${conflicts.join(', ')} — ☁ 동기화 상태에서 고르세요`);
     return { merged, version: remoteVersion };
   }, [dispatch]);
 
   const sync = useCallback(async (reason: 'pull' | 'push'): Promise<void> => {
     const session = loadSession();
     if (!session) return;
+    // No connection: the edits stay on this computer; syncing resumes by itself when it returns.
+    if (!navigator.onLine) { setStatus((s) => ({ ...s, state: 'offline', message: null })); return; }
     if (busy.current) { requested.current = true; return; }
     busy.current = true;
     requested.current = false;
@@ -137,6 +149,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
       lastPushed.current = JSON.stringify(current);
       await syncMedia(session.token, current, (m) => setStatus((s) => ({ ...s, message: m })));
       if (loadSession()?.token !== session.token) return;
+      failures.current = 0;
       setStatus((s) => ({ ...s, state: 'synced', message: null, lastSync: Date.now() }));
       succeeded = true;
       void refreshStorage();
@@ -147,7 +160,10 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
         setSession(null);
         notifyRef.current('클라우드 로그인이 만료되었습니다. 다시 로그인하세요.');
       }
-      setStatus((s) => ({ ...s, state: err.status === 401 ? 'off' : 'error', message: err.message }));
+      if (err.status !== 401) failures.current++;
+      // Server unreachable = offline (not an error): edits are safe here and go out once it is back.
+      if (isOfflineError(err)) setStatus((s) => ({ ...s, state: 'offline', message: '교회 서버에 연결할 수 없습니다. 변경한 내용은 이 컴퓨터에 안전하게 저장되어 있고, 연결되면 자동으로 동기화합니다.' }));
+      else setStatus((s) => ({ ...s, state: err.status === 401 ? 'off' : 'error', message: err.message }));
     } finally {
       busy.current = false;
       if (loadSession()?.token === session.token && (requested.current || (succeeded && JSON.stringify(syncable(libRef.current)) !== lastPushed.current))) {
@@ -157,19 +173,50 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
     }
   }, [absorb, refreshStorage, dispatch]);
 
-  // Start + poll.
+  // Start + poll: every 20 s, slower while the server cannot be reached, at once when the connection returns.
   useEffect(() => {
     if (!status.session) return;
-    sync('pull');
-    const t = setInterval(() => sync('pull'), POLL_EVERY);
-    const onFocus = () => sync('pull');
-    window.addEventListener('focus', onFocus);
+    let timer: ReturnType<typeof setTimeout>;
+    let stopped = false;
+    // One pending timer at most, however many syncs are running at once.
+    const tick = async () => {
+      await sync('pull');
+      if (stopped) return;
+      clearTimeout(timer);
+      timer = setTimeout(tick, retryDelay(failures.current));
+    };
+    const again = () => { failures.current = 0; clearTimeout(timer); void tick(); };
+    const lost = () => setStatus((s) => (s.session ? { ...s, state: 'offline', message: null } : s));
+    void tick();
+    window.addEventListener('focus', again);
+    window.addEventListener('online', again);
+    window.addEventListener('offline', lost);
     return () => {
-      clearInterval(t);
-      window.removeEventListener('focus', onFocus);
+      stopped = true;
+      clearTimeout(timer);
+      window.removeEventListener('focus', again);
+      window.removeEventListener('online', again);
+      window.removeEventListener('offline', lost);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.session?.token]);
+
+  // While edits cannot be sent (offline or an error), count what is waiting.
+  useEffect(() => {
+    if (!status.session || (status.state !== 'offline' && status.state !== 'error')) { setPending(null); return; }
+    let alive = true;
+    const t = setTimeout(async () => {
+      const base = await loadBase();
+      if (alive) setPending(pendingChanges(base, syncable(libRef.current)));
+    }, 1500);
+    return () => { alive = false; clearTimeout(t); };
+  }, [library, status.state, status.session?.token]);
+
+  const conflicts = useMemo(() => openConflicts(savedConflicts, library), [savedConflicts, library]);
+  useEffect(() => {
+    if (conflicts.length !== savedConflicts.length) { saveConflicts(conflicts); setSavedConflicts(conflicts); }
+  }, [conflicts, savedConflicts]);
+  const dismissConflict = useCallback((id: string) => setSavedConflicts((prev) => { const next = prev.filter((c) => c.id !== id); saveConflicts(next); return next; }), []);
 
   // Push shortly after local edits.
   useEffect(() => {
@@ -193,7 +240,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
     setStorage({ loading: false, usage: null, error: null });
   };
 
-  return { status: { ...status, storageUsage: storage.usage, storageError: storage.error }, storage, refreshStorage, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, syncNow: () => sync('pull') };
+  return { status: { ...status, pending, storageUsage: storage.usage, storageError: storage.error }, conflicts, dismissConflict, storage, refreshStorage, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, syncNow: () => sync('pull') };
 }
 
 export type CloudSync = ReturnType<typeof useCloudSync>;

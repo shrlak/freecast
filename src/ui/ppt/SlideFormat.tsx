@@ -2,6 +2,8 @@ import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Background, Presentation, Slide, SlideStyle, Theme } from '../../domain/types';
 import { BACKGROUND_PRESETS } from '../../domain/defaults';
+import { MOTION_PRESETS } from '../../domain/motion';
+import { swatchStyle } from '../backgroundSwatch';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { assetUrl, slideTheme } from '../SlideCanvas';
@@ -151,7 +153,12 @@ export function SlideFormat({ state, dispatch, presentation: p, slide, onDesign,
           {BACKGROUND_PRESETS.map((b) => (
             <button key={b.name} className="fmt-swatch" title={b.name} onClick={() => setBg(b.background)}>
               {b.background.kind === 'image' ? <img className="fmt-swatch-fill" src={assetUrl(b.background.url)} alt="" />
-                : <span className="fmt-swatch-fill" style={b.background.kind === 'color' ? { background: b.background.value } : { backgroundImage: (b.background as { value: string }).value }} />}
+                : <span className="fmt-swatch-fill" style={swatchStyle(b.background)} />}
+            </button>
+          ))}
+          {MOTION_PRESETS.map((b) => (
+            <button key={b.name} className="fmt-swatch" title={b.name} onClick={() => setBg(b.background)}>
+              <span className="fmt-swatch-fill" style={swatchStyle(b.background)} />
             </button>
           ))}
           {state.library.media.filter((m) => m.type !== 'audio' && !m.backgroundHidden).map((m) => (

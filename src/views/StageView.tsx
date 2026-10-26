@@ -1,24 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { StageLayout } from '../domain/types';
 import { useLiveFeed, useNow } from '../ui/hooks';
 import { formatClock, timerValue } from '../domain/timers';
-import { chordRows, hasChords, stripChords, transposeChords } from '../domain/lyrics';
+import { hasChords, stripChords } from '../domain/lyrics';
+import { liveChordShower } from '../domain/chordChart';
+import { StageChords } from '../ui/StageChords';
 import { DEFAULT_STAGE_LAYOUTS } from '../domain/defaults';
 import { SlideCanvas } from '../ui/SlideCanvas';
 import { liveCanvasProps } from '../ui/liveProps';
-
-/** Lyrics with chords drawn above each line (ChordPro-style inline chords). */
-function ChordText({ text }: { text: string }) {
-  if (!hasChords(text)) return <>{text}</>;
-  return (
-    <div className="chord-text">
-      {text.split('\n').map((line, i) => {
-        const r = chordRows(line);
-        return <div key={i}><div className="chord-row">{r.chords || ' '}</div><div>{r.lyric}</div></div>;
-      })}
-    </div>
-  );
-}
 
 /**
  * Confidence monitor. `?layout=<id>` picks a stage layout (edit them in 🖥 Screens):
@@ -38,8 +27,8 @@ export function StageView() {
   const running = (live?.timers ?? []).filter((t) => t.running || t.kind === 'countdownTo');
   const slide = live?.slide;
   // Key change and capo from the operator: the chords shown are the shapes to play.
-  const shift = (live?.chordShift ?? 0) - (live?.capo ?? 0);
-  const current = slide ? transposeChords([slide.title, slide.text.replace(/\*\*/g, '')].filter(Boolean).join('\n'), shift) : null;
+  const show = useMemo(() => liveChordShower(live ?? {}), [live?.songKey, live?.chordShift, live?.capo]);
+  const current = slide ? [slide.title, slide.text.replace(/\*\*/g, '')].filter(Boolean).join('\n') : null;
   const videoLeft = live?.video.endsAt ? live.video.endsAt - now : null;
   const onlyClock = !L.current && !L.next && !L.notes && !L.preview;
 
@@ -66,7 +55,7 @@ export function StageView() {
         <div className={`stage-body ${L.preview ? 'with-preview' : ''}`}>
           {L.preview && live && <div className="stage-preview"><SlideCanvas {...liveCanvasProps(live)} /></div>}
           <div className="stage-text">
-            {L.current && <section className="stage-current">{current ? (L.chords ? <ChordText text={current} /> : stripChords(current)) : <span className="dim">—</span>}</section>}
+            {L.current && <section className="stage-current">{current ? (L.chords && hasChords(current) ? <StageChords text={current} show={show} /> : stripChords(current)) : <span className="dim">—</span>}</section>}
             {L.notes && <section className="stage-next stage-notes"><label>Notes</label><div>{slide?.notes || <span className="dim">No notes</span>}</div></section>}
             {L.next && <section className="stage-next"><label>Next</label><div>{live?.nextText ? stripChords(live.nextText.replace(/\*\*/g, '')) : <span className="dim">End</span>}</div></section>}
           </div>

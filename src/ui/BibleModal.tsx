@@ -5,6 +5,9 @@ import { loadTranslation, searchBible, TRANSLATIONS, type SearchHit, type Transl
 import { BIBLE_BOOKS } from '../domain/bible/books';
 import { buildScripture } from '../domain/bible/slides';
 import { uid } from '../domain/lyrics';
+import { detectRefs } from '../domain/bible/detect';
+import { loadVerseDefaults, saveVerseDefaults } from '../domain/bible/liveVerse';
+import { useSpeechRefs } from './useSpeechRefs';
 
 /** Translations available from the content server. */
 export function loadTranslations(): Translation[] {
@@ -23,8 +26,13 @@ interface Props {
 export function BibleModal({ initialRefs = '', onClose, onCreate, service }: Props) {
   const [input, setInput] = useState(initialRefs);
   const translations = TRANSLATIONS;
-  const [chosen, setChosen] = useState<string[]>(['nkrv']);
-  const [perSlide, setPerSlide] = useState(2);
+  const [defaults] = useState(loadVerseDefaults);
+  const [chosen, setChosen] = useState<string[]>(defaults.translations);
+  const [perSlide, setPerSlide] = useState(defaults.versesPerSlide);
+  useEffect(() => saveVerseDefaults({ translations: chosen, versesPerSlide: perSlide }), [chosen.join(), perSlide]);
+  const [heard, setHeard] = useState('');
+  const speech = useSpeechRefs((recent) => setHeard(recent));
+  const detected = useMemo(() => detectRefs(heard), [heard]);
   const [sermonTitle, setSermonTitle] = useState('');
   const [preacher, setPreacher] = useState('');
   const [placed, setPlaced] = useState<string | null>(null);
@@ -44,6 +52,7 @@ export function BibleModal({ initialRefs = '', onClose, onCreate, service }: Pro
     const token = `${BIBLE_BOOKS[h.bookIndex].abbrKo[0]}${h.chapter}:${h.verse}`;
     setInput((v) => (v.trim() ? `${v.trim()} ${token}` : token));
   };
+  const addDetected = (compact: string) => setInput((v) => (parseRefs(v).refs.some((r) => formatRef(r) === formatRef(parseRefs(compact).refs[0])) ? v : v.trim() ? `${v.trim()} ${compact}` : compact));
   const { refs, invalid } = useMemo(() => parseRefs(input), [input]);
   const picked = chosen.map((id) => translations.find((t) => t.id === id)).filter(Boolean) as Translation[];
 
@@ -127,6 +136,22 @@ export function BibleModal({ initialRefs = '', onClose, onCreate, service }: Pro
               <span>🔎 Search the Bible by words (in the first selected translation)</span>
               <div className="row gap-xs"><input className="grow" placeholder="사랑 오래 참고 · shepherd" value={query} onChange={(e) => setQuery(e.target.value)} /><button type="submit">Search</button></div>
             </form>
+            <div className="stack bible-detect">
+              <span>🎙 자동 인식 — 설교 원고를 붙여 넣거나 말하면 성경 구절을 찾아 줍니다</span>
+              <div className="row gap-xs">
+                <textarea className="grow" rows={2} placeholder="“오늘 본문은 요한복음 3장 16절입니다” …" value={heard} onChange={(e) => setHeard(e.target.value)} />
+                <div className="stack">
+                  <button className={speech.listening ? 'active' : ''} disabled={!speech.supported && !speech.listening} onClick={speech.listening ? speech.stop : speech.start}>{speech.listening ? '■ 듣는 중' : '🎙 듣기'}</button>
+                  <button disabled={!heard} onClick={() => { speech.clear(); setHeard(''); }}>지우기</button>
+                </div>
+              </div>
+              {speech.error && <div className="warn">{speech.error}</div>}
+              {!speech.supported && <p className="hint">이 화면(앱)에서는 음성 인식이 되지 않을 수 있습니다. 목사님 태블릿의 무대 화면에서 말하면 인식됩니다.</p>}
+              <div className="row gap-xs wrap">
+                {detected.map((d) => <button key={d.compact} title="누르면 위 입력칸에 넣습니다" onClick={() => addDetected(d.compact)}>＋ {d.label}</button>)}
+                {heard && !detected.length && <span className="muted small">찾은 구절이 없습니다</span>}
+              </div>
+            </div>
             {hits.length > 0 && (
               <ol className="preview-list search-hits">
                 {hits.map((h) => (

@@ -11,6 +11,7 @@ const COMMANDS = new Set([
   'live/next', 'live/prev', 'live/clearAll', 'live/clearText', 'live/clearBackground', 'live/toggleBlack',
   'live/go', 'playlist/select', 'macro/run', 'timer/op', 'prop/toggle', 'live/message',
   'live/logo', 'live/stageMessage', 'prop/clearAll', 'announce/stop', 'show/start', 'show/end',
+  'live/chords', 'bible/show',
 ]);
 
 /** Only well-formed commands from the whitelist reach the operator. */

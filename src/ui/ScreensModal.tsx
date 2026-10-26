@@ -121,6 +121,7 @@ export function ScreensModal({ state, dispatch, relayConnected, midi, onMidi, on
               {' '}On a phone or tablet on the same Wi-Fi, open this computer's address with <code>?view=remote</code> (control), <code>?view=stage</code> or <code>?view=output</code>. Set <code>FREECAST_REMOTE_PIN</code> to require a PIN.
             </p>
             <code className="small selectable">{base}?view=remote</code>
+            <p className="hint">🎤 목사님 태블릿(무대 화면 + 조작): <code className="small selectable">{base}?view=remote&amp;mode=stage</code> — 리모컨과 같은 연결·PIN·조작권을 씁니다.</p>
             </>}
             <h3>Online library server</h3>
             <p className="hint">Songs (library.json) and Bibles (bible-text/*.json) are read from this address every session.</p>

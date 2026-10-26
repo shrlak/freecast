@@ -325,8 +325,8 @@ function StatusBar({ cmd, text }: { cmd: Commands; text: string }) {
       <span className="truncate">{text}</span>
       <span className="ppt-team" title="KCCP 빛주사랑 대학청년부 미디어팀"><img src="/media-team-logo.png" alt="" />KCCP 미디어팀</span>
       <span className={`ppt-online ${cmd.online.status}`}>☁ {cmd.online.status === 'ok' ? `온라인 찬양 ${cmd.online.count}곡` : cmd.online.status === 'loading' ? '불러오는 중…' : '오프라인'}</span>
-      <button className="ppt-cloud" onClick={() => cmd.open('account')} title={cmd.cloud.message ?? ''}>
-        {cmd.cloud.session ? `☁ ${cmd.cloud.session.username} · ${cmd.cloud.state === 'syncing' ? '동기화 중' : cmd.cloud.state === 'error' ? '동기화 오류' : '동기화됨'}` : '☁ 로그인 안 됨 (이 컴퓨터에만 저장)'}
+      <button className="ppt-cloud" onClick={() => cmd.open(cmd.cloud.session ? 'sync' : 'account')} title={cmd.cloud.message ?? ''}>
+        {cmd.cloud.session ? `☁ ${cmd.cloud.session.username} · ${cmd.cloud.state === 'syncing' ? '동기화 중' : cmd.cloud.state === 'error' ? '동기화 오류' : cmd.cloud.state === 'offline' ? `오프라인${cmd.cloud.pending?.total ? ` · 보낼 변경 ${cmd.cloud.pending.total}` : ''}` : '동기화됨'}` : '☁ 로그인 안 됨 (이 컴퓨터에만 저장)'}
       </button>
       <button className={`ppt-cloud ppt-lock ${cmd.locked ? 'on' : ''}`} onClick={() => cmd.setLocked(!cmd.locked)}
         title={cmd.locked ? '잠금 켜짐: 화면에 표시 중에는 Enter·Delete로 슬라이드를 추가/삭제하지 않습니다 (클릭하면 해제)' : '잠금 꺼짐 (클릭하면 켜기)'}>{cmd.locked ? '🔒 잠금' : '🔓 잠금 해제됨'}</button>

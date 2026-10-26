@@ -1,6 +1,7 @@
 import type { Library, LiveState, Playlist, Presentation, Slide, Theme } from './types';
 import { sequence } from './arrangement';
 import { resolveBackground } from './autoBackground';
+import { songKey, stageSettingsFor } from './chordChart';
 
 export interface Cursor {
   presentationId: string;
@@ -130,6 +131,7 @@ export function goLive<S extends NavState>(s: S, c: Cursor): S {
   const nextSlide = next ? slideAt(s.library, next) : undefined;
   const crossed = cursor.playlistIndex != null && cursor.playlistIndex !== s.playlistIndex;
   const first = c.seq === 0 || s.cursor?.presentationId !== p.id;
+  const entering = s.cursor?.presentationId !== p.id;
   return {
     ...s,
     cursor,
@@ -144,7 +146,20 @@ export function goLive<S extends NavState>(s: S, c: Cursor): S {
       background: resolveBackground(slide, p),
       bgEffect: p.bgEffect ?? null,
       black: false,
+      songKey: songKey(p),
+      ...(entering ? songKeyOnStage(s, p) : {}),
       copyright: first || !next || next.presentationId !== p.id ? copyrightLine(p) : null,
     },
   };
+}
+
+/**
+ * A song with its own play key / capo sets the stage chords when it comes on; the next song without one
+ * starts from the written key again. A shift the operator typed in by hand is left alone for songs that have none.
+ */
+function songKeyOnStage(s: NavState, p: Presentation): Pick<LiveState, 'chordShift' | 'capo'> | null {
+  const own = stageSettingsFor(p);
+  if (own) return { chordShift: own.shift, capo: own.capo };
+  const before = s.cursor ? findPres(s.library, s.cursor.presentationId) : undefined;
+  return before && stageSettingsFor(before) ? { chordShift: 0, capo: 0 } : null;
 }

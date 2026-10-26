@@ -8,6 +8,7 @@ import { qrDataUrl } from '../domain/io/qr';
 import { formatClock, timerValue } from '../domain/timers';
 import { isDecoded, preloadImage, useMediaUrl, useNow, useReadyImage, useWidth } from './hooks';
 import { mediaUrl, peekMediaUrl } from '../domain/media';
+import { MotionLayer } from './MotionLayer';
 
 export { CANVAS_W, CANVAS_H } from '../domain/canvas';
 import { CANVAS_W, CANVAS_H } from '../domain/canvas';
@@ -90,11 +91,12 @@ function BackgroundLayer({ background, animate, video, onTime }: { background: B
     held.current = null;
     return null;
   }
-  const fit = background.kind === 'color' || background.kind === 'gradient' || background.kind === 'camera' ? undefined : background.fit ?? 'cover';
+  const fit = background.kind === 'color' || background.kind === 'gradient' || background.kind === 'camera' || background.kind === 'motion' ? undefined : background.fit ?? 'cover';
   let node: ReactNode = null;
   let pending = false;
   if (background.kind === 'color') node = <div className="layer" style={{ background: background.value }} />;
   else if (background.kind === 'gradient') node = <div className="layer" style={{ backgroundImage: background.value }} />;
+  else if (background.kind === 'motion') node = <MotionLayer bg={background} animate={animate} />;
   else if (background.kind === 'camera') node = <CameraBg deviceId={background.deviceId} label={background.label} animate={animate} />;
   else if (background.kind === 'image' || background.mediaType === 'image') {
     pending = !ready;

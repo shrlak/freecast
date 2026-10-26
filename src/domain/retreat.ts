@@ -1,4 +1,5 @@
-import type { Library, Playlist, PlaylistItem, Presentation, Slide } from './types';
+import type { Library, Playlist, PlaylistItem, Presentation, RetreatLook, Slide } from './types';
+import { defaultRetreatLook, retreatBackground, withTheme } from './motion';
 import { uid } from './lyrics';
 import { CHURCH_BACKGROUNDS, presetBackground } from './defaults';
 import { findSong } from './sunday/songs';
@@ -40,6 +41,8 @@ export interface RetreatDraft {
   linesPerSlide: number;
   translations: string[];
   meetings: Meeting[];
+  /** Moving background; follows `theme` while 자동 is on. Drafts saved before it existed have none. */
+  look?: RetreatLook;
 }
 
 export const BLOCK_LABELS: Record<BlockKind, string> = {
@@ -68,7 +71,7 @@ export function defaultRetreat(friday: string): RetreatDraft {
   sat.setDate(sat.getDate() + 1);
   const saturday = `${sat.getFullYear()}-${String(sat.getMonth() + 1).padStart(2, '0')}-${String(sat.getDate()).padStart(2, '0')}`;
   return {
-    name: '수련회', subtitle: '', theme: '', linesPerSlide: 4, translations: ['nkrv', 'esv'],
+    name: '수련회', subtitle: '', theme: '', linesPerSlide: 4, translations: ['nkrv', 'esv'], look: defaultRetreatLook(''),
     meetings: [
       { id: uid('mt'), name: '금요일 저녁예배', date: friday, blocks: blocks('title', 'worship', 'scripture', 'sermonTitle', 'blank', ['prayer', { title: '기도회' }], 'prayer', 'benediction', ['announcements', { heading: 'OT | 광고' }]) },
       { id: uid('mt'), name: '토요일 오전 특강', date: saturday, blocks: blocks('title', 'worship', 'announcements') },
@@ -111,14 +114,18 @@ export function buildMeeting(lib: Library, draft: RetreatDraft, m: Meeting, scri
   const date = new Date(`${m.date}T12:00:00`);
   const folder = `${mmdd(date)} 수련회`;
   const night = CHURCH_BACKGROUNDS.nightSky;
+  const look = draft.look ? withTheme(draft.look, draft.theme) : defaultRetreatLook(draft.theme);
+  const moving = retreatBackground(look);
   const created: Presentation[] = [];
   const items: PlaylistItem[] = [];
   const warnings: string[] = [];
   const caption = [draft.name, draft.subtitle].filter(Boolean).join(' · ');
   const s = (group: string, text: string, extra: Partial<Slide> = {}): Slide => ({ id: uid('s'), group, text, ...extra });
-  const add = (title: string, slides: Slide[], themeId: string, extra: Partial<Presentation> = {}) => {
+  /** `follow` decks take the retreat's moving background, now and whenever it is changed later. */
+  const add = (title: string, slides: Slide[], themeId: string, extra: Partial<Presentation> = {}, follow = true) => {
     if (!slides.length) return;
-    const p: Presentation = { id: uid('p'), title, slides, themeId, folder, background: night, ...extra };
+    const p: Presentation = { id: uid('p'), title, slides, themeId, folder, background: night, ...extra,
+      ...(follow ? { retreatBg: true, ...(moving ? { background: moving, bgEffect: { dim: look.dim, blur: 0 } } : {}) } : {}) };
     created.push(p);
     items.push({ id: uid('pli'), presentationId: p.id });
   };
@@ -127,7 +134,7 @@ export function buildMeeting(lib: Library, draft: RetreatDraft, m: Meeting, scri
   header(m.name);
   const opening: Slide[] = [];
   if (m.posterMediaId) opening.push(s('Poster', '', { background: { kind: 'media', mediaId: m.posterMediaId, mediaType: 'image', fit: 'contain' } }));
-  add(`${mmdd(date)} ${m.name}`, opening, 'theme_classic');
+  add(`${mmdd(date)} ${m.name}`, opening, 'theme_classic', {}, false);
 
   for (const b of m.blocks) {
     switch (b.kind) {
@@ -159,7 +166,7 @@ export function buildMeeting(lib: Library, draft: RetreatDraft, m: Meeting, scri
         if (b.title.trim()) add(BLOCK_LABELS.sermonTitle, [s('Sermon', b.title.trim(), { subtext: b.preacher || undefined })], 'theme_bold');
         break;
       case 'blank':
-        add(BLOCK_LABELS.blank, [s('Blank', '', { background: presetBackground('Black') })], 'theme_classic');
+        add(BLOCK_LABELS.blank, [s('Blank', '', { background: presetBackground('Black') })], 'theme_classic', {}, false);
         break;
       case 'prayer':
         add(b.title || '기도', [s('Prayer', b.title || '기도')], 'theme_bold', { background: CHURCH_BACKGROUNDS.prayer });
@@ -170,7 +177,7 @@ export function buildMeeting(lib: Library, draft: RetreatDraft, m: Meeting, scri
       case 'announcements': {
         const anns = parseAnnouncements(b.text);
         const slides = [s('광고', b.heading || '광고'), ...anns.map((a, i) => s('광고', a.body.join('\n'), { title: `${i + 1}. ${a.title}`, qr: a.links.length ? a.links : undefined, caption }))];
-        add(b.heading || '광고', slides, 'theme_info');
+        add(b.heading || '광고', slides, 'theme_info', {}, false);
         break;
       }
     }
