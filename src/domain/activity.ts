@@ -2,7 +2,7 @@ import type { ActivityEntry, Library } from './types';
 import type { Action, AppState } from './reducer';
 
 export const ACTIVITY_LIMIT = 2000;
-const SKIP = new Set(['trash/expire', 'library/merge', 'online/songs', 'songs/dedupe', 'services/finish', 'device/register', 'activity/record', 'usage/clear']);
+const SKIP = new Set(['trash/expire', 'library/merge', 'library/cloudReset', 'online/songs', 'songs/dedupe', 'services/finish', 'device/register', 'activity/record', 'usage/clear']);
 const LABELS: Record<string, string> = {
   'presentation/create': '프레젠테이션 추가', 'presentation/createMany': '자료 가져오기', 'presentation/update': '프레젠테이션 수정', 'presentation/delete': '프레젠테이션 삭제',
   'presentation/protect': '자료 보호 설정',

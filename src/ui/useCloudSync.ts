@@ -60,6 +60,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
   const libRef = useRef(library);
   libRef.current = library;
   const busy = useRef(false);
+  const paused = useRef(false);
   const lastPushed = useRef<string>('');
   const requested = useRef(false);
   const storageRequest = useRef(0);
@@ -93,11 +94,19 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
     const remote = normalizeLibrary(remoteData);
     if (!remote) return { merged: syncable(libRef.current), version: remoteVersion };
     const base = await loadBase();
+    if (loadSession()?.token !== session.token) return { merged: syncable(libRef.current), version: loadSession()?.version ?? remoteVersion };
     const local = syncable(libRef.current);
     const { library: merged, conflicts, conflictPairs } = mergeLibrary(base, local, remote);
-    dispatch({ type: 'library/merge', library: merged });
-    if (conflictPairs.length) setSavedConflicts((prev) => { const next = addConflicts(prev, conflictPairs, Date.now()); saveConflicts(next); return next; });
+    if (remote.cloudResetId && remote.cloudResetId !== local.cloudResetId) {
+      libRef.current = remote;
+      dispatch({ type: 'library/cloudReset', library: remote });
+      failures.current = 0; setPending(null); saveConflicts([]); setSavedConflicts([]);
+    } else {
+      dispatch({ type: 'library/merge', library: merged });
+      if (conflictPairs.length) setSavedConflicts((prev) => { const next = addConflicts(prev, conflictPairs, Date.now()); saveConflicts(next); return next; });
+    }
     await saveBase(remote);
+    if (loadSession()?.token !== session.token) return { merged: syncable(libRef.current), version: loadSession()?.version ?? remoteVersion };
     setSession({ ...session, version: remoteVersion });
     if (conflicts.length) notifyRef.current(`두 기기에서 동시에 고친 프레젠테이션은 둘 다 남겼습니다: ${conflicts.join(', ')} — ☁ 동기화 상태에서 고르세요`);
     return { merged, version: remoteVersion };
@@ -105,8 +114,8 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
 
   const sync = useCallback(async (reason: 'pull' | 'push'): Promise<void> => {
     const session = loadSession();
-    if (!session) return;
-    // No connection: the edits stay on this computer; syncing resumes by itself when it returns.
+    if (!session || paused.current) return;
+    // Keep offline edits locally; a reviewed full clear pauses automatic sync too.
     if (!navigator.onLine) { setStatus((s) => ({ ...s, state: 'offline', message: null })); return; }
     if (busy.current) { requested.current = true; return; }
     busy.current = true;
@@ -122,6 +131,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
       const remote = await cloudApi.getLibrary(session.token, reason === 'push' ? version : version || undefined);
       if (loadSession()?.token !== session.token) return;
       if (remote && remote.version !== version) ({ merged: current, version } = await absorb(remote.data, remote.version, session));
+      if (loadSession()?.token !== session.token) return;
       const base = await loadBase();
       if (!base || JSON.stringify(base) !== JSON.stringify(current) || version === 0) {
         // Merging may have incorporated newer edits; preserve the submitted state too.
@@ -129,6 +139,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
         let res = await cloudApi.putLibrary(session.token, version, current);
         if (res.status === 409 && res.data.data) {
           ({ merged: current, version } = await absorb(res.data.data, res.data.version, session));
+          if (loadSession()?.token !== session.token) return;
           await saveSyncRestorePoint(current);
           res = await cloudApi.putLibrary(session.token, version, current);
         }
@@ -143,6 +154,7 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
         }
         version = res.data.version;
         await saveBase(current);
+        if (loadSession()?.token !== session.token) return;
         setSession({ ...session, version });
       }
       // Never mark edits made during an in-flight request as already uploaded.
@@ -240,7 +252,29 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
     setStorage({ loading: false, usage: null, error: null });
   };
 
-  return { status: { ...status, pending, storageUsage: storage.usage, storageError: storage.error }, conflicts, dismissConflict, storage, refreshStorage, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, syncNow: () => sync('pull') };
+  const pauseSync = useCallback(() => { paused.current = true; }, []);
+  const resumeSync = useCallback(() => { paused.current = false; void sync('pull'); }, [sync]);
+  const clearAll = async (password: string, revision: string) => {
+    const session = loadSession();
+    if (!session) throw new Error('먼저 로그인해 주세요.');
+    const result = await cloudApi.clearAll(session.token, password, revision);
+    const empty = normalizeLibrary(result.data);
+    if (!empty?.cloudResetId) throw new Error('서버 초기화 결과를 확인하지 못했습니다. 다시 로그인하세요.');
+    if (loadSession()?.token !== session.token) throw new Error('서버 자료 삭제가 완료되었습니다. 다시 로그인해 확인하세요.');
+    // Rotate before awaiting local writes so old in-flight syncs can no longer commit their state.
+    setSession({ token: result.token, username: result.username, version: result.version });
+    libRef.current = empty;
+    lastPushed.current = JSON.stringify(syncable(empty)); requested.current = false;
+    failures.current = 0; setPending(null); saveConflicts([]); setSavedConflicts([]);
+    dispatch({ type: 'library/cloudReset', library: empty });
+    await saveBase(empty).catch(() => notifyRef.current('서버 자료 삭제는 완료했지만 이 기기의 동기화 기록을 저장하지 못했습니다. 다시 로그인해 주세요.'));
+    setStatus((s) => ({ ...s, state: 'synced', message: null, lastSync: Date.now() }));
+    await refreshStorage();
+    notifyRef.current('서버의 FreeCast 자료와 미디어를 모두 삭제했습니다.');
+    return result.deleted;
+  };
+
+  return { status: { ...status, pending, storageUsage: storage.usage, storageError: storage.error }, conflicts, dismissConflict, storage, refreshStorage, device, registeredDevices: library.devices ?? [], renameDevice, login, logout, pauseSync, resumeSync, clearAll, syncNow: () => sync('pull') };
 }
 
 export type CloudSync = ReturnType<typeof useCloudSync>;

@@ -85,6 +85,7 @@ type DomainAction =
   /** Save the 수련회 moving background; `apply` (default) puts it on every deck that follows it. */
   | { type: 'retreat/look'; look: RetreatLook; apply?: boolean }
   | { type: 'library/replace'; library: Library }
+  | { type: 'library/cloudReset'; library: Library }
   | { type: 'usage/clear' }
   | { type: 'live/go'; presentationId: string; seq: number; playlistIndex?: number | null; now?: number }
   | { type: 'live/next'; now?: number }
@@ -480,7 +481,7 @@ function core(s: AppState, a: Action): AppState {
     case 'sunday/settings':
       return setLib(s, { sunday: { ...lib.sunday, ...a.patch } });
     case 'library/replace':
-      return { ...createInitialState(keepProtectedMaterials({ ...a.library, protectionChanges: mergeProtectionChanges(lib, a.library) }, protectionWinners(lib), [lib])), past: [...s.past, s.library].slice(-60), pastPositions: [...s.pastPositions, { before: s.cursor, after: null }].slice(-60) };
+      return { ...createInitialState(keepProtectedMaterials({ ...a.library, cloudResetId: lib.cloudResetId ?? a.library.cloudResetId, protectionChanges: mergeProtectionChanges(lib, a.library) }, protectionWinners(lib), [lib])), past: [...s.past, s.library].slice(-60), pastPositions: [...s.pastPositions, { before: s.cursor, after: null }].slice(-60) };
     case 'device/register':
       return setLib(s, { devices: [...(lib.devices ?? []).filter((d) => d.id !== a.device.id), a.device] });
     case 'activity/record':
@@ -587,6 +588,8 @@ function syncLive(s: AppState): AppState {
 }
 
 function reduceState(s: AppState, a: Action): AppState {
+  // A server reset was explicitly password-authorized. It includes protected content and clears Undo.
+  if (a.type === 'library/cloudReset' && a.library.cloudResetId) return createInitialState(a.library);
   if (a.type === 'undo' || a.type === 'redo') {
     const from = a.type === 'undo' ? s.past : s.future;
     if (!from.length) return s;

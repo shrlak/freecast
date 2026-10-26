@@ -91,8 +91,11 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
   const tpl = useRef<ServiceTemplates | null>(null);
 
   useEffect(() => {
-    loadServiceTemplates()
+    let current = true;
+    tpl.current = null; setTemplates('loading');
+    loadServiceTemplates(!!library.cloudResetId)
       .then((t) => {
+        if (!current) return;
         tpl.current = t;
         // The lyrics theme follows the church template — unless the operator has changed it since.
         const theme = themeWithFingerprint(templateLyricsTheme(t));
@@ -102,8 +105,9 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
         if (untouched && have?.generated !== theme.generated) dispatch({ type: 'theme/upsert', theme });
         setTemplates('ok');
       })
-      .catch(() => setTemplates('error'));
-  }, [dispatch]);
+      .catch(() => { if (current) setTemplates('error'); });
+    return () => { current = false; };
+  }, [dispatch, library.cloudResetId]);
 
   // The library's 주일예배 Front / Back decks follow the church templates and this season's 고백송
   // (re-checked as songs load from the server and when the 고백송 setting changes).
