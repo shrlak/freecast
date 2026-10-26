@@ -193,6 +193,10 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="📈" label={`사용 기록 (${lib.usage.length})`} onClick={cmd.exportUsage} />
               <Small icon="🧹" label="발표 기록 지우기" onClick={cmd.clearUsage} />
             </Group>
+            <Group label="실험">
+              <Big icon="🧪" label="실험 기능" title="아직 기본으로 켜지 않은 기능" onClick={() => cmd.open('features')} />
+              {cmd.templateMarket && <Big icon="🛍" label="템플릿 마켓" title="슬라이드 템플릿을 파일로 주고받기" onClick={() => cmd.open('templateMarket')} />}
+            </Group>
             <Group label="계정">
               <Big icon="☁" label={cmd.cloud.session ? `${cmd.cloud.session.username} · 동기화` : '로그인 · 클라우드'} onClick={() => cmd.open('account')} />
               {cmd.cloud.session && <Big icon="⇅" label="동기화 상태" title="오프라인·충돌·미디어 준비 확인" onClick={() => cmd.open('sync')} />}
@@ -359,6 +363,13 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             </Group>
             <Group label="예배 준비"><Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} /><Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} /><Big icon="🗑" label="휴지통" onClick={() => cmd.open('trash')} />
               <Big icon="🕘" label="복원 지점" onClick={() => cmd.open('restore')} /></Group>
+            <Group label="예배 도우미">
+              <Big icon={cmd.followOn ? '🎙✓' : '🎙'} label="가사 따라가기" title="찬양 가사를 듣고 다음 슬라이드를 준비합니다" onClick={() => cmd.open('follow')} />
+              <Big icon="📊" label="찬양 통계 · 추천" title="많이 부른 곡, 쉬었던 곡 추천, 키 점검" onClick={() => cmd.open('songStats')} />
+              <Big icon="©" label="저작권(CCLI) 보고" title="기간별 사용 곡과 CCLI 번호를 CSV로" onClick={() => cmd.open('ccli')} />
+              <Big icon="🛡" label={cmd.safeModeOn ? '안전 모드 켜짐' : '안전 모드'} title="예배 자료를 이 컴퓨터에 모두 받아 두고 위험한 변경을 막습니다" onClick={() => cmd.open('safeMode')} />
+              <Big icon="💻" label={cmd.standbyOn ? '대기 컴퓨터 켜짐' : '대기 컴퓨터'} title="메인 컴퓨터를 따라가다 멈추면 이어받습니다" onClick={() => cmd.open('standby')} />
+            </Group>
             <Group label="예배 만들기">
               <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
               <Big icon="🙏" label="기도제목" title="이번 주 기도제목 — 주일예배 Front 슬라이드에 들어갑니다" onClick={() => cmd.open('prayer')} />

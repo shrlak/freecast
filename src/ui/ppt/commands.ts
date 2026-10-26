@@ -1,7 +1,7 @@
 import type { CloudStatus } from '../useCloudSync';
 import type { ServiceUploads } from './useServiceUploads';
 
-export type Modal = 'teamRequests' | 'trash' | 'rehearsal' | 'remoteControl' | 'edit' | 'source' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'retreatBg' | 'chords' | 'sync' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | null;
+export type Modal = 'teamRequests' | 'trash' | 'rehearsal' | 'remoteControl' | 'edit' | 'source' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'retreatBg' | 'chords' | 'sync' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | 'follow' | 'songStats' | 'ccli' | 'safeMode' | 'standby' | 'features' | 'templateMarket' | null;
 export type ImportKind = 'library' | 'slides' | 'lyrics' | 'backup';
 export type PptViewMode = 'normal' | 'sorter' | 'presenter';
 export type Layout = 'ppt' | 'classic';
@@ -43,6 +43,12 @@ export interface Commands {
   setLocked: (on: boolean) => void;
   /** This week's 주일예배: uploads go straight into it. */
   service: ServiceUploads;
+  /** 🛡 안전 모드, 💻 대기 컴퓨터, 🎙 가사 따라가기 are on. */
+  safeModeOn: boolean;
+  standbyOn: boolean;
+  followOn: boolean;
+  /** 실험 기능 turned on in 파일 → 실험 기능. */
+  templateMarket: boolean;
 }
 
 export const ACCEPT = {

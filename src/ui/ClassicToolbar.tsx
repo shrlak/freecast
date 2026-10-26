@@ -14,6 +14,13 @@ export function ClassicToolbar({ state, dispatch, cmd, hasSelection }: { state: 
         <button className="tool-btn" onClick={() => cmd.open('preflight')}><span className="ti">🔎</span><span>예배 시작 전 점검</span></button>
         <button className="tool-btn" onClick={() => cmd.open('preparation')}><span className="ti">☑</span><span>예배 준비</span></button>
         <button className="tool-btn" onClick={() => cmd.open('trash')}><span className="ti">♲</span><span>휴지통</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('follow')}><span className="ti">🎙</span><span>가사 따라가기</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('songStats')}><span className="ti">📊</span><span>찬양 통계</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('ccli')}><span className="ti">©</span><span>CCLI 보고</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('safeMode')}><span className="ti">🛡</span><span>{cmd.safeModeOn ? '안전 모드 켜짐' : '안전 모드'}</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('standby')}><span className="ti">💻</span><span>{cmd.standbyOn ? '대기 켜짐' : '대기 컴퓨터'}</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('features')}><span className="ti">🧪</span><span>실험 기능</span></button>
+        {cmd.templateMarket && <button className="tool-btn" onClick={() => cmd.open('templateMarket')}><span className="ti">🛍</span><span>템플릿 마켓</span></button>}
         <button className="tool-btn" disabled={!hasSelection} onClick={() => cmd.open('rehearsal')}><span className="ti">▷</span><span>리허설</span></button>
         <button className={`tool-btn ${cmd.teamRequestCount ? 'team-request-alert' : ''}`} onClick={() => cmd.open('teamRequests')}><span className="ti">✉</span><span>무대팀 요청 {cmd.teamRequestCount}</span></button>
         <button className="tool-btn" onClick={() => cmd.open('remoteControl')}><span className="ti">⌁</span><span>리모컨 조작권{cmd.remoteRequests > 0 ? ` · 요청 ${cmd.remoteRequests}` : ''}</span></button>

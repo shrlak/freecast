@@ -66,6 +66,17 @@ import { PptLayout } from '../ui/ppt/PptLayout';
 import { presentOutput } from '../ui/LivePanel';
 import { desktop } from '../domain/desktop';
 import type { Commands, Layout, Modal, PptViewMode } from '../ui/ppt/commands';
+import { FollowDock } from '../ui/FollowDock';
+import { SongStatsModal } from '../ui/SongStatsModal';
+import { CcliModal } from '../ui/CcliModal';
+import { SafeModeModal } from '../ui/SafeModeModal';
+import { StandbyBar, StandbyModal } from '../ui/StandbyModal';
+import { ExperimentalModal } from '../ui/ExperimentalModal';
+import { TemplateMarketModal } from '../ui/TemplateMarketModal';
+import { loadSafeMode, safeModeBlock, saveSafeMode, type SafeModeState } from '../domain/safeMode';
+import { loadStandby, saveStandby, useStandby, type StandbyConfig } from '../ui/useStandby';
+import { takeoverActions } from '../domain/standby';
+import { featureEnabled } from '../domain/features';
 
 
 const KEYS: Record<string, Action> = {
@@ -92,6 +103,11 @@ function download(name: string, data: string, type: string) {
 export function OperatorView() {
   const [state, dispatchRaw] = useReducer(reducer, undefined, () => createInitialState(loadLibrary()));
   const [modal, setModal] = useState<Modal>(null);
+  const [followOn, setFollowOn] = useState(false);
+  const [safe, setSafeState] = useState<SafeModeState>(loadSafeMode);
+  const safeRef = useRef(safe); safeRef.current = safe;
+  const [standbyConfig, setStandbyConfig] = useState<StandbyConfig>(loadStandby);
+  const [marketOn, setMarketOn] = useState(() => featureEnabled('templateMarket'));
   const modalRef = useRef(modal); modalRef.current = modal;
   const rehearsalCommandRef = useRef<((command: Record<string, unknown>) => void) | null>(null);
   const [rehearsalPreview, setRehearsalPreview] = useState<AppState | null>(null);
@@ -121,6 +137,8 @@ export function OperatorView() {
   const dispatch = useMemo(() => (a: Action) => {
     const blocked = blockedProtectedAction(latestLib.current, a);
     if (blocked) { notifyRef.current(`${blocked}: ${PROTECTED_MESSAGE}`); return; }
+    const locked = safeModeBlock(safeRef.current, a);
+    if (locked) { notifyRef.current(`🛡 안전 모드 중에는 ${locked}을(를) 할 수 없습니다. 끄려면 예배 → 안전 모드`); return; }
     if ((a.type === 'live/go' || a.type === 'live/next') && a.now == null) a = { ...a, now: Date.now() };
     const macroId = a.type === 'macro/run' ? a.id : a.type === 'schedule/ran' ? schedulesRef.current.find((x) => x.id === a.id)?.macroId : undefined;
     const macro = macroId ? macrosRef.current.find((m) => m.id === macroId) : undefined;
@@ -159,6 +177,27 @@ export function OperatorView() {
     return () => { clearTimeout(first); clearInterval(t); };
   }, []);
   const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
+  // 🛡 While the service runs the library does not change underneath it: no cloud merges, and risky edits are blocked.
+  useEffect(() => {
+    if (!safe.on) return;
+    cloud.pauseSync();
+    return () => cloud.resumeSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safe.on]);
+  const setSafe = (next: SafeModeState) => { saveSafeMode(next); setSafeState(next); };
+  const standby = useStandby(standbyConfig, state.library, state.activePlaylistId);
+  const setStandby = (next: StandbyConfig) => { saveStandby(next); setStandbyConfig(next); };
+  const takeOver = () => {
+    const actions = takeoverActions(standby.cursor, standby.live);
+    if (!actions.length) return notifyRef.current('이 컴퓨터에 메인 화면과 같은 슬라이드가 없어 이어받을 수 없습니다');
+    setStandby({ ...standbyConfig, on: false });
+    dispatch({ type: 'select', id: standby.cursor!.presentationId });
+    actions.forEach(dispatch);
+    setView('presenter');
+    presentOutput();
+    setModal(null);
+    notifyRef.current('💻 송출을 이어받았습니다');
+  };
   // The server deletes blobs atomically with the library update; remove this device's cache too.
   const previousMedia = useRef(state.library.media);
   useEffect(() => {
@@ -524,7 +563,11 @@ export function OperatorView() {
     a.click();
   };
   const cmd: Commands = {
-    open: setModal,
+    open: (m) => (m === 'follow' ? setFollowOn((on) => !on) : setModal(m)),
+    safeModeOn: safe.on,
+    standbyOn: standbyConfig.on,
+    followOn,
+    templateMarket: marketOn,
     notify,
     pickFiles,
     exportPlaylistPptx,
@@ -581,6 +624,15 @@ export function OperatorView() {
       )}
       {(modal === 'preparation' || modal === 'preflight') && <ServicePreparationModal mode={modal} library={state.library} playlistId={state.activePlaylistId} onClose={() => setModal(null)} onSettings={() => setModal('screens')} />}
       {modal === 'activity' && <ActivityModal library={state.library} onClose={() => setModal(null)} />}
+      {modal === 'songStats' && <SongStatsModal state={state} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
+      {modal === 'ccli' && <CcliModal library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
+      {modal === 'safeMode' && <SafeModeModal library={state.library} playlistId={state.activePlaylistId} safe={safe} onChange={setSafe} notify={notify} onClose={() => setModal(null)} />}
+      {modal === 'standby' && <StandbyModal config={standbyConfig} feed={standby} onChange={setStandby} onTakeOver={takeOver} onClose={() => setModal(null)} />}
+      {modal === 'features' && <ExperimentalModal onChange={() => setMarketOn(featureEnabled('templateMarket'))} onClose={() => setModal(null)} />}
+      {modal === 'templateMarket' && marketOn && <TemplateMarketModal library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
+      {followOn && <FollowDock state={state} dispatch={dispatch} onClose={() => setFollowOn(false)} />}
+      <StandbyBar feed={standby} onTakeOver={takeOver} onOpen={() => setModal('standby')} />
+      {safe.on && <button className="safe-badge" onClick={() => setModal('safeMode')} title="예배 당일 안전 모드 켜짐">🛡 안전 모드</button>}
       <UpdateBanner />
       <AudioPlayer state={state} dispatch={dispatch} />
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}

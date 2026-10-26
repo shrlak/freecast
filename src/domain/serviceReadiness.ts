@@ -14,7 +14,7 @@ export function replaceDeckSlides(p: Presentation, slides: Slide[]): Presentatio
   if (!slides.length) throw new Error('슬라이드를 읽지 못했습니다. 기존 PPT는 유지됩니다.');
   return { ...p, slides };
 }
-export function referencedAssets(decks: Presentation[]): { media: string[]; images: string[] } {
+export function referencedAssets(decks: unknown): { media: string[]; images: string[] } {
   const media = new Set<string>(), images = new Set<string>();
   const scan = (v: unknown): void => {
     if (!v || typeof v !== 'object') return;
