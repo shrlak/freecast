@@ -18,12 +18,14 @@ export function ClassicToolbar({ state, dispatch, cmd, hasSelection }: { state: 
         <button className={`tool-btn ${cmd.teamRequestCount ? 'team-request-alert' : ''}`} onClick={() => cmd.open('teamRequests')}><span className="ti">✉</span><span>무대팀 요청 {cmd.teamRequestCount}</span></button>
         <button className="tool-btn" onClick={() => cmd.open('remoteControl')}><span className="ti">⌁</span><span>리모컨 조작권{cmd.remoteRequests > 0 ? ` · 요청 ${cmd.remoteRequests}` : ''}</span></button>
         <button className="tool-btn" onClick={() => cmd.open('retreat')}><span className="ti">⛺</span><span>수련회</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('retreatBg')}><span className="ti">🌌</span><span>수련회 배경</span></button>
       </div>
       <div className="tool-group">
         <button className="tool-btn" onClick={() => cmd.open('new')}><span className="ti">＋</span><span>New</span></button>
         <button className="tool-btn" disabled={!hasSelection} onClick={() => cmd.open('edit')}><span className="ti">✎</span><span>Edit</span></button>
         <button className="tool-btn" onClick={() => cmd.open('themes')}><span className="ti">Aa</span><span>Themes</span></button>
         <button className="tool-btn" onClick={() => cmd.open('bible')}><span className="ti">📖</span><span>Bible</span></button>
+        <button className="tool-btn" onClick={() => cmd.open('chords')}><span className="ti">🎼</span><span>코드·키</span></button>
         <button className="tool-btn" onClick={() => cmd.open('ai')}><span className="ti">✨</span><span>AI</span></button>
       </div>
       <div className="tool-group">

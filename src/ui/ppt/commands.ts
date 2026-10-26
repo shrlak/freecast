@@ -1,7 +1,7 @@
 import type { CloudStatus } from '../useCloudSync';
 import type { ServiceUploads } from './useServiceUploads';
 
-export type Modal = 'teamRequests' | 'trash' | 'rehearsal' | 'remoteControl' | 'edit' | 'source' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | null;
+export type Modal = 'teamRequests' | 'trash' | 'rehearsal' | 'remoteControl' | 'edit' | 'source' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'retreatBg' | 'chords' | 'sync' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | null;
 export type ImportKind = 'library' | 'slides' | 'lyrics' | 'backup';
 export type PptViewMode = 'normal' | 'sorter' | 'presenter';
 export type Layout = 'ppt' | 'classic';

@@ -13,6 +13,8 @@ import { exportPptx } from '../domain/io/pptxExport';
 import { putMedia } from '../domain/media';
 import { uid } from '../domain/lyrics';
 import { ai } from '../domain/ai';
+import { defaultRetreatLook, withTheme } from '../domain/motion';
+import { RetreatLookEditor } from './RetreatLookEditor';
 import { loadTranslations } from './BibleModal';
 import { AutoTextarea } from './AutoTextarea';
 
@@ -45,7 +47,11 @@ function load(): RetreatDraft {
 /** 수련회 builder: one playlist (and PPTX) per meeting, built from an ordered list of blocks. */
 export function RetreatWizard({ state, dispatch, onClose, notify }: Props) {
   const [step, setStep] = useState(0);
-  const [d, setD] = useState<RetreatDraft>(load);
+  const [d, setD] = useState<RetreatDraft>(() => {
+    const saved = load();
+    return saved.look ? saved : { ...saved, look: state.library.retreat ?? defaultRetreatLook(saved.theme) };
+  });
+  const look = d.look ?? defaultRetreatLook(d.theme);
   const [busy, setBusy] = useState<string | null>(null);
   const [readSongs, setReadSongs] = useState<{ title: string; lyrics: string }[]>([]);
   const pdfRef = useRef<HTMLInputElement>(null);
@@ -137,7 +143,9 @@ export function RetreatWizard({ state, dispatch, onClose, notify }: Props) {
         const { refs } = parseRefs(b.refs);
         if (refs.length && picked.length) scripture.set(b.id, await buildScripture(refs, { translations: picked, versesPerSlide: 1 }));
       }
-      const built = buildMeeting(state.library, d, m, scripture);
+      const built = buildMeeting(state.library, { ...d, look }, m, scripture);
+      // Keep the retreat's look in the library, so 수련회 배경 can change it later for every deck.
+      if (JSON.stringify(state.library.retreat) !== JSON.stringify(look)) dispatch({ type: 'retreat/look', look });
       dispatch({ type: 'presentation/createMany', presentations: built.presentations, playlist: built.playlist });
       if (pptx) {
         const merged = { ...state.library, presentations: [...state.library.presentations, ...built.presentations] };
@@ -225,7 +233,13 @@ export function RetreatWizard({ state, dispatch, onClose, notify }: Props) {
               <label className="stack">수련회 이름<input className="title-input" value={d.name} onChange={(e) => set({ name: e.target.value })} /></label>
               <div className="row gap-s">
                 <label className="stack grow">부제<input value={d.subtitle} onChange={(e) => set({ subtitle: e.target.value })} /></label>
-                <label className="stack grow">주제<input value={d.theme} onChange={(e) => set({ theme: e.target.value })} /></label>
+                <label className="stack grow">주제 (theme)<input value={d.theme} placeholder="예: 빛으로 나아가라" onChange={(e) => set({ theme: e.target.value, look: withTheme(look, e.target.value) })} /></label>
+              </div>
+              <div className="card stack">
+                <h3>움직이는 배경</h3>
+                <p className="hint">주제를 넣으면 어울리는 움직이는 배경이 자동으로 골라집니다. 종류·색·속도는 바꿀 수 있고, 만든 뒤에도 <b>수련회 배경</b>에서 주제를 바꾸면 모든 수련회 슬라이드가 한 번에 바뀝니다.</p>
+                <RetreatLookEditor look={look} theme={state.library.themes.find((t) => t.id === 'theme_bold') ?? state.library.themes[0]} showTheme={false}
+                  onChange={(l) => set({ look: l, theme: l.theme })} />
               </div>
               <div className="card stack">
                 <h3>찬양 콘티 (PDF, several files OK)</h3>

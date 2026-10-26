@@ -6,6 +6,8 @@ import { useRef, useState, type Dispatch, type ReactNode } from 'react';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Background, Presentation, Slide, SlideElement, TransitionKind } from '../../domain/types';
 import { BACKGROUND_PRESETS, presetBackground, DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
+import { MOTION_PRESETS } from '../../domain/motion';
+import { swatchStyle } from '../backgroundSwatch';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { SlideCanvas, assetUrl } from '../SlideCanvas';
@@ -162,7 +164,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
         <button className="rb-busy" onClick={() => cmd.open('remoteControl')} title="리모컨 조작권 관리">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}{cmd.remoteRequests > 0 && <strong className="remote-request-badge"> · 조작권 요청 {cmd.remoteRequests}</strong>}</button>
         {busy && <span className="rb-busy">{busy}</span>}
         <button className="rb-account" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">
-          {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : ' ✓'}` : '☁ 로그인'}{cmd.cloud.session && (cmd.cloud.storageError ? ' · 서버 용량 확인 필요' : cmd.cloud.storageUsage?.server ? ` · 서버 ${formatStoragePercent(cmd.cloud.storageUsage.server.usedPercent)}%` : '')}
+          {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : cmd.cloud.state === 'offline' ? ' ⏸' : ' ✓'}` : '☁ 로그인'}{cmd.cloud.session && (cmd.cloud.storageError ? ' · 서버 용량 확인 필요' : cmd.cloud.storageUsage?.server ? ` · 서버 ${formatStoragePercent(cmd.cloud.storageUsage.server.usedPercent)}%` : '')}
         </button>
         <button className="rb-account" disabled={!p} onClick={() => cmd.open('rehearsal')}>리허설</button>
         <button className="rb-present" disabled={!p} title="지금 편집 중인 슬라이드부터 발표 (Shift+F5) — 처음부터는 F5" onClick={() => cmd.startShow(true)}>▶ 발표</button>
@@ -193,6 +195,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
             </Group>
             <Group label="계정">
               <Big icon="☁" label={cmd.cloud.session ? `${cmd.cloud.session.username} · 동기화` : '로그인 · 클라우드'} onClick={() => cmd.open('account')} />
+              {cmd.cloud.session && <Big icon="⇅" label="동기화 상태" title="오프라인·충돌·미디어 준비 확인" onClick={() => cmd.open('sync')} />}
             </Group>
             <Group label="설정">
               <Big icon="🖥" label="화면 · 설정" onClick={() => cmd.open('screens')} />
@@ -281,7 +284,12 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
                 {BACKGROUND_PRESETS.map((b) => (
                   <button key={b.name} className="rb-swatch" title={b.name} disabled={!p} onClick={() => applyBackground(b.background)}>
                     {b.background.kind === 'image' ? <img className="rb-swatch-fill" src={assetUrl(b.background.url)} alt="" />
-                      : <span className="rb-swatch-fill" style={b.background.kind === 'color' ? { background: b.background.value } : { backgroundImage: (b.background as { value: string }).value }} />}
+                      : <span className="rb-swatch-fill" style={swatchStyle(b.background)} />}
+                  </button>
+                ))}
+                {MOTION_PRESETS.map((b) => (
+                  <button key={b.name} className="rb-swatch" title={b.name} disabled={!p} onClick={() => applyBackground(b.background)}>
+                    <span className="rb-swatch-fill" style={swatchStyle(b.background)} />
                   </button>
                 ))}
                 {lib.media.filter((m) => m.type !== 'audio' && !m.backgroundHidden).map((m) => (
@@ -356,11 +364,13 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🙏" label="기도제목" title="이번 주 기도제목 — 주일예배 Front 슬라이드에 들어갑니다" onClick={() => cmd.open('prayer')} />
               <Big icon="🙌" label="공동체 고백송" title={`지금: ${lib.sunday.confessionSong || DEFAULT_CONFESSION_SONG} — 학기·해마다 바꾸기`} onClick={() => cmd.open('confession')} />
               <Big icon="⛺" label="수련회" onClick={() => cmd.open('retreat')} />
+              <Big icon="🌌" label="수련회 배경" title="수련회 주제를 넣으면 어울리는 움직이는 배경이 정해집니다 — 언제든 바꿀 수 있고 모든 수련회 슬라이드가 따라갑니다" onClick={() => cmd.open('retreatBg')} />
             </Group>
             <Group label="말씀 · 찬양">
               <Big icon="🎵" label="새 찬양" title="찬양 등록 — 제목·진행·파트별 가사 (주일예배 생성기와 같은 방식)" onClick={() => cmd.open('songNew')} />
               <Big icon="✎" label="찬양 편집" title="선택한 찬양의 가사·진행 편집, 교회 찬양 라이브러리에 등록" disabled={!p || !isSong(p)} onClick={() => cmd.open('edit')} />
               <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
+              <Big icon="🎼" label="코드 · 키 악보" title="곡마다 키·BPM·코드를 보고, 키를 옮기고, 밴드용으로 인쇄합니다" onClick={() => cmd.open('chords')} />
               <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="찬양 라이브러리 보기 · 편집 · 삭제" onClick={() => cmd.open('songLibrary')} />
               <Big icon="✨" label="AI" onClick={() => cmd.open('ai')} />
               <Big icon="📊" label="AI 사용량" title="오늘 AI를 얼마나 썼는지 (모델별 무료 한도)" onClick={() => cmd.open('aiUsage')} />

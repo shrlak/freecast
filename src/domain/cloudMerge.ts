@@ -53,11 +53,14 @@ export interface MergeResult {
   library: Library;
   /** Titles of presentations both devices edited; the other device's version was kept as a copy. */
   conflicts: string[];
+  /** The same, with the ids of this computer's version and of the copy, so the choice can be made later. */
+  conflictPairs: { title: string; localId: string; copyId: string }[];
 }
 
 /** Merge the cloud library into this computer's library (both without online songs). */
 export function mergeLibrary(base0: Library | null, local0: Library, remote0: Library): MergeResult {
   const conflicts: string[] = [];
+  const conflictPairs: MergeResult['conflictPairs'] = [];
   // A copy from before transitions were reset (an older app) must not bring its transitions back.
   const fresh = (l: Library): Library => (l.transitionsReset === true ? l : { ...l, presentations: clearTransitions(l.presentations) });
   const base = base0 && fresh(base0);
@@ -70,8 +73,11 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
     if ((l.protectionChangedAt ?? 0) !== (r.protectionChangedAt ?? 0)) return [(l.protectionChangedAt ?? 0) > (r.protectionChangedAt ?? 0) ? l : r];
     if (!base) return [r];
     conflicts.push(l.title);
-    return [l, { ...r, id: uid('p'), title: `${r.title} (다른 기기)` }];
+    const copy = { ...r, id: uid('p'), title: `${r.title} (다른 기기)` };
+    conflictPairs.push({ title: l.title, localId: l.id, copyId: copy.id });
+    return [l, copy];
   });
+  const retreat = pick(base?.retreat, local.retreat, remote.retreat, !!base) ?? local.retreat ?? remote.retreat;
   const usageKey = (u: UsageEntry) => `${u.at}:${u.presentationId}:${u.device?.id ?? ''}`;
   const usage = [...local.usage];
   const seen = new Set(usage.map(usageKey));
@@ -81,6 +87,7 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
     mergeById<{ id: string }>(base?.[k] as { id: string }[] | undefined, (local[k] ?? []) as { id: string }[], (remote[k] ?? []) as { id: string }[], (l, r) => [base ? l : r]) as Library[K];
   return {
     conflicts,
+    conflictPairs,
     library: keepProtectedMaterials({
       version: 1,
       aspect: '4:3',
@@ -106,6 +113,7 @@ export function mergeLibrary(base0: Library | null, local0: Library, remote0: Li
       usage: usage.slice(-5000),
       sunday: pick(base?.sunday, local.sunday, remote.sunday, !!base),
       logoMediaId: pick(base?.logoMediaId, local.logoMediaId, remote.logoMediaId, !!base),
+      ...(retreat ? { retreat } : {}),
     }, locked, [base, local, remote].filter((s): s is Library => !!s)),
   };
 }

@@ -64,7 +64,27 @@ export type Background =
   | { kind: 'media'; mediaId: string; mediaType: 'image' | 'video'; fit?: MediaFit; loop?: boolean }
   /** Built-in image shipped with the app (the church's template backgrounds). */
   | { kind: 'image'; url: string; fit?: MediaFit }
-  | { kind: 'camera'; deviceId: string; label: string };
+  | { kind: 'camera'; deviceId: string; label: string }
+  /** Generated moving background (aurora, waves, stars…); drawn live, no file needed. */
+  | { kind: 'motion'; style: MotionStyle; colors: string[]; speed?: number };
+
+export type MotionStyle = 'aurora' | 'waves' | 'stars' | 'rays' | 'embers' | 'bokeh';
+
+/** The 수련회's moving background: follows the retreat theme (자동) or is set by hand, and can be changed at any time. */
+export interface RetreatLook {
+  /** The retreat theme text (주제), e.g. "빛으로 나아가라". */
+  theme: string;
+  enabled: boolean;
+  /** Style and colours follow the theme text; off = the style and colours below are used as set. */
+  auto: boolean;
+  style: MotionStyle;
+  /** [base, accent, highlight] as #rrggbb. */
+  colors: string[];
+  /** 0.25 – 3, 1 = normal. */
+  speed: number;
+  /** 0 – 0.9 darkening so lyrics stay readable. */
+  dim: number;
+}
 
 /** Cue at a time in a video/audio file (ProPresenter "playback markers"). */
 export interface PlaybackMarker {
@@ -200,6 +220,10 @@ export interface SongMeta {
   ccli?: string;
   key?: string;
   tempo?: string;
+  /** Key the team plays this song in at the service (when different from `key`); the stage chords follow it. */
+  playKey?: string;
+  /** Capo fret for the stage chords. */
+  capo?: number;
   /** The song's 진행 as written on the 콘티 / in the library, e.g. ["I","V1","C","V2","C"]. */
   order?: string[];
 }
@@ -247,6 +271,8 @@ export interface Presentation {
   updatedAt?: number;
   /** Dim / blur applied to the background while this presentation is live. */
   bgEffect?: BackgroundEffect;
+  /** Built by the 수련회 builder: its background follows the retreat's moving background setting. */
+  retreatBg?: boolean;
   /** Recorded slide timings, optionally synced to an audio track. */
   timeline?: Timeline;
 }
@@ -480,6 +506,8 @@ export interface Library {
   logoMediaId: string | null;
   looks: Look[];
   stageLayouts: StageLayout[];
+  /** 수련회 moving background; decks with `retreatBg` follow it. */
+  retreat?: RetreatLook;
 }
 
 /** Everything the output and stage windows need to render. */
@@ -512,6 +540,8 @@ export interface LiveState {
   chordShift?: number;
   /** Stage display chords: capo fret, so the chords shown are the shapes to play. */
   capo?: number;
+  /** The key the live song is written in (its chords are in this key), for the stage displays. */
+  songKey?: string | null;
   /** Separate looping layer (e.g. lower-third announcements during pre-service). */
   announcement: { slide: Slide; theme: Theme; title: string } | null;
 }

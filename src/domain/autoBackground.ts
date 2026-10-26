@@ -25,7 +25,7 @@ export function autoBackground(slide: Slide, pres?: Pick<Presentation, 'title' |
 
 /** A deck background the operator chose stays; the removed pictures and gradients are decided automatically. */
 const kept = (b: Background | undefined): b is Background =>
-  !!b && (b.kind === 'color' || b.kind === 'media' || b.kind === 'camera' || (b.kind === 'image' && [WHITE_LOGO_URL, 'backgrounds/night-sky.jpg'].includes(b.url)));
+  !!b && (b.kind === 'color' || b.kind === 'media' || b.kind === 'camera' || b.kind === 'motion' || (b.kind === 'image' && [WHITE_LOGO_URL, 'backgrounds/night-sky.jpg'].includes(b.url)));
 
 /** Slide's own background, else the deck's (when still one of the backgrounds), else automatic. */
 export function resolveBackground(slide: Slide, pres?: Pick<Presentation, 'title' | 'folder' | 'background'> | null): Background {

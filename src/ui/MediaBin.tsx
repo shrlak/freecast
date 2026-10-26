@@ -2,6 +2,8 @@ import { useRef, useState, type Dispatch } from 'react';
 import type { Action, AppState } from '../domain/reducer';
 import type { Background, MediaMeta } from '../domain/types';
 import { BACKGROUND_PRESETS } from '../domain/defaults';
+import { MOTION_PRESETS } from '../domain/motion';
+import { swatchStyle } from './backgroundSwatch';
 import { deleteMedia, forgetMediaUrl, putMedia } from '../domain/media';
 import { uid } from '../domain/lyrics';
 import { useMediaUrl } from './hooks';
@@ -20,6 +22,7 @@ function sameBackground(a: Background | null | undefined, b: Background): boolea
   if (a.kind === 'media') return a.mediaId === (b as typeof a).mediaId;
   if (a.kind === 'camera') return a.deviceId === (b as typeof a).deviceId;
   if (a.kind === 'image') return a.url === (b as typeof a).url;
+  if (a.kind === 'motion') return a.style === (b as typeof a).style && a.colors.join() === (b as typeof a).colors.join();
   return a.value === (b as typeof a).value;
 }
 
@@ -67,6 +70,7 @@ export function MediaBin({ state, dispatch }: Props) {
 
   const items: { key: string; name: string; background: Background; media?: MediaMeta }[] = [
     ...BACKGROUND_PRESETS.map((p) => ({ key: p.name, name: p.name, background: p.background })),
+    ...MOTION_PRESETS.map((p) => ({ key: p.name, name: p.name, background: p.background as Background })),
     ...cameras.map((c) => ({ key: c.deviceId, name: c.label, background: { kind: 'camera', deviceId: c.deviceId, label: c.label } as Background })),
     ...state.library.media.filter((m) => m.type !== 'audio' && !m.backgroundHidden).map((m) => ({
       key: m.id, name: m.name, media: m,
@@ -91,7 +95,7 @@ export function MediaBin({ state, dispatch }: Props) {
           <div key={it.key} className={`swatch ${sameBackground(state.live.background, it.background) ? 'live' : ''}`}>
             <button className="swatch-main" title={it.name} onClick={() => dispatch({ type: 'live/background', background: it.background })}>
               {it.media ? <MediaThumb media={it.media} /> : it.background.kind === 'camera' ? <div className="swatch-fill camera-swatch">📷</div> : it.background.kind === 'image' ? <img className="swatch-fill" src={assetUrl(it.background.url)} alt="" loading="lazy" /> : (
-                <div className="swatch-fill" style={it.background.kind === 'color' ? { background: it.background.value } : { backgroundImage: (it.background as { value: string }).value }} />
+                <div className="swatch-fill" style={swatchStyle(it.background)} />
               )}
               <span className="swatch-name truncate">{it.media?.type === 'video' ? '▶ ' : ''}{it.name}</span>
             </button>

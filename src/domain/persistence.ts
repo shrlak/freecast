@@ -4,6 +4,7 @@ import { createSeedLibrary, DEFAULT_THEMES } from './defaults';
 import { CANVAS_W, LEGACY_CANVAS_W } from './canvas';
 import { centerSongLyrics } from './songCentering';
 import { prepareAnnouncementSizing } from './announcementSizing';
+import { normalizeRetreatLook } from './motion';
 
 const LIBRARY_KEY = 'freecast.library.v1';
 const LIVE_KEY = 'freecast.live.v2';
@@ -70,6 +71,7 @@ export function normalizeLibrary(value: unknown): Library | null {
     looks: arr(value.looks, []),
     stageLayouts: arr(value.stageLayouts, seed.stageLayouts),
     logoMediaId: typeof value.logoMediaId === 'string' ? value.logoMediaId : null,
+    ...(normalizeRetreatLook(value.retreat) ? { retreat: normalizeRetreatLook(value.retreat) } : {}),
     sunday: churchStyle({ ...seed.sunday, ...(isObj(value.sunday) ? value.sunday : {}) }, isObj(value.sunday) ? value.sunday.styleVersion : undefined),
   };
 }
