@@ -6,6 +6,8 @@
 // The feedback text is typed by anyone running the app, so it is only ever handed to Claude as quoted data.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export const STATE_FILE = 'feedback/state.json';
 export const BATCH_JSON = '.feedback/batch.json';
@@ -107,7 +109,8 @@ function record() {
   writeFileSync(STATE_FILE, JSON.stringify({ upTo: Math.max(maxId, readState().upTo) }, null, 2) + '\n');
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL: on Windows the URL is file:///D:/..., which a plain `file://${argv[1]}` never matches
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const cmd = process.argv[2];
   const run = { fetch: fetchBatch, guard, bump, record }[cmd];
   if (!run) { console.error('usage: feedbackAuto.mjs fetch|guard|bump|record'); process.exit(2); }
