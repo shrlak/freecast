@@ -28,7 +28,7 @@ interface Props {
   onDesign: () => void;
 }
 
-const TABS = ['파일', '홈', '삽입', '디자인', '전환', '슬라이드 쇼', '예배', '보기'] as const;
+const TABS = ['파일', '홈', '삽입', '디자인', '전환', '슬라이드 쇼', '예배', '도구', '보기'] as const;
 type Tab = (typeof TABS)[number];
 
 function Big({ icon, label, onClick, disabled, active, title }: { icon: ReactNode; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; title?: string }) {
@@ -160,13 +160,18 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
           <button key={t} className={`rb-tab ${t === tab ? 'on' : ''} ${t === '파일' ? 'file' : ''}`} onClick={() => setTab(t)}>{t}</button>
         ))}
         <span className="rb-spacer" />
-        <button className={`rb-busy ${cmd.teamRequestCount ? 'team-request-alert' : ''}`} onClick={() => cmd.open('teamRequests')}>무대팀 요청 {cmd.teamRequestCount}</button>
-        <button className="rb-busy" onClick={() => cmd.open('remoteControl')} title="리모컨 조작권 관리">{cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}대 연결` : '리모컨 서버 재연결 중…'}{cmd.remoteRequests > 0 && <strong className="remote-request-badge"> · 조작권 요청 {cmd.remoteRequests}</strong>}</button>
-        {busy && <span className="rb-busy">{busy}</span>}
-        <button className="rb-account" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">
+        {busy && <span className="rb-busy" role="status">{busy}</span>}
+        <button className={`rb-pill ${cmd.teamRequestCount ? 'team-request-alert' : ''}`} onClick={() => cmd.open('teamRequests')} title="무대팀이 보낸 요청">
+          ✉ 무대팀{cmd.teamRequestCount ? ` 요청 ${cmd.teamRequestCount}` : ''}
+        </button>
+        <button className="rb-pill" onClick={() => cmd.open('remoteControl')} title="리모컨 조작권 관리">
+          <span className={`dot ${cmd.relayConnected ? 'ok' : ''}`} /> {cmd.relayConnected ? `휴대폰 ${cmd.remoteCount}` : '재연결 중…'}{cmd.remoteRequests > 0 && <strong className="remote-request-badge"> · 조작권 요청 {cmd.remoteRequests}</strong>}
+        </button>
+        <button className="rb-pill" onClick={() => cmd.open('account')} title="교회 클라우드 라이브러리">
           {cmd.cloud.session ? `☁ ${cmd.cloud.session.username}${cmd.cloud.state === 'syncing' ? ' ⟳' : cmd.cloud.state === 'error' ? ' ⚠' : cmd.cloud.state === 'offline' ? ' ⏸' : ' ✓'}` : '☁ 로그인'}{cmd.cloud.session && (cmd.cloud.storageError ? ' · 서버 용량 확인 필요' : cmd.cloud.storageUsage?.server ? ` · 서버 ${formatStoragePercent(cmd.cloud.storageUsage.server.usedPercent)}%` : '')}
         </button>
-        <button className="rb-account" disabled={!p} onClick={() => cmd.open('rehearsal')}>리허설</button>
+        <button className="rb-pill rb-gear" onClick={() => cmd.open('settings')} title="설정" aria-label="설정">⚙</button>
+        <button className="rb-pill" disabled={!p} onClick={() => cmd.open('rehearsal')} title="송출하지 않고 미리 넘겨 보기">리허설</button>
         <button className="rb-present" disabled={!p} title="지금 편집 중인 슬라이드부터 발표 (Shift+F5) — 처음부터는 F5" onClick={() => cmd.startShow(true)}>▶ 발표</button>
         <input ref={uploadRef} type="file" hidden onChange={(e) => { onUpload(Array.from(e.target.files ?? [])); e.target.value = ''; }} />
       </div>
@@ -178,6 +183,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🎵" label="찬양 파일" title="Text, Markdown, ProPresenter 6, ChordPro, OpenLyrics, OpenSong" onClick={() => cmd.pickFiles('lyrics', ACCEPT.lyrics)} />
               <Big icon="🗂" label="백업 복원" onClick={() => cmd.pickFiles('backup', ACCEPT.backup)} />
               <Big icon="{ }" label="라이브러리 JSON" onClick={() => cmd.pickFiles('library', ACCEPT.library)} />
+              {cmd.templateMarket && <Big icon="🛍" label="템플릿 마켓" title="슬라이드 템플릿을 파일로 주고받기 (실험 기능)" onClick={() => cmd.open('templateMarket')} />}
             </Group>
             <Group label="내보내기">
               <Big icon="⇩" label="재생목록 PPTX" onClick={cmd.exportPlaylistPptx} />
@@ -188,24 +194,19 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🗑" label="휴지통" onClick={() => cmd.open('trash')} />
               <Big icon="🕘" label="복원 지점" title="라이브러리를 자동으로 저장해 둔 지점으로 되돌리기" onClick={() => cmd.open('restore')} />
             </Group>
-            <Group label="사용기록">
+            <Group label="기록">
               <Big icon="📋" label="사용기록 보기" onClick={() => cmd.open('activity')} />
-              <Big icon="📈" label={`사용 기록 (${lib.usage.length})`} onClick={cmd.exportUsage} />
-              <Small icon="🧹" label="발표 기록 지우기" onClick={cmd.clearUsage} />
-            </Group>
-            <Group label="실험">
-              <Big icon="🧪" label="실험 기능" title="아직 기본으로 켜지 않은 기능" onClick={() => cmd.open('features')} />
-              {cmd.templateMarket && <Big icon="🛍" label="템플릿 마켓" title="슬라이드 템플릿을 파일로 주고받기" onClick={() => cmd.open('templateMarket')} />}
+              <div className="rb-col">
+                <Small icon="📈" label={`찬양 사용 CSV (${lib.usage.length})`} onClick={cmd.exportUsage} />
+                <Small icon="🧹" label="발표 기록 지우기" onClick={cmd.clearUsage} />
+              </div>
             </Group>
             <Group label="계정">
-              <Big icon="☁" label={cmd.cloud.session ? `${cmd.cloud.session.username} · 동기화` : '로그인 · 클라우드'} onClick={() => cmd.open('account')} />
+              <Big icon="☁" label={cmd.cloud.session ? `${cmd.cloud.session.username} · 계정` : '로그인 · 클라우드'} onClick={() => cmd.open('account')} />
               {cmd.cloud.session && <Big icon="⇅" label="동기화 상태" title="오프라인·충돌·미디어 준비 확인" onClick={() => cmd.open('sync')} />}
             </Group>
             <Group label="설정">
-              <Big icon="🖥" label="화면 · 설정" onClick={() => cmd.open('screens')} />
-            </Group>
-            <Group label="도움">
-              <Big icon="💬" label="피드백 보내기" title="고칠 점·원하는 기능을 개발자에게 보냅니다 — 반영되면 자동 업데이트" onClick={() => cmd.open('feedback')} />
+              <Big icon="⚙" label="설정" title="업데이트 · 출력 화면 · 리모컨 · AI · 장비" onClick={() => cmd.open('settings')} />
             </Group>
           </>
         )}
@@ -343,7 +344,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="🖵" label="청중 화면" onClick={() => openOutput('output')} />
               <Big icon="🎤" label="무대 화면" onClick={() => openOutput('stage')} />
               <Big icon="▦" label="멀티뷰" onClick={() => window.open(`${location.origin}/?view=multiview`, 'freecast-multiview', 'popup,width=1280,height=760')} />
-              <Big icon="⚙" label="화면 설정" onClick={() => cmd.open('screens')} />
+              <Big icon="⚙" label="출력 설정" title="출력 화면 · 모니터 · 무대 화면 설정" onClick={() => cmd.open('screens')} />
             </Group>
             <Group label="화면">
               <Small icon="■" label="검은 화면 (B)" active={state.live.black} onClick={() => dispatch({ type: 'live/toggleBlack' })} />
@@ -360,15 +361,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               {contiButton}
               <Big icon="🎵" label="가사 올리기" title="가사 파일(.txt/.md 등)을 찬양 순서에 넣습니다" disabled={working} onClick={() => upload('lyrics')} />
               <Big icon="🎤" label="설교 슬라이드" title="설교 PPTX/PPT/PDF/이미지로 기존 설교 슬라이드를 교체합니다. 예배 순서와 설정은 유지됩니다. 여러 파일은 한 번에 선택하세요." disabled={working} onClick={() => upload('sermon')} />
-            </Group>
-            <Group label="예배 준비"><Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} /><Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} /><Big icon="🗑" label="휴지통" onClick={() => cmd.open('trash')} />
-              <Big icon="🕘" label="복원 지점" onClick={() => cmd.open('restore')} /></Group>
-            <Group label="예배 도우미">
-              <Big icon={cmd.followOn ? '🎙✓' : '🎙'} label="가사 따라가기" title="찬양 가사를 듣고 다음 슬라이드를 준비합니다" onClick={() => cmd.open('follow')} />
-              <Big icon="📊" label="찬양 통계 · 추천" title="많이 부른 곡, 쉬었던 곡 추천, 키 점검" onClick={() => cmd.open('songStats')} />
-              <Big icon="©" label="저작권(CCLI) 보고" title="기간별 사용 곡과 CCLI 번호를 CSV로" onClick={() => cmd.open('ccli')} />
-              <Big icon="🛡" label={cmd.safeModeOn ? '안전 모드 켜짐' : '안전 모드'} title="예배 자료를 이 컴퓨터에 모두 받아 두고 위험한 변경을 막습니다" onClick={() => cmd.open('safeMode')} />
-              <Big icon="💻" label={cmd.standbyOn ? '대기 컴퓨터 켜짐' : '대기 컴퓨터'} title="메인 컴퓨터를 따라가다 멈추면 이어받습니다" onClick={() => cmd.open('standby')} />
+              <Big icon="⇩" label="PPTX 저장 (MMDD)" title="이번 재생목록을 PowerPoint 파일로 내보냅니다" onClick={cmd.exportPlaylistPptx} />
             </Group>
             <Group label="예배 만들기">
               <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
@@ -377,17 +370,35 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="⛺" label="수련회" onClick={() => cmd.open('retreat')} />
               <Big icon="🌌" label="수련회 배경" title="수련회 주제를 넣으면 어울리는 움직이는 배경이 정해집니다 — 언제든 바꿀 수 있고 모든 수련회 슬라이드가 따라갑니다" onClick={() => cmd.open('retreatBg')} />
             </Group>
-            <Group label="말씀 · 찬양">
+            <Group label="찬양 · 말씀">
               <Big icon="🎵" label="새 찬양" title="찬양 등록 — 제목·진행·파트별 가사 (주일예배 생성기와 같은 방식)" onClick={() => cmd.open('songNew')} />
               <Big icon="✎" label="찬양 편집" title="선택한 찬양의 가사·진행 편집, 교회 찬양 라이브러리에 등록" disabled={!p || !isSong(p)} onClick={() => cmd.open('edit')} />
-              <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
-              <Big icon="🎼" label="코드 · 키 악보" title="곡마다 키·BPM·코드를 보고, 키를 옮기고, 밴드용으로 인쇄합니다" onClick={() => cmd.open('chords')} />
               <Big icon="☁" label={cmd.online.status === 'ok' ? `찬양 ${cmd.online.count}곡` : '찬양 라이브러리'} title="찬양 라이브러리 보기 · 편집 · 삭제" onClick={() => cmd.open('songLibrary')} />
-              <Big icon="✨" label="AI" onClick={() => cmd.open('ai')} />
-              <Big icon="📊" label="AI 사용량" title="오늘 AI를 얼마나 썼는지 (모델별 무료 한도)" onClick={() => cmd.open('aiUsage')} />
+              <Big icon="🎼" label="코드 · 키 악보" title="곡마다 키·BPM·코드를 보고, 키를 옮기고, 밴드용으로 인쇄합니다" onClick={() => cmd.open('chords')} />
+              <Big icon="📖" label="성경" onClick={() => cmd.open('bible')} />
             </Group>
-            <Group label="내보내기">
-              <Big icon="⇩" label="PPTX (MMDD)" onClick={cmd.exportPlaylistPptx} />
+            <Group label="예배 전 점검">
+              <Big icon="🔎" label="예배 시작 전 점검" onClick={() => cmd.open('preflight')} />
+              <Big icon="☑" label="준비 · 사전 점검" onClick={() => cmd.open('preparation')} />
+              <Big icon="🛡" label={cmd.safeModeOn ? '안전 모드 켜짐' : '안전 모드'} active={cmd.safeModeOn} title="예배 자료를 이 컴퓨터에 모두 받아 두고 위험한 변경을 막습니다" onClick={() => cmd.open('safeMode')} />
+              <Big icon="💻" label={cmd.standbyOn ? '대기 컴퓨터 켜짐' : '대기 컴퓨터'} active={cmd.standbyOn} title="메인 컴퓨터를 따라가다 멈추면 이어받습니다" onClick={() => cmd.open('standby')} />
+            </Group>
+          </>
+        )}
+        {tab === '도구' && (
+          <>
+            <Group label="예배 중">
+              <Big icon="🎙" label="가사 따라가기" active={cmd.followOn} title="찬양 가사를 듣고 다음 슬라이드를 준비합니다" onClick={() => cmd.open('follow')} />
+              <Big icon="▷" label="리허설" disabled={!p} title="송출하지 않고 미리 넘겨 보기" onClick={() => cmd.open('rehearsal')} />
+              <Big icon="⚡" label="빠른 찾기" title="가사·성경·광고를 모든 프레젠테이션에서 찾아 바로 표시 (⌘/Ctrl+K)" onClick={() => cmd.open('find')} />
+            </Group>
+            <Group label="통계 · 보고">
+              <Big icon="📊" label="찬양 통계 · 추천" title="많이 부른 곡, 쉬었던 곡 추천, 키 점검" onClick={() => cmd.open('songStats')} />
+              <Big icon="©" label="저작권(CCLI) 보고" title="기간별 사용 곡과 CCLI 번호를 CSV로" onClick={() => cmd.open('ccli')} />
+            </Group>
+            <Group label="AI">
+              <Big icon="✨" label="AI로 만들기" onClick={() => cmd.open('ai')} />
+              <Big icon="📈" label="AI 사용량" title="오늘 AI를 얼마나 썼는지 (모델별 무료 한도)" onClick={() => cmd.open('aiUsage')} />
             </Group>
           </>
         )}
@@ -398,8 +409,10 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="▦" label="여러 슬라이드" active={cmd.view === 'sorter'} onClick={() => cmd.setView('sorter')} />
               <Big icon="🧑‍🏫" label="발표자 보기" active={cmd.view === 'presenter'} onClick={() => cmd.setView('presenter')} />
             </Group>
-            <Group label="레이아웃">
-              <Big icon="🎛" label="클래식 (ProPresenter형)" onClick={() => cmd.setLayout('classic')} />
+            <Group label="창 열기">
+              <Big icon="🖵" label="청중 화면" onClick={() => openOutput('output')} />
+              <Big icon="🎤" label="무대 화면" onClick={() => openOutput('stage')} />
+              <Big icon="▦" label="멀티뷰" onClick={() => window.open(`${location.origin}/?view=multiview`, 'freecast-multiview', 'popup,width=1280,height=760')} />
             </Group>
           </>
         )}

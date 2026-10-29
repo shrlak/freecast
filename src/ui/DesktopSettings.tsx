@@ -5,17 +5,15 @@ import { openOutput } from './LivePanel';
 import { UpdateCheck } from './UpdateBanner';
 import { qrDataUrl } from '../domain/io/qr';
 
-/** Desktop-app only: which display each screen opens on, the AI key, and network access for phones. */
-export function DesktopSettings({ screens }: { screens: Screen[] }) {
-  const [info, setInfo] = useState<DesktopInfo | null>(null);
-  const [key, setKey] = useState('');
-  const [orKey, setOrKey] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [copyStatus, setCopyStatus] = useState('');
-  const [teamCopyStatus, setTeamCopyStatus] = useState('');
-  const refresh = () => desktop?.info().then(setInfo);
+export interface DesktopSettingsState {
+  info: DesktopInfo;
+  refresh: () => Promise<void> | undefined;
+}
 
-  useEffect(() => { setCopyStatus(''); }, [info?.internet.connectionCode]);
+/** Desktop-app only: the app's settings (displays, AI keys, network access), kept fresh while settings are open. */
+export function useDesktopInfo(): DesktopSettingsState | null {
+  const [info, setInfo] = useState<DesktopInfo | null>(null);
+  const refresh = () => desktop?.info().then(setInfo);
 
   useEffect(() => {
     refresh();
@@ -29,122 +27,171 @@ export function DesktopSettings({ screens }: { screens: Screen[] }) {
     return () => clearInterval(t);
   }, [waiting]);
 
-  if (!desktop) return null;
-  if (!info) return <p className="hint">Loading desktop settings…</p>;
+  return desktop && info ? { info, refresh } : null;
+}
 
+export function DesktopUpdate({ info }: { info: DesktopInfo }) {
+  return (
+    <section className="settings-card">
+      <h4>소프트웨어 업데이트 <span className="muted small">현재 FreeCast {info.version}</span></h4>
+      <UpdateCheck />
+      <p className="hint">FreeCast는 macOS(또는 Windows)가 업데이트된 뒤 처음 켤 때 새 버전을 확인하고, 앱을 종료할 때 설치합니다. 예배 중에는 저절로 재시작하지 않습니다.</p>
+    </section>
+  );
+}
+
+/** Which display each output opens on. */
+export function DesktopDisplays({ info, refresh, screens }: DesktopSettingsState & { screens: Screen[] }) {
   const displayFor = (id: string) => info.outputDisplays[id] ?? '';
-  const targets = [...screens.map((s) => ({ id: s.id, name: s.name, view: 'output' as const, extra: `&screen=${s.id}` })), { id: 'stage', name: 'Stage display', view: 'stage' as const, extra: '' }];
+  const targets = [...screens.map((s) => ({ id: s.id, name: s.name, view: 'output' as const, extra: `&screen=${s.id}` })), { id: 'stage', name: '무대 화면', view: 'stage' as const, extra: '' }];
+  return (
+    <section className="settings-card">
+      <h4>어느 모니터에 띄울까요?</h4>
+      <p className="hint">화면마다 모니터를 고르면 그 모니터에 전체 화면으로 열리고, 다음에도 기억합니다.</p>
+      <div className="settings-rows">
+        {targets.map((t) => (
+          <div key={t.id} className="settings-row">
+            <span className="grow truncate">{t.name}</span>
+            <select value={displayFor(t.id)} onChange={(e) => {
+              const v = e.target.value === '' ? null : Number(e.target.value);
+              openOutput(t.view, t.extra, v);
+              setTimeout(refresh, 300);
+            }}>
+              <option value="">창으로 열기</option>
+              {info.displays.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+            </select>
+            <button onClick={() => openOutput(t.view, t.extra)}>열기</button>
+          </div>
+        ))}
+      </div>
+      <div><button onClick={() => desktop!.closeOutputs()}>모든 출력 창 닫기</button></div>
+    </section>
+  );
+}
+
+export function DesktopAi({ info, refresh }: DesktopSettingsState) {
+  const [key, setKey] = useState('');
+  const [orKey, setOrKey] = useState('');
+  return (
+    <>
+      <section className="settings-card">
+        <h4>교회 AI 서버</h4>
+        <p className="hint">기본으로 교회 Cloudflare Worker(lyrics-ai-proxy)를 통해 관리자가 정한 모델 순서로 요청합니다. 키가 없어도 됩니다. 주일예배 생성기와 같은 설정입니다.</p>
+        <label className="stack small">Worker 주소 (비우면 기본값)
+          <input placeholder="https://lyrics-ai-proxy.spencerkim1235.workers.dev" defaultValue={info.ai.proxyUrl} onBlur={async (e) => { await desktop!.setAiConfig({ proxyUrl: e.target.value }); refresh(); }} />
+        </label>
+      </section>
+      <section className="settings-card">
+        <h4>내 API 키 <span className="muted small">선택</span></h4>
+        <p className="hint">자신의 키를 넣으면 Google Gemini / OpenRouter로 바로 요청합니다. 키는 이 컴퓨터에 암호화되어 저장됩니다.</p>
+        <div className="row gap-xs">
+          <input className="grow" type="password" autoComplete="off" placeholder={info.ai.hasGeminiKey ? '✓ Gemini 키 저장됨' : 'Gemini API 키'} value={key} onChange={(e) => setKey(e.target.value)} />
+          <button disabled={!key.trim()} onClick={async () => { await desktop!.setAiConfig({ geminiKey: key }); setKey(''); refresh(); }}>저장</button>
+          {info.ai.hasGeminiKey && <button className="danger" onClick={async () => { await desktop!.setAiConfig({ geminiKey: '' }); refresh(); }}>삭제</button>}
+        </div>
+        <div className="row gap-xs">
+          <input className="grow" type="password" autoComplete="off" placeholder={info.ai.hasOpenrouterKey ? '✓ OpenRouter 키 저장됨' : 'OpenRouter API 키'} value={orKey} onChange={(e) => setOrKey(e.target.value)} />
+          <button disabled={!orKey.trim()} onClick={async () => { await desktop!.setAiConfig({ openrouterKey: orKey }); setOrKey(''); refresh(); }}>저장</button>
+          {info.ai.hasOpenrouterKey && <button className="danger" onClick={async () => { await desktop!.setAiConfig({ openrouterKey: '' }); refresh(); }}>삭제</button>}
+        </div>
+      </section>
+    </>
+  );
+}
+
+/** Phones and tablets: on this network, over the internet, and the fixed web-app links. */
+export function DesktopRemote({ info, refresh }: DesktopSettingsState) {
+  const [busy, setBusy] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('');
+  const [teamCopyStatus, setTeamCopyStatus] = useState('');
+  useEffect(() => { setCopyStatus(''); }, [info.internet.connectionCode]);
+  const toggle = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    await fn();
+    await refresh();
+    setBusy(false);
+  };
 
   return (
-    <div className="stack">
-      <h3>소프트웨어 업데이트 <span className="muted small">FreeCast {info.version}</span></h3>
-      <UpdateCheck />
-      <p className="hint">FreeCast는 macOS(또는 Windows)가 업데이트된 뒤 처음 켤 때 새 버전을 확인하고, 앱을 종료할 때 설치합니다. 언제든 “업데이트 확인”으로 직접 확인할 수도 있습니다.</p>
-      <h3>Displays</h3>
-      <p className="hint">Pick a display for each output and it opens full-screen there; FreeCast remembers it next time.</p>
-      {targets.map((t) => (
-        <div key={t.id} className="row gap-xs">
-          <span className="grow truncate">{t.name}</span>
-          <select value={displayFor(t.id)} onChange={(e) => {
-            const v = e.target.value === '' ? null : Number(e.target.value);
-            openOutput(t.view, t.extra, v);
-            setTimeout(refresh, 300);
-          }}>
-            <option value="">Window</option>
-            {info.displays.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-          </select>
-          <button onClick={() => openOutput(t.view, t.extra)}>Open</button>
-        </div>
-      ))}
-      <button onClick={() => desktop!.closeOutputs()}>Close all outputs</button>
+    <>
+      <section className="settings-card">
+        <label className="settings-switch">
+          <span>
+            <b>같은 Wi-Fi의 휴대폰 · 태블릿</b>
+            <small className="muted">이 네트워크의 다른 기기에서 리모컨과 무대 화면을 열 수 있습니다. 끄면 이 컴퓨터에서만 접속됩니다.</small>
+          </span>
+          <input type="checkbox" checked={info.networkRemote} disabled={busy} onChange={(e) => toggle(() => desktop!.setNetworkRemote(e.target.checked))} />
+        </label>
+        {info.networkRemote && info.lanUrls.map((u) => <code key={u} className="small selectable">{u}/?view=remote</code>)}
+      </section>
 
-      <h3>AI (Gemini · OpenRouter — 주일예배 생성기와 같은 설정)</h3>
-      <p className="hint">기본: 교회 Cloudflare Worker(lyrics-ai-proxy)를 통해 관리자가 정한 모델 순서로 요청합니다. 키가 없어도 됩니다. 자신의 키를 넣으면 Google / OpenRouter로 바로 요청합니다.</p>
-      <label className="stack small">Worker 주소 (비우면 기본값)
-        <div className="row gap-xs">
-          <input className="grow" placeholder="https://lyrics-ai-proxy.spencerkim1235.workers.dev" defaultValue={info.ai.proxyUrl} onBlur={async (e) => { await desktop!.setAiConfig({ proxyUrl: e.target.value }); refresh(); }} />
-        </div>
-      </label>
-      <div className="row gap-xs">
-        <input className="grow" type="password" autoComplete="off" placeholder={info.ai.hasGeminiKey ? '✓ Gemini 키 저장됨' : 'Gemini API 키 (선택)'} value={key} onChange={(e) => setKey(e.target.value)} />
-        <button disabled={!key.trim()} onClick={async () => { await desktop!.setAiConfig({ geminiKey: key }); setKey(''); refresh(); }}>저장</button>
-        {info.ai.hasGeminiKey && <button className="danger" onClick={async () => { await desktop!.setAiConfig({ geminiKey: '' }); refresh(); }}>삭제</button>}
-      </div>
-      <div className="row gap-xs">
-        <input className="grow" type="password" autoComplete="off" placeholder={info.ai.hasOpenrouterKey ? '✓ OpenRouter 키 저장됨' : 'OpenRouter API 키 (선택)'} value={orKey} onChange={(e) => setOrKey(e.target.value)} />
-        <button disabled={!orKey.trim()} onClick={async () => { await desktop!.setAiConfig({ openrouterKey: orKey }); setOrKey(''); refresh(); }}>저장</button>
-        {info.ai.hasOpenrouterKey && <button className="danger" onClick={async () => { await desktop!.setAiConfig({ openrouterKey: '' }); refresh(); }}>삭제</button>}
-      </div>
+      <section className="settings-card">
+        <label className="settings-switch">
+          <span>
+            <b>어디서나 리모컨 (인터넷)</b>
+            <small className="muted">다른 Wi-Fi나 휴대폰 데이터로도 FreeCast를 조작합니다.</small>
+          </span>
+          <input type="checkbox" checked={info.internet.on} disabled={busy} onChange={(e) => toggle(() => desktop!.setInternetRemote(e.target.checked))} />
+        </label>
+        {info.internet.on && info.internet.status === 'connecting' && <p className="hint">{info.internet.note ?? '연결하는 중…'}</p>}
+        {info.internet.on && info.internet.status === 'error' && <p className="hint warn">{info.internet.error}</p>}
+      </section>
 
-      <h3>Phones & tablets</h3>
-      <label className="check">
-        <input type="checkbox" checked={info.networkRemote} disabled={busy} onChange={async (e) => {
-          setBusy(true);
-          await desktop!.setNetworkRemote(e.target.checked);
-          await refresh();
-          setBusy(false);
-        }} />
-        Allow remote control and stage displays from other devices on this network
-      </label>
-      {info.lanUrls.map((u) => <code key={u} className="small selectable">{u}/?view=remote</code>)}
-      {!info.networkRemote && <p className="hint">Off: FreeCast is only reachable from this computer.</p>}
-
-      <h3>Remote from anywhere (any Wi-Fi or mobile data)</h3>
-      <label className="check">
-        <input type="checkbox" checked={info.internet.on} disabled={busy} onChange={async (e) => {
-          setBusy(true);
-          await desktop!.setInternetRemote(e.target.checked);
-          await refresh();
-          setBusy(false);
-        }} />
-        Let a phone or tablet control FreeCast over the internet
-      </label>
-      {info.internet.on && info.internet.status === 'connecting' && <p className="hint">{info.internet.note ?? 'Connecting…'}</p>}
-      {info.internet.on && info.internet.status === 'error' && <p className="hint">{info.internet.error}</p>}
-      <div className="stack">
-        <h3>FreeCast Remote 웹앱 · 고정 주소</h3>
+      <section className="settings-card">
+        <h4>FreeCast Remote 웹앱</h4>
         <code className="small selectable">{info.internet.webAppUrl ?? `${info.ai.proxyUrl.replace(/\/+$/, '')}/freecast/remote/`}</code>
         <p className="hint">Windows·Mac 어느 컴퓨터를 사용하든 웹앱 주소는 같습니다. iPhone Safari에서 열고 공유 → 홈 화면에 추가를 선택하세요.</p>
-        {info.internet.on && info.internet.linkStatus === 'ok' && info.internet.link && <>
-          <h4>이 컴퓨터 연결</h4>
-          {info.internet.connectionCode && <>
-            <label className="stack small">연결 코드
-              <input className="selectable" readOnly value={info.internet.connectionCode} onFocus={(e) => e.currentTarget.select()} spellCheck={false} />
-            </label>
-            <button onClick={async () => {
-              try {
-                if (!await desktop!.copyRemoteCode()) throw new Error('Code unavailable');
-                setCopyStatus('연결 코드를 복사했습니다.');
-              } catch {
-                setCopyStatus('복사하지 못했습니다. 위 연결 코드를 선택한 뒤 직접 복사해 주세요.');
-              }
-            }}>연결 코드 복사</button>
-            <p className="hint">웹앱에서 ‘컴퓨터 변경’ → ‘연결 코드’에 붙여 넣으세요. QR 코드 대신 텍스트로 연결할 수 있습니다.</p>
-            <p className="hint" role="status">{copyStatus}</p>
-          </>}
-          <img src={qrDataUrl(info.internet.pairingUrl ?? info.internet.link)} alt="FreeCast Remote 컴퓨터 연결 QR 코드" width={160} height={160} />
-          <code className="small selectable">{info.internet.pairingUrl ?? info.internet.link}</code>
-          <p className="hint">QR 코드를 한 번 스캔하면 이 컴퓨터가 웹앱에 저장됩니다. 이후 고정 웹앱 주소에서 저장한 컴퓨터를 선택하세요. 컴퓨터에서 FreeCast와 인터넷 리모컨이 켜져 있어야 합니다.</p>
-          <button onClick={async () => { if (!confirm('연결 키를 재발급할까요? 기존에 연결한 휴대폰은 새 QR 코드를 스캔해야 합니다. 웹앱 주소는 그대로 유지됩니다.')) return; await desktop!.newRemoteLink(); refresh(); }}>연결 키 재발급</button>
-        </>}
+        {!info.internet.on && <p className="hint">이 컴퓨터를 연결하려면 위의 <b>어디서나 리모컨</b>을 켜세요.</p>}
+        {info.internet.on && info.internet.linkStatus === 'ok' && info.internet.link && (
+          <div className="settings-pair">
+            <img src={qrDataUrl(info.internet.pairingUrl ?? info.internet.link)} alt="FreeCast Remote 컴퓨터 연결 QR 코드" width={150} height={150} />
+            <div className="stack grow">
+              <b>이 컴퓨터 연결</b>
+              <p className="hint">QR 코드를 한 번 스캔하면 이 컴퓨터가 웹앱에 저장됩니다. 이후 고정 웹앱 주소에서 저장한 컴퓨터를 선택하세요.</p>
+              {info.internet.connectionCode && <>
+                <label className="stack small">연결 코드 (QR 대신 웹앱의 ‘컴퓨터 변경 → 연결 코드’에 붙여 넣기)
+                  <input className="selectable" readOnly value={info.internet.connectionCode} onFocus={(e) => e.currentTarget.select()} spellCheck={false} />
+                </label>
+                <div className="row gap-xs wrap">
+                  <button onClick={async () => {
+                    try {
+                      if (!await desktop!.copyRemoteCode()) throw new Error('Code unavailable');
+                      setCopyStatus('연결 코드를 복사했습니다.');
+                    } catch {
+                      setCopyStatus('복사하지 못했습니다. 위 연결 코드를 선택한 뒤 직접 복사해 주세요.');
+                    }
+                  }}>연결 코드 복사</button>
+                  <button onClick={async () => { if (!confirm('연결 키를 재발급할까요? 기존에 연결한 휴대폰은 새 QR 코드를 스캔해야 합니다. 웹앱 주소는 그대로 유지됩니다.')) return; await desktop!.newRemoteLink(); refresh(); }}>연결 키 재발급</button>
+                </div>
+                <p className="hint" role="status">{copyStatus}</p>
+              </>}
+              <code className="small selectable">{info.internet.pairingUrl ?? info.internet.link}</code>
+            </div>
+          </div>
+        )}
         {info.internet.on && info.internet.linkStatus === 'pending' && <p className="hint">이 컴퓨터의 고정 연결을 등록하고 있습니다…</p>}
         {info.internet.on && (info.internet.linkStatus === 'error' || info.internet.linkStatus === 'unavailable') && <p className="hint">{info.internet.linkError ?? '연결 등록을 다시 시도하고 있습니다.'}</p>}
-        <p className="hint">연결 QR 코드는 컴퓨터를 조작할 수 있는 개인 연결 정보입니다. 미디어팀에만 공유하세요.</p>
-      </div>
-      {info.internet.team && <section className="stack team-link-settings">
-        <h3>무대팀 전용 웹앱 · 고정 링크</h3>
+        <p className="hint">🔐 연결 QR 코드는 컴퓨터를 조작할 수 있는 개인 연결 정보입니다. 미디어팀에만 공유하세요.</p>
+      </section>
+
+      {info.internet.team && <section className="settings-card team-link-settings">
+        <h4>무대팀 전용 웹앱</h4>
         <code className="small selectable">{info.internet.team.webAppUrl}</code>
         <p className="hint">무대팀은 현재 송출을 보고 방송실에 비공개 요청을 보낼 수 있습니다. 슬라이드 조작권은 주어지지 않습니다. 일반 리모컨과 다른 연결 코드이며, 재시작·인터넷 재연결·일반 리모컨 키 재발급으로 바뀌지 않습니다.</p>
-        {info.internet.team.pairingUrl && <>
-          <label className="stack small">이 컴퓨터의 무대팀 연결 링크<input readOnly className="selectable" value={info.internet.team.pairingUrl} onFocus={(e) => e.currentTarget.select()} /></label>
-          <button disabled={info.internet.team.status !== 'ok'} onClick={async () => { try { setTeamCopyStatus(await desktop!.copyTeamLink() ? '무대팀 연결 링크를 복사했습니다.' : '위 링크를 선택해 직접 복사해 주세요.'); } catch { setTeamCopyStatus('위 링크를 선택해 직접 복사해 주세요.'); } }}>무대팀 연결 링크 복사</button>
-          <label className="stack small">무대팀 연결 코드<input readOnly className="selectable" value={info.internet.team.connectionCode ?? ''} onFocus={(e) => e.currentTarget.select()} /></label>
-          {info.internet.team.status === 'ok' && <img src={qrDataUrl(info.internet.team.pairingUrl)} alt="무대팀 전용 연결 QR 코드" width={160} height={160} />}
-        </>}
+        {info.internet.team.pairingUrl && (
+          <div className="settings-pair">
+            {info.internet.team.status === 'ok' && <img src={qrDataUrl(info.internet.team.pairingUrl)} alt="무대팀 전용 연결 QR 코드" width={150} height={150} />}
+            <div className="stack grow">
+              <label className="stack small">이 컴퓨터의 무대팀 연결 링크<input readOnly className="selectable" value={info.internet.team.pairingUrl} onFocus={(e) => e.currentTarget.select()} /></label>
+              <div><button disabled={info.internet.team.status !== 'ok'} onClick={async () => { try { setTeamCopyStatus(await desktop!.copyTeamLink() ? '무대팀 연결 링크를 복사했습니다.' : '위 링크를 선택해 직접 복사해 주세요.'); } catch { setTeamCopyStatus('위 링크를 선택해 직접 복사해 주세요.'); } }}>무대팀 연결 링크 복사</button></div>
+              <label className="stack small">무대팀 연결 코드<input readOnly className="selectable" value={info.internet.team.connectionCode ?? ''} onFocus={(e) => e.currentTarget.select()} /></label>
+            </div>
+          </div>
+        )}
         <p role="status" className="hint">{teamCopyStatus}</p>
         {info.internet.on && info.internet.team.status !== 'ok' && <p className="hint">{info.internet.team.error || '무대팀 고정 링크를 등록하고 있습니다…'}</p>}
         <p className="hint">같은 인터넷 리모컨 스위치를 사용합니다. 무대팀 기기에서는 위 링크를 열고 Safari의 공유 → 홈 화면에 추가를 선택하세요.</p>
       </section>}
-    </div>
+    </>
   );
 }

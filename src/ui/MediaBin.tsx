@@ -54,15 +54,15 @@ export function MediaBin({ state, dispatch }: Props) {
       const probe = await navigator.mediaDevices.getUserMedia({ video: true });
       probe.getTracks().forEach((t) => t.stop());
       const devices = await navigator.mediaDevices.enumerateDevices();
-      setCameras(devices.filter((d) => d.kind === 'videoinput').map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` })));
+      setCameras(devices.filter((d) => d.kind === 'videoinput').map((d, i) => ({ deviceId: d.deviceId, label: d.label || `카메라 ${i + 1}` })));
     } catch (e) {
-      alert(`Camera unavailable: ${(e as Error).message}`);
+      alert(`카메라를 쓸 수 없습니다: ${(e as Error).message}`);
     }
   };
 
   const remove = async (m: MediaMeta) => {
     if (protectedMediaIds(state.library).has(m.id)) { alert(PROTECTED_MESSAGE); return; }
-    if (!confirm(`Remove “${m.name}” from the media bin?`)) return;
+    if (!confirm(`“${m.name}”을(를) 미디어에서 삭제할까요?`)) return;
     dispatch({ type: 'media/remove', id: m.id });
     forgetMediaUrl(m.id);
     await deleteMedia(m.id);
@@ -80,14 +80,16 @@ export function MediaBin({ state, dispatch }: Props) {
 
   return (
     <section className="panel media-bin">
-      <div className="section-head">
-        <h2>Backgrounds</h2>
-        <span className="muted small grow right">Click: live · 📌: attach to “{selected?.title ?? '—'}”</span>
-        <select value={fit} onChange={(e) => setFit(e.target.value as 'cover' | 'contain')} title="How images and videos fit the screen">
-          <option value="cover">Fill</option><option value="contain">Fit</option>
-        </select>
-        <button onClick={findCameras} title="Live camera / capture card input">📷 Cameras</button>
-        <button onClick={() => input.current?.click()}>＋ Image / video</button>
+      <div className="media-bin-head">
+        <h2>배경 · 미디어</h2>
+        <p className="muted small">누르면 바로 화면 배경이 됩니다 · 📌 “{selected?.title ?? '—'}”의 배경으로 고정</p>
+        <div className="row gap-xs wrap">
+          <button className="primary" onClick={() => input.current?.click()}>＋ 그림 · 영상</button>
+          <button onClick={findCameras} title="카메라 · 캡처 카드 입력">📷 카메라</button>
+          <select value={fit} onChange={(e) => setFit(e.target.value as 'cover' | 'contain')} title="그림 · 영상을 화면에 맞추는 방법" aria-label="화면 맞춤">
+            <option value="cover">꽉 채우기</option><option value="contain">전체 보이기</option>
+          </select>
+        </div>
         <input ref={input} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => add(e.target.files)} />
       </div>
       <div className="swatches">
@@ -101,14 +103,14 @@ export function MediaBin({ state, dispatch }: Props) {
             </button>
             <div className="swatch-actions">
               {it.background.kind !== 'camera' && (
-                <button className="mini-btn" title="Pin as presentation background" disabled={!selected}
+                <button className="mini-btn" title="이 프레젠테이션의 배경으로 고정" disabled={!selected}
                   onClick={() => selected && dispatch({ type: 'presentation/update', id: selected.id, patch: { background: it.background } })}>📌</button>
               )}
               {it.media?.type === 'image' && (
-                <button className={`mini-btn ${state.library.logoMediaId === it.media.id ? 'active' : ''}`} title="Use as the logo screen (L)"
+                <button className={`mini-btn ${state.library.logoMediaId === it.media.id ? 'active' : ''}`} title="로고 화면으로 사용 (L)"
                   onClick={() => dispatch({ type: 'library/logo', mediaId: state.library.logoMediaId === it.media!.id ? null : it.media!.id })}>L</button>
               )}
-              {it.media && <button className="mini-btn" title="Remove" onClick={() => remove(it.media!)}>✕</button>}
+              {it.media && <button className="mini-btn" title="삭제" onClick={() => remove(it.media!)}>✕</button>}
             </div>
           </div>
         ))}

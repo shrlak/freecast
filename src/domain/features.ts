@@ -1,6 +1,6 @@
 /**
  * Features that ship switched off. They stay out of the menus until someone turns them on in
- * 파일 → 실험 기능, and the choice is kept on this computer only.
+ * 설정 → 일반 → 실험 기능, and the choice is kept on this computer only.
  */
 export type FeatureId = 'templateMarket';
 
