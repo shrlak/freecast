@@ -67,7 +67,7 @@ export function LivePanel({ state, dispatch }: Props) {
         <button onClick={() => dispatch({ type: 'live/clearText' })} title="Clear slide (F2)"><span className="ti">T</span>Slide</button>
         <button onClick={() => dispatch({ type: 'live/clearBackground' })} title="Clear media (F3)"><span className="ti">▣</span>Media</button>
         <button onClick={() => dispatch({ type: 'prop/clearAll' })} title="Clear props (F4)"><span className="ti">◈</span>Props</button>
-        <button onClick={() => dispatch({ type: 'live/message', message: null })} title="Clear messages (F5)"><span className="ti">✉</span>Msg</button>
+        <button onClick={() => dispatch({ type: 'live/message', message: null })} title="Clear messages"><span className="ti">✉</span>Msg</button>
         <button disabled={!live.announcement} onClick={() => dispatch({ type: 'announce/stop' })} title="Stop announcements (F6)"><span className="ti">📣</span>Announce</button>
         <button onClick={() => dispatch({ type: 'audio/play', mediaId: null })} title="Stop audio"><span className="ti">♪</span>Audio</button>
         <button className={live.logo ? 'active' : ''} onClick={() => dispatch({ type: 'live/logo' })} title="Logo (L)"><span className="ti">◆</span>Logo</button>

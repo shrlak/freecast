@@ -1,10 +1,9 @@
 import type { CloudStatus } from '../useCloudSync';
 import type { ServiceUploads } from './useServiceUploads';
 
-export type Modal = 'teamRequests' | 'trash' | 'rehearsal' | 'remoteControl' | 'edit' | 'source' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'retreatBg' | 'chords' | 'sync' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'feedback' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | 'follow' | 'songStats' | 'ccli' | 'safeMode' | 'standby' | 'features' | 'templateMarket' | null;
+export type Modal = 'teamRequests' | 'trash' | 'rehearsal' | 'remoteControl' | 'edit' | 'source' | 'new' | 'themes' | 'bible' | 'ai' | 'screens' | 'sunday' | 'retreat' | 'retreatBg' | 'chords' | 'sync' | 'account' | 'confession' | 'aiUsage' | 'prayer' | 'song' | 'songNew' | 'songLibrary' | 'find' | 'restore' | 'preparation' | 'preflight' | 'activity' | 'follow' | 'songStats' | 'ccli' | 'safeMode' | 'standby' | 'settings' | 'templateMarket' | null;
 export type ImportKind = 'library' | 'slides' | 'lyrics' | 'backup';
 export type PptViewMode = 'normal' | 'sorter' | 'presenter';
-export type Layout = 'ppt' | 'classic';
 
 export interface OnlineStatus {
   status: 'loading' | 'ok' | 'error';
@@ -12,7 +11,7 @@ export interface OnlineStatus {
   error?: string;
 }
 
-/** Everything the ribbon / toolbars can do; implemented once in OperatorView. */
+/** Everything the ribbon can do; implemented once in OperatorView. */
 export interface Commands {
   open: (m: Modal) => void;
   notify: (msg: string) => void;
@@ -26,7 +25,6 @@ export interface Commands {
   startShow: (fromCurrent: boolean) => void;
   endShow: () => void;
   setView: (v: PptViewMode) => void;
-  setLayout: (l: Layout) => void;
   online: OnlineStatus;
   relayConnected: boolean;
   remoteCount: number;
@@ -47,7 +45,7 @@ export interface Commands {
   safeModeOn: boolean;
   standbyOn: boolean;
   followOn: boolean;
-  /** 실험 기능 turned on in 파일 → 실험 기능. */
+  /** 실험 기능 turned on in 설정 → 일반. */
   templateMarket: boolean;
 }
 

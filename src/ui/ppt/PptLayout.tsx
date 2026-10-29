@@ -10,6 +10,7 @@ import { CanvasEditor } from './CanvasEditor';
 import { SlideDesigner } from '../SlideDesigner';
 import { SlideGrid } from '../SlideGrid';
 import { LibraryPanel } from '../LibraryPanel';
+import { MediaBin } from '../MediaBin';
 import { Ribbon } from './Ribbon';
 import { PresenterView } from './PresenterView';
 import type { Commands } from './commands';
@@ -31,7 +32,7 @@ interface Props {
 /** PowerPoint-style window: ribbon, slide list, slide editor with notes, Format pane, status bar. */
 export function PptLayout({ state, dispatch, cmd }: Props) {
   const [sectionRequest, setSectionRequest] = useState<{ presentationId: string; ids: string[]; initialValue: string } | null>(null);
-  const [leftTab, setLeftTab] = useState<'slides' | 'library'>('slides');
+  const [leftTab, setLeftTab] = useState<'slides' | 'library' | 'media'>('slides');
   const [designing, setDesigning] = useState(false);
   /** The object selected on the canvas (shown in the Format pane). */
   const [selEl, setSelEl] = useState<string | null>(null);
@@ -237,10 +238,13 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
         <aside className="ppt-left">
           <div className="ppt-left-tabs">
             <button className={leftTab === 'slides' ? 'on' : ''} onClick={() => setLeftTab('slides')}>슬라이드</button>
-            <button className={leftTab === 'library' ? 'on' : ''} onClick={() => setLeftTab('library')}>라이브러리 · 재생목록</button>
+            <button className={leftTab === 'library' ? 'on' : ''} onClick={() => setLeftTab('library')} title="라이브러리 · 재생목록">라이브러리</button>
+            <button className={leftTab === 'media' ? 'on' : ''} onClick={() => setLeftTab('media')} title="배경 · 그림 · 영상 · 카메라">미디어</button>
           </div>
           {leftTab === 'library' ? (
             <LibraryPanel state={state} dispatch={dispatch} onNew={() => cmd.open('new')} online={cmd.online} onReloadOnline={cmd.reloadOnline} />
+          ) : leftTab === 'media' ? (
+            <MediaBin state={state} dispatch={dispatch} />
           ) : (
             <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick} multi={multi} onClickSlide={onClickSlide}
               heading={source && 'playlist' in source ? source.playlist.name : p?.title ?? ''}
@@ -265,11 +269,21 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
                 </div>
               ) : (
                 <div className="ppt-empty">
-                  <p>왼쪽 <b>라이브러리</b>에서 프레젠테이션을 고르거나, <b>예배</b> 탭에서 주일예배·수련회를 만드세요.</p>
-                  <div className="row gap-s">
-                    <button className="primary" onClick={() => cmd.open('sunday')}>⛪ 주일예배 만들기</button>
-                    <button onClick={() => cmd.open('retreat')}>⛺ 수련회 만들기</button>
-                    <button onClick={() => cmd.open('new')}>📄 새 프레젠테이션</button>
+                  <h2>무엇을 준비할까요?</h2>
+                  <p>왼쪽 <b>라이브러리</b>에서 프레젠테이션을 고르거나 아래에서 시작하세요. 파일을 창에 끌어다 놓으면 이번 주 예배에 바로 들어갑니다.</p>
+                  <div className="ppt-start">
+                    <button className="ppt-start-card primary" onClick={() => cmd.service.open()}>
+                      <span className="ppt-start-icon">⛪</span><b>이번 주 예배 열기</b><small>교회 템플릿으로 주일예배를 열고 콘티 · 가사 · 설교를 올립니다</small>
+                    </button>
+                    <button className="ppt-start-card" onClick={() => cmd.open('sunday')}>
+                      <span className="ppt-start-icon">📝</span><b>주일예배 마법사</b><small>순서 · 찬양 · 광고를 단계별로 채웁니다</small>
+                    </button>
+                    <button className="ppt-start-card" onClick={() => cmd.open('retreat')}>
+                      <span className="ppt-start-icon">⛺</span><b>수련회 만들기</b><small>주제에 어울리는 움직이는 배경까지</small>
+                    </button>
+                    <button className="ppt-start-card" onClick={() => cmd.open('new')}>
+                      <span className="ppt-start-icon">📄</span><b>새 프레젠테이션</b><small>빈 슬라이드에서 시작합니다</small>
+                    </button>
                   </div>
                 </div>
               )}
@@ -330,8 +344,7 @@ function StatusBar({ cmd, text }: { cmd: Commands; text: string }) {
       </button>
       <button className={`ppt-cloud ppt-lock ${cmd.locked ? 'on' : ''}`} onClick={() => cmd.setLocked(!cmd.locked)}
         title={cmd.locked ? '잠금 켜짐: 화면에 표시 중에는 Enter·Delete로 슬라이드를 추가/삭제하지 않습니다 (클릭하면 해제)' : '잠금 꺼짐 (클릭하면 켜기)'}>{cmd.locked ? '🔒 잠금' : '🔓 잠금 해제됨'}</button>
-      <button className="ppt-cloud" onClick={() => cmd.open('feedback')} title="고칠 점·원하는 기능을 개발자에게 보내기">💬 피드백</button>
-      <span title={cmd.relayConnected ? '리모컨 연결됨' : '리모컨 오프라인'}><span className={`dot ${cmd.relayConnected ? 'on' : ''}`} /></span>
+      <span title={cmd.relayConnected ? '리모컨 연결됨' : '리모컨 오프라인'}><span className={`dot ${cmd.relayConnected ? 'ok' : ''}`} /></span>
       <span className="ppt-views">
         <button className={cmd.view === 'normal' ? 'on' : ''} title="기본" onClick={() => cmd.setView('normal')}>▭</button>
         <button className={cmd.view === 'sorter' ? 'on' : ''} title="여러 슬라이드" onClick={() => cmd.setView('sorter')}>▦</button>

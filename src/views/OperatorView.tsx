@@ -23,17 +23,13 @@ import { ServicePreparationModal } from '../ui/ServicePreparationModal';
 import { FindPalette } from '../ui/FindPalette';
 import { RestorePointsModal } from '../ui/RestorePointsModal';
 import { useLiveBroadcast, useRelay } from '../ui/hooks';
-import { LibraryPanel } from '../ui/LibraryPanel';
-import { SlideGrid } from '../ui/SlideGrid';
-import { LivePanel } from '../ui/LivePanel';
-import { MediaBin } from '../ui/MediaBin';
 import { SlideEditorModal } from '../ui/SlideEditorModal';
 import { isSong } from '../domain/templates/fill';
 import { EditorModal } from '../ui/EditorModal';
 import { ThemeModal } from '../ui/ThemeModal';
 import { BibleModal } from '../ui/BibleModal';
 import { AiModal } from '../ui/AiModal';
-import { ScreensModal } from '../ui/ScreensModal';
+import { SettingsModal } from '../ui/SettingsModal';
 import { SongLibraryModal } from '../ui/sunday/SongLibraryModal';
 import { SundayWizard } from '../ui/sunday/SundayWizard';
 import { RetreatWizard } from '../ui/RetreatWizard';
@@ -49,7 +45,6 @@ import { filesToSlides } from '../ui/importFiles';
 import { remoteInfoMessages, remotePositionMessage, remoteSlideInfo } from '../domain/remoteSlides';
 import { mediaIdsFor, resetSentMedia, sendMediaToRemotes } from '../domain/remoteMedia';
 import { useMidi } from '../ui/midi';
-import { ClassicToolbar } from '../ui/ClassicToolbar';
 import { UpdateBanner } from '../ui/UpdateBanner';
 import { useCloudSync } from '../ui/useCloudSync';
 import { deleteMedia, forgetMediaUrl } from '../domain/media';
@@ -58,20 +53,18 @@ import { useServiceUploads } from '../ui/ppt/useServiceUploads';
 import { AccountModal } from '../ui/AccountModal';
 import { ConfessionSetting } from '../ui/sunday/ConfessionSetting';
 import { AiUsage } from '../ui/AiUsage';
-import { FeedbackModal } from '../ui/FeedbackModal';
 import { PrayerSetting } from '../ui/sunday/PrayerSetting';
 import { SongEditor } from '../ui/sunday/SongEditor';
 import { reviewNote } from '../ui/ppt/contiReview';
 import { PptLayout } from '../ui/ppt/PptLayout';
 import { presentOutput } from '../ui/LivePanel';
 import { desktop } from '../domain/desktop';
-import type { Commands, Layout, Modal, PptViewMode } from '../ui/ppt/commands';
+import type { Commands, Modal, PptViewMode } from '../ui/ppt/commands';
 import { FollowDock } from '../ui/FollowDock';
 import { SongStatsModal } from '../ui/SongStatsModal';
 import { CcliModal } from '../ui/CcliModal';
 import { SafeModeModal } from '../ui/SafeModeModal';
 import { StandbyBar, StandbyModal } from '../ui/StandbyModal';
-import { ExperimentalModal } from '../ui/ExperimentalModal';
 import { TemplateMarketModal } from '../ui/TemplateMarketModal';
 import { loadSafeMode, safeModeBlock, saveSafeMode, type SafeModeState } from '../domain/safeMode';
 import { loadStandby, saveStandby, useStandby, type StandbyConfig } from '../ui/useStandby';
@@ -83,7 +76,7 @@ const KEYS: Record<string, Action> = {
   ArrowRight: { type: 'live/next' }, ArrowDown: { type: 'live/next' }, PageDown: { type: 'live/next' }, ' ': { type: 'live/next' },
   ArrowLeft: { type: 'live/prev' }, ArrowUp: { type: 'live/prev' }, PageUp: { type: 'live/prev' },
   F1: { type: 'live/clearAll' }, F2: { type: 'live/clearText' }, F3: { type: 'live/clearBackground' },
-  F4: { type: 'prop/clearAll' }, F5: { type: 'live/message', message: null }, F6: { type: 'announce/stop' },
+  F4: { type: 'prop/clearAll' }, F6: { type: 'announce/stop' },
   b: { type: 'live/toggleBlack' }, B: { type: 'live/toggleBlack' }, l: { type: 'live/logo' }, L: { type: 'live/logo' },
 };
 
@@ -118,14 +111,12 @@ export function OperatorView() {
   const [toast, setToast] = useState<string | null>(null);
   const [midiOn, setMidiOn] = useState(() => localStorage.getItem('freecast.midi') === '1');
   const [online, setOnline] = useState<{ status: 'loading' | 'ok' | 'error'; count: number; error?: string }>({ status: 'loading', count: 0 });
-  const [layout, setLayoutState] = useState<Layout>(() => (localStorage.getItem('freecast.layout') as Layout) || 'ppt');
   const [view, setView] = useState<PptViewMode>('normal');
   const [slideId, setSlideIdState] = useState<string | null>(null);
   const [slideSeq, setSlideSeq] = useState<number | null>(null);
   const setSlideId = (id: string | null, seq?: number) => { setSlideIdState(id); setSlideSeq(seq ?? null); };
   const [locked, setLockedState] = useState(() => localStorage.getItem('freecast.lock') !== '0');
   const setLocked = (on: boolean) => { localStorage.setItem('freecast.lock', on ? '1' : '0'); setLockedState(on); };
-  const setLayout = (l: Layout) => { localStorage.setItem('freecast.layout', l); setLayoutState(l); };
   const fileRef = useRef<HTMLInputElement>(null);
   const importKind = useRef<'library' | 'slides' | 'lyrics' | 'backup'>('slides');
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -411,14 +402,12 @@ export function OperatorView() {
         return;
       }
       if (modal || isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (layoutRef.current === 'ppt') {
-        if (e.key === 'F5') {
-          e.preventDefault();
-          startShowRef.current(e.shiftKey);
-          return;
-        }
-        if (viewRef.current !== 'presenter' && ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp', ' '].includes(e.key)) return;
+      if (e.key === 'F5') {
+        e.preventDefault();
+        startShowRef.current(e.shiftKey);
+        return;
       }
+      if (viewRef.current !== 'presenter' && ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'PageDown', 'PageUp', ' '].includes(e.key)) return;
       // Slide hotkeys of the selected presentation win over global keys.
       const sel = state.library.presentations.find((p) => p.id === state.selectedId);
       if (sel && e.key.length === 1) {
@@ -467,8 +456,6 @@ export function OperatorView() {
   startShowRef.current = startShow;
   const endShowRef = useRef(endShow);
   endShowRef.current = endShow;
-  const layoutRef = useRef(layout);
-  layoutRef.current = layout;
   const viewRef = useRef(view);
   viewRef.current = view;
 
@@ -579,7 +566,6 @@ export function OperatorView() {
     startShow,
     endShow,
     setView,
-    setLayout,
     online,
     relayConnected: relay.connected,
     remoteCount: remotes,
@@ -597,23 +583,9 @@ export function OperatorView() {
   notifyRef.current = notify;
 
   return (
-    <div className={`app ${layout === 'ppt' ? 'app-ppt' : ''}`}>
+    <div className="app app-ppt">
       <input ref={fileRef} type="file" multiple hidden onChange={(e) => onFiles(Array.from(e.target.files ?? []))} />
-      {layout === 'ppt' ? (
-        <PptLayout state={state} dispatch={dispatch} cmd={cmd} />
-      ) : (
-        <>
-          <ClassicToolbar state={state} dispatch={dispatch} cmd={cmd} hasSelection={!!selected} />
-          <div className="workspace">
-            <LibraryPanel state={state} dispatch={dispatch} onNew={() => setModal('new')} online={online} onReloadOnline={loadOnline} />
-            <div className="center-col">
-              <SlideGrid state={state} dispatch={dispatch} locked={locked} onEdit={() => selected && setModal('edit')} onEditSlide={(id, seq) => { setSlideId(id, seq); setModal('edit'); }} onThemes={() => setModal('themes')} notify={notify} />
-              <MediaBin state={state} dispatch={dispatch} />
-            </div>
-            <LivePanel state={state} dispatch={dispatch} />
-          </div>
-        </>
-      )}
+      <PptLayout state={state} dispatch={dispatch} cmd={cmd} />
       {dragging && (
         <div className="drop-overlay">
           <div>
@@ -628,7 +600,6 @@ export function OperatorView() {
       {modal === 'ccli' && <CcliModal library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
       {modal === 'safeMode' && <SafeModeModal library={state.library} playlistId={state.activePlaylistId} safe={safe} onChange={setSafe} notify={notify} onClose={() => setModal(null)} />}
       {modal === 'standby' && <StandbyModal config={standbyConfig} feed={standby} onChange={setStandby} onTakeOver={takeOver} onClose={() => setModal(null)} />}
-      {modal === 'features' && <ExperimentalModal onChange={() => setMarketOn(featureEnabled('templateMarket'))} onClose={() => setModal(null)} />}
       {modal === 'templateMarket' && marketOn && <TemplateMarketModal library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
       {followOn && <FollowDock state={state} dispatch={dispatch} onClose={() => setFollowOn(false)} />}
       <StandbyBar feed={standby} onTakeOver={takeOver} onOpen={() => setModal('standby')} />
@@ -666,9 +637,10 @@ export function OperatorView() {
         }} />
       )}
       {modal === 'ai' && <AiModal onClose={() => setModal(null)} onCreate={(p) => { dispatch({ type: 'presentation/create', presentation: p }); setModal(null); }} />}
-      {modal === 'screens' && (
-        <ScreensModal state={state} dispatch={dispatch} relayConnected={relay.connected} midi={midiOn}
-          onMidi={(on) => { setMidiOn(on); localStorage.setItem('freecast.midi', on ? '1' : '0'); }} onClose={() => setModal(null)} />
+      {(modal === 'settings' || modal === 'screens') && (
+        <SettingsModal state={state} dispatch={dispatch} relayConnected={relay.connected} midi={midiOn} initialPage={modal === 'screens' ? 'outputs' : 'general'}
+          onMidi={(on) => { setMidiOn(on); localStorage.setItem('freecast.midi', on ? '1' : '0'); }}
+          onFeatures={() => setMarketOn(featureEnabled('templateMarket'))} onClose={() => setModal(null)} />
       )}
       {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}
       {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
@@ -712,7 +684,6 @@ export function OperatorView() {
         <RestorePointsModal library={state.library} notify={notify} onClose={() => setModal(null)}
           onRestore={(lib) => { dispatch({ type: 'library/replace', library: lib }); notify('복원했습니다 (⌘Z로 되돌릴 수 있습니다)'); }} />
       )}
-      {modal === 'feedback' && <FeedbackModal notify={notify} onClose={() => setModal(null)} />}
       {modal === 'confession' && <ConfessionSetting library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} />}
 
     </div>
