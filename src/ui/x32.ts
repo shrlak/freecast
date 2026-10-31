@@ -72,10 +72,28 @@ class X32Hub {
     return this.post<{ found: { ip: string; name: string | null; model: string | null }[] }>('scan').then((r) => r.found ?? []);
   }
 
+  /** Ask the mixer for values (a strip's processing when its editor opens); answers arrive as events. */
+  read(addresses: string[]) {
+    if (this.state.status !== 'connected' || !addresses.length) return Promise.resolve();
+    return this.post('read', { addresses }).then(() => undefined, (e: Error) => { this.patch({ error: e.message }); });
+  }
+
+  private pending: Record<string, { value: number; timer: ReturnType<typeof setTimeout> | null }> = {};
+  /** For knobs and faders being dragged: sends at most every 50 ms, and always the last position. */
+  setSoon(address: string, value: number) {
+    const p = this.pending[address] ?? (this.pending[address] = { value, timer: null });
+    p.value = value;
+    if (p.timer) { this.patch({ values: { ...this.state.values, [address]: value } }); return; }
+    this.set(address, value);
+    p.timer = setTimeout(() => { p.timer = null; if (this.sent[address] !== p.value) this.set(address, p.value); }, 50);
+  }
+  private sent: Record<string, number> = {};
+
   /** Change a mute, fader or scene on the mixer; shown at once, then confirmed by the server. */
   set(address: string, value: number) {
     if (this.state.status !== 'connected') return Promise.resolve(false);
     this.patch({ values: { ...this.state.values, [address]: value } });
+    this.sent[address] = value;
     return this.post('set', { address, value }).then(() => true, (e: Error) => { this.patch({ error: e.message }); return false; });
   }
 }

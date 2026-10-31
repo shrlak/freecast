@@ -345,6 +345,9 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="▦" label="멀티뷰" onClick={() => window.open(`${location.origin}/?view=multiview`, 'freecast-multiview', 'popup,width=1280,height=760')} />
               <Big icon="⚙" label="출력 설정" title="출력 화면 · 모니터 · 무대 화면 설정" onClick={() => cmd.open('screens')} />
             </Group>
+            <Group label="음향">
+              <Big icon="🎚" label="X32 믹서" title="볼륨 · 뮤트 · 게인 · 로우 컷 · 컴프레서 · EQ · 모니터 · 장면" onClick={() => cmd.open('mixer')} />
+            </Group>
             <Group label="화면">
               <Small icon="■" label="검은 화면 (B)" active={state.live.black} onClick={() => dispatch({ type: 'live/toggleBlack' })} />
               <Small icon="◆" label="로고 (L)" active={state.live.logo} onClick={() => dispatch({ type: 'live/logo' })} />

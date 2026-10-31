@@ -45,6 +45,7 @@ import { filesToSlides } from '../ui/importFiles';
 import { remoteInfoMessages, remotePositionMessage, remoteSlideInfo } from '../domain/remoteSlides';
 import { mediaIdsFor, resetSentMedia, sendMediaToRemotes } from '../domain/remoteMedia';
 import { x32 } from '../ui/x32';
+import { MixerModal } from '../ui/MixerModal';
 import { loadX32Settings, saveX32Settings, type X32Settings } from '../domain/x32';
 import { UpdateBanner } from '../ui/UpdateBanner';
 import { useCloudSync } from '../ui/useCloudSync';
@@ -643,6 +644,7 @@ export function OperatorView() {
           setModal(null);
         }} />
       )}
+      {modal === 'mixer' && <MixerModal onClose={() => setModal(null)} />}
       {modal === 'ai' && <AiModal onClose={() => setModal(null)} onCreate={(p) => { dispatch({ type: 'presentation/create', presentation: p }); setModal(null); }} />}
       {(modal === 'settings' || modal === 'screens') && (
         <SettingsModal state={state} dispatch={dispatch} relayConnected={relay.connected} mixer={mixer} initialPage={modal === 'screens' ? 'outputs' : 'general'}
