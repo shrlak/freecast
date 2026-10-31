@@ -1,4 +1,5 @@
 import { isPdfSlide, PDF_READ_ONLY } from '../../domain/importedSlides';
+import { openMixerWindow } from '../MixerPanel';
 import { MaterialProtectionButton } from '../MaterialProtection';
 import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
 import { formatStoragePercent } from '../../domain/cloudStorage';
@@ -346,7 +347,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="⚙" label="출력 설정" title="출력 화면 · 모니터 · 무대 화면 설정" onClick={() => cmd.open('screens')} />
             </Group>
             <Group label="음향">
-              <Big icon="🎚" label="X32 믹서" title="볼륨 · 뮤트 · 게인 · 로우 컷 · 컴프레서 · EQ · 모니터 · 장면" onClick={() => cmd.open('mixer')} />
+              <Big icon="🎚" label="X32 믹서 ↗" title="새 창 (다른 창 위에 항상 표시) — 볼륨 · 뮤트 · 게인 · 로우 컷 · 컴프레서 · EQ · 모니터 · 장면" onClick={openMixerWindow} />
             </Group>
             <Group label="화면">
               <Small icon="■" label="검은 화면 (B)" active={state.live.black} onClick={() => dispatch({ type: 'live/toggleBlack' })} />

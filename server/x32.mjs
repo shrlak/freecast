@@ -75,8 +75,8 @@ function broadcastAddresses() {
 const two = (n) => String(n).padStart(2, '0');
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const STRIPS = [
-  ...range(1, 32).map((n) => `ch/${two(n)}`), ...range(1, 8).map((n) => `auxin/${two(n)}`),
-  ...range(1, 16).map((n) => `bus/${two(n)}`), 'main/st',
+  ...range(1, 32).map((n) => `ch/${two(n)}`), ...range(1, 8).map((n) => `auxin/${two(n)}`), ...range(1, 8).map((n) => `fxrtn/${two(n)}`),
+  ...range(1, 16).map((n) => `bus/${two(n)}`), ...range(1, 6).map((n) => `mtx/${two(n)}`), 'main/st', 'main/m',
 ];
 /**
  * What FreeCast reads on connecting: every strip's name, mute, fader and pan, DCAs, scene names and the
@@ -84,13 +84,13 @@ const STRIPS = [
  * editor opens (see read), and /xremote keeps everything current afterwards.
  */
 export const SNAPSHOT = [
-  ...STRIPS.flatMap((s) => [...(s === 'main/st' ? [] : [`/${s}/config/name`]), `/${s}/mix/on`, `/${s}/mix/fader`, `/${s}/mix/pan`]),
-  ...range(1, 8).flatMap((n) => [`/dca/${n}/config/name`, `/dca/${n}/on`, `/dca/${n}/fader`]),
+  ...STRIPS.flatMap((s) => [...(s.startsWith('main/') ? [] : [`/${s}/config/name`, `/${s}/config/color`]), `/${s}/mix/on`, `/${s}/mix/fader`, ...(s === 'main/m' ? [] : [`/${s}/mix/pan`])]),
+  ...range(1, 8).flatMap((n) => [`/dca/${n}/config/name`, `/dca/${n}/config/color`, `/dca/${n}/on`, `/dca/${n}/fader`]),
   ...range(0, 99).map((n) => `/-show/showfile/scene/${String(n).padStart(3, '0')}/name`),
   '/-show/prepos/current',
 ];
 
-const STRIP = '(?:ch\\/(?:0[1-9]|[12]\\d|3[0-2])|auxin\\/0[1-8]|bus\\/(?:0[1-9]|1[0-6])|main\\/st)';
+const STRIP = '(?:ch\\/(?:0[1-9]|[12]\\d|3[0-2])|auxin\\/0[1-8]|fxrtn\\/0[1-8]|bus\\/(?:0[1-9]|1[0-6])|mtx\\/0[1-6]|main\\/(?:st|m))';
 const SEND = '(?:0[1-9]|1[0-6])';
 /**
  * Everything FreeCast may change, as [pattern, kind]: 'f' = float 0–1 (faders, knobs; the X32 maps it to
@@ -109,7 +109,7 @@ const SETTABLE = [
   ['-action\\/goscene', 99],
 ].map(([re, kind]) => [new RegExp(`^\\/${re}$`), kind]);
 const READABLE = [
-  new RegExp(`^\\/(?:${STRIP}|dca\\/[1-8])\\/config\\/name$`),
+  new RegExp(`^\\/(?:${STRIP}|dca\\/[1-8])\\/config\\/(?:name|color)$`),
   /^\/-show\/showfile\/scene\/\d{3}\/name$/, /^\/-show\/prepos\/current$/,
 ];
 

@@ -8,21 +8,25 @@ export type X32Step = Extract<MacroStep, { type: 'x32' }>;
 export type X32Values = Record<string, number | string>;
 
 export interface X32Strip {
-  /** 'ch/05', 'auxin/02', 'bus/03', 'dca/2' or 'main/st'. */
+  /** 'ch/05', 'auxin/02', 'fxrtn/01', 'bus/03', 'mtx/02', 'dca/2', 'main/st' or 'main/m'. */
   id: string;
-  kind: 'ch' | 'auxin' | 'bus' | 'dca' | 'main';
+  kind: 'ch' | 'auxin' | 'fxrtn' | 'bus' | 'mtx' | 'dca' | 'main';
   label: string;
 }
 
 const two = (n: number) => String(n).padStart(2, '0');
 const strips = (count: number, kind: X32Strip['kind'], label: string, pad = true) =>
   Array.from({ length: count }, (_, i): X32Strip => ({ id: `${kind}/${pad ? two(i + 1) : i + 1}`, kind, label: `${label} ${pad ? two(i + 1) : i + 1}` }));
+/** Every fader of the X32, in console order. */
 export const X32_STRIPS: X32Strip[] = [
-  { id: 'main/st', kind: 'main', label: 'Main LR' },
-  ...strips(8, 'dca', 'DCA', false),
-  ...strips(16, 'bus', 'Bus'),
   ...strips(32, 'ch', 'Ch'),
   ...strips(8, 'auxin', 'Aux'),
+  ...strips(8, 'fxrtn', 'FX'),
+  ...strips(16, 'bus', 'Bus'),
+  ...strips(6, 'mtx', 'Mtx'),
+  ...strips(8, 'dca', 'DCA', false),
+  { id: 'main/m', kind: 'main', label: 'M/C' },
+  { id: 'main/st', kind: 'main', label: 'Main LR' },
 ];
 export const isStrip = (id: unknown): id is string => typeof id === 'string' && X32_STRIPS.some((s) => s.id === id);
 
@@ -42,6 +46,42 @@ export function stripName(id: string, values: X32Values): string {
   const name = strip && strip.kind !== 'main' ? values[stripAddress(id, 'name')] : undefined;
   return typeof name === 'string' && name.trim() ? `${label} · ${name.trim()}` : label;
 }
+
+/** The scribble-strip name alone (“Pastor”), or the strip's label when it has none (“Ch 05”). */
+export function shortName(id: string, values: X32Values): string {
+  const strip = X32_STRIPS.find((s) => s.id === id);
+  const name = strip && strip.kind !== 'main' ? values[stripAddress(id, 'name')] : undefined;
+  return typeof name === 'string' && name.trim() ? name.trim() : strip?.label ?? id;
+}
+
+/**
+ * Scribble-strip colour as the console shows it (config/color 0–15: off, red, green, yellow, blue,
+ * magenta, cyan, white; 8–15 the same, inverted).
+ */
+const SCRIBBLE = ['#1b1d22', '#e5484d', '#3dbb6b', '#f2c94c', '#3b82f6', '#d946ef', '#22d3ee', '#f1f5f9'];
+export function scribbleColor(id: string, values: X32Values): { background: string; color: string; inverted: boolean } {
+  const raw = values[`/${id}/config/color`];
+  const n = typeof raw === 'number' && raw >= 0 && raw <= 15 ? raw : 0;
+  const hue = SCRIBBLE[n % 8];
+  const inverted = n >= 8;
+  const dark = n % 8 === 0;
+  if (inverted) return { background: '#0b0c0f', color: dark ? '#9aa0aa' : hue, inverted };
+  return { background: hue, color: dark || n % 8 === 4 || n % 8 === 5 || n % 8 === 1 ? '#f8fafc' : '#0b0c0f', inverted };
+}
+
+/** Move a fader by whole dB, as the arrow keys do (always at least one fader step, never past +10 / −∞). */
+export function nudgeFader(f: number, deltaDb: number): number {
+  const db = faderToDb(f);
+  const from = Number.isFinite(db) ? db : -90;
+  const next = dbToFader(Math.max(-90, Math.min(10, from + deltaDb)));
+  const step = 1 / 1023;
+  if (deltaDb > 0) return Math.min(1, Math.max(next, f + step));
+  return Math.max(0, Math.min(next, f - step));
+}
+
+/** The dB marks printed beside an X32 fader, at their fader positions. */
+export const FADER_MARKS: { label: string; at: number }[] = [10, 5, 0, -5, -10, -20, -30, -40, -50].map((db) => ({ label: db > 0 ? `+${db}` : String(db), at: dbToFader(db) }))
+  .concat([{ label: '−∞', at: 0 }]);
 
 /** Monitor mix names for the sends: “Bus 03 · 드럼 모니터”. */
 export const busName = (n: number, values: X32Values) => stripName(`bus/${two(n)}`, values);
@@ -118,7 +158,8 @@ const SENDS: X32Section = {
 export function stripSections(kind: X32Strip['kind']): X32Section[] {
   if (kind === 'ch') return [PREAMP, GATE, DYN, eq(4), SENDS];
   if (kind === 'auxin') return [{ ...PREAMP, title: '게인', params: PREAMP.params.filter((p) => p.key === 'preamp/trim' || p.key === 'preamp/invert') }, eq(4), SENDS];
-  if (kind === 'bus' || kind === 'main') return [DYN, eq(6)];
+  if (kind === 'fxrtn') return [eq(4), SENDS];
+  if (kind === 'bus' || kind === 'mtx' || kind === 'main') return [DYN, eq(6)];
   return [];
 }
 
@@ -126,7 +167,7 @@ export function stripSections(kind: X32Strip['kind']): X32Section[] {
 export function stripAddresses(id: string): string[] {
   const strip = X32_STRIPS.find((s) => s.id === id);
   if (!strip || strip.kind === 'dca') return [];
-  const out = [`/${id}/mix/pan`];
+  const out = id === 'main/m' ? [] : [`/${id}/mix/pan`];
   for (const sec of stripSections(strip.kind)) {
     if (sec.on) out.push(`/${id}/${sec.on}`);
     for (const p of [...sec.params, ...(sec.bands ?? []).flatMap((b) => b.params)]) out.push(`/${id}/${p.key}`);

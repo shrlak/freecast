@@ -198,6 +198,7 @@ const isCovering = (win) => (isMac ? win.isSimpleFullScreen() : win.isFullScreen
 function openView(url, displayId, present = false) {
   const u = new URL(url, origin());
   if (u.origin !== origin()) return;
+  if (u.searchParams.get('view') === 'mixer') return openMixer();
   const key = `${u.searchParams.get('view')}:${u.searchParams.get('screen') ?? ''}:${u.searchParams.get('layout') ?? ''}`;
   const screenId = u.searchParams.get('screen') ?? u.searchParams.get('view');
   if (displayId === undefined) displayId = settings.outputDisplays[screenId];
@@ -247,6 +248,29 @@ function openView(url, displayId, present = false) {
   return win;
 }
 
+/**
+ * The X32 mixer in its own window, floating above the console, the slide show and other apps so the
+ * sound can be worked at any moment (📌 in the window lets it go behind again).
+ */
+let mixerWindow = null;
+function openMixer() {
+  if (mixerWindow && !mixerWindow.isDestroyed()) {
+    mixerWindow.show();
+    mixerWindow.focus();
+    return mixerWindow;
+  }
+  const win = new BrowserWindow({
+    width: 1280, height: 660, minWidth: 480, minHeight: 360, title: 'FreeCast — X32 믹서', backgroundColor: '#1c1e23',
+    autoHideMenuBar: true, icon: APP_ICON, alwaysOnTop: true, show: false, webPreferences,
+  });
+  win.setAlwaysOnTop(true, 'floating');
+  win.on('closed', () => { if (mixerWindow === win) mixerWindow = null; });
+  win.loadURL(`${origin()}/?view=mixer`);
+  win.once('ready-to-show', () => win.show());
+  mixerWindow = win;
+  return win;
+}
+
 /** The window a slide show opened itself (closed again when the show ends, like PowerPoint). */
 let showKey = null;
 function closeShow() {
@@ -271,6 +295,7 @@ function buildMenu() {
       submenu: [
         { label: 'Open Audience Output', accelerator: 'CmdOrCtrl+1', click: () => openView(`${origin()}/?view=output`) },
         { label: 'Open Stage Display', accelerator: 'CmdOrCtrl+2', click: () => openView(`${origin()}/?view=stage`) },
+        { label: 'Open X32 Mixer', accelerator: 'CmdOrCtrl+3', click: () => openMixer() },
         { label: 'Close All Outputs', accelerator: 'CmdOrCtrl+Shift+W', click: () => viewWindows.forEach((w) => w.close()) },
         { type: 'separator' },
         { label: 'Open Data Folder', click: () => shell.openPath(app.getPath('userData')) },
@@ -299,7 +324,7 @@ function createMainWindow() {
     } catch {
       return { action: 'deny' };
     }
-    if (u.origin === origin() && ['output', 'stage', 'remote', 'multiview'].includes(u.searchParams.get('view') ?? '')) openView(url);
+    if (u.origin === origin() && ['output', 'stage', 'remote', 'multiview', 'mixer'].includes(u.searchParams.get('view') ?? '')) openView(url);
     else if (u.protocol === 'https:' || u.protocol === 'http:') shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -356,6 +381,13 @@ ipcMain.handle('desktop:pptToPptx', (e, bytes) => (fromMain(e) && bytes instance
 ipcMain.handle('desktop:openView', (e, url, displayId) => {
   if (!fromMain(e) || typeof url !== 'string') return;
   openView(url, typeof displayId === 'number' ? displayId : displayId === null ? null : undefined);
+});
+// The mixer window's 📌: keep it above everything, or let it go behind like a normal window.
+ipcMain.handle('desktop:setOnTop', (e, on) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!fromMain(e) || !win || win !== mixerWindow) return false;
+  if (typeof on === 'boolean') win.setAlwaysOnTop(on, 'floating');
+  return win.isAlwaysOnTop();
 });
 ipcMain.handle('desktop:present', (e, url) => {
   if (!fromMain(e) || typeof url !== 'string') return;
