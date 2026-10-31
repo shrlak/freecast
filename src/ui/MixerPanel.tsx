@@ -1,23 +1,51 @@
 import { useState } from 'react';
-import { CURRENT_SCENE, formatDb, SCENE_ADDRESS, sceneName, stripAddress, stripName, X32_STRIPS, type X32Strip } from '../domain/x32';
+import { CURRENT_SCENE, formatDb, SCENE_ADDRESS, sceneName, scribbleColor, shortName, stripAddress, X32_STRIPS, type X32Strip } from '../domain/x32';
+import { Fader, LitButton } from './X32Controls';
 import { useX32, x32 } from './x32';
 import { X32StripModal } from './X32StripModal';
 
 const SCENES = Array.from({ length: 100 }, (_, i) => i);
-const GROUPS: { kind: X32Strip['kind'][]; title: string }[] = [
-  { kind: ['main', 'dca'], title: 'Main · DCA' },
-  { kind: ['ch'], title: '채널' },
-  { kind: ['auxin'], title: 'Aux In' },
-  { kind: ['bus'], title: '버스 (모니터)' },
+/** The fader layers of the console surface. */
+const LAYERS: { id: string; label: string; strips: (s: X32Strip) => boolean }[] = [
+  { id: 'ch1', label: 'CH 1-16', strips: (s) => s.kind === 'ch' && Number(s.id.slice(3)) <= 16 },
+  { id: 'ch17', label: 'CH 17-32', strips: (s) => s.kind === 'ch' && Number(s.id.slice(3)) > 16 },
+  { id: 'aux', label: 'AUX IN', strips: (s) => s.kind === 'auxin' },
+  { id: 'bus1', label: 'BUS 1-8', strips: (s) => s.kind === 'bus' && Number(s.id.slice(4)) <= 8 },
+  { id: 'bus9', label: 'BUS 9-16', strips: (s) => s.kind === 'bus' && Number(s.id.slice(4)) > 8 },
+  { id: 'dca', label: 'DCA 1-8', strips: (s) => s.kind === 'dca' },
 ];
 
+/** One channel strip of the surface: SEL, scribble strip, MUTE, fader. */
+function Strip({ strip, selected, onSelect, master }: { strip: X32Strip; selected: boolean; onSelect: () => void; master?: boolean }) {
+  const mixer = useX32();
+  const v = mixer.values;
+  const onAddr = stripAddress(strip.id, 'on');
+  const faderAddr = stripAddress(strip.id, 'fader');
+  const muted = v[onAddr] === 0;
+  const fader = typeof v[faderAddr] === 'number' ? (v[faderAddr] as number) : 0;
+  const name = shortName(strip.id, v);
+  const scribble = scribbleColor(strip.id, v);
+  return (
+    <div className={`x32-strip ${master ? 'master' : ''} ${selected ? 'selected' : ''}`}>
+      <LitButton tone="green" on={selected} onClick={onSelect} title={strip.kind === 'dca' ? 'DCA는 페이더 · 뮤트만 있습니다' : '게인 · 로우 컷 · 게이트 · 컴프레서 · EQ · 센드'} disabled={strip.kind === 'dca'}>SEL</LitButton>
+      <div className="x32-scribble" style={{ background: master ? '#f1f5f9' : scribble.background, color: master ? '#0b0c0f' : scribble.color }} title={name}>
+        <small>{strip.label}</small>
+        <b>{name === strip.label ? '' : name}</b>
+      </div>
+      <LitButton tone="red" on={muted} onClick={() => x32.set(onAddr, muted ? 1 : 0)}>MUTE</LitButton>
+      <Fader value={fader} label={`${strip.label} ${name} 페이더`} readout={formatDb(fader)} onChange={(f) => x32.setSoon(faderAddr, f)} />
+      <span className="x32-readout">{formatDb(fader).replace(' dB', '')}</span>
+    </div>
+  );
+}
+
 /**
- * The X32 by hand: faders and mutes of every strip, scene recall, and each strip's full editor
- * (gain, low cut, gate, compressor, EQ, monitor sends) — the same things as on the console.
+ * The X32 surface: fader layers like the console (CH 1-16, CH 17-32, AUX IN, BUS, DCA), the main LR
+ * fader on the right, scene recall, and SEL to open a strip's processing.
  */
 export function MixerPanel() {
   const mixer = useX32();
-  const [allStrips, setAllStrips] = useState(false);
+  const [layer, setLayer] = useState('ch1');
   const [editing, setEditing] = useState<string | null>(null);
   const current = mixer.values[CURRENT_SCENE];
   const [scene, setScene] = useState<number>(typeof current === 'number' ? current : 0);
@@ -31,54 +59,29 @@ export function MixerPanel() {
     );
   }
 
-  const named = (s: X32Strip) => {
-    const n = mixer.values[stripAddress(s.id, 'name')];
-    return typeof n === 'string' && n.trim() !== '';
-  };
-  const shown = (s: X32Strip) => s.kind === 'main' || s.kind === 'dca' || allStrips || named(s);
+  const strips = X32_STRIPS.filter(LAYERS.find((l) => l.id === layer)!.strips);
+  const main = X32_STRIPS.find((s) => s.id === 'main/st')!;
 
   return (
-    <div className="stack mixer-panel">
-      <div className="row gap-xs">
-        <span className="dot on" />
-        <strong className="grow truncate">X32 {mixer.name ?? mixer.ip}</strong>
-        {typeof current === 'number' && <span className="muted small">장면 {sceneName(current, mixer.values)}</span>}
-      </div>
-      <div className="row gap-xs">
-        <select className="grow" aria-label="장면" value={scene} onChange={(e) => setScene(Number(e.target.value))}>
+    <div className="x32-console">
+      <div className="x32-topbar">
+        <span className="x32-led on" aria-hidden />
+        <strong className="x32-lcd">X32 · {mixer.name ?? mixer.ip}{typeof current === 'number' ? ` · 장면 ${sceneName(current, mixer.values)}` : ''}</strong>
+        <select className="x32-select" aria-label="장면" value={scene} onChange={(e) => setScene(Number(e.target.value))}>
           {SCENES.map((n) => <option key={n} value={n}>{sceneName(n, mixer.values)}</option>)}
         </select>
-        <button onClick={() => { if (confirm(`X32 장면 ${sceneName(scene, mixer.values)}을(를) 불러올까요? 믹서 설정이 그 장면으로 바뀝니다.`)) x32.set(SCENE_ADDRESS, scene); }}>장면 불러오기</button>
+        <button type="button" className="x32-btn yellow" onClick={() => { if (confirm(`X32 장면 ${sceneName(scene, mixer.values)}을(를) 불러올까요? 믹서 설정이 그 장면으로 바뀝니다.`)) x32.set(SCENE_ADDRESS, scene); }}>GO 장면</button>
       </div>
       {mixer.error && <p className="warn small">{mixer.error}</p>}
-      <div className="mixer-strips">
-        {GROUPS.map((g) => {
-          const list = X32_STRIPS.filter((s) => g.kind.includes(s.kind) && shown(s));
-          if (!list.length) return null;
-          return (
-            <div key={g.title} className="mixer-group">
-              <span className="mixer-group-title">{g.title}</span>
-              {list.map((s) => {
-                const onAddr = stripAddress(s.id, 'on');
-                const faderAddr = stripAddress(s.id, 'fader');
-                const muted = mixer.values[onAddr] === 0;
-                const fader = typeof mixer.values[faderAddr] === 'number' ? (mixer.values[faderAddr] as number) : 0;
-                const name = stripName(s.id, mixer.values);
-                return (
-                  <div key={s.id} className={`mixer-strip ${s.kind}`}>
-                    <button className="mixer-name truncate" title={s.kind === 'dca' ? name : `${name} — 게인 · 로우 컷 · 게이트 · 컴프레서 · EQ · 센드`} onClick={() => setEditing(s.id)}>{name}</button>
-                    <button className={`mixer-mute ${muted ? 'muted' : ''}`} aria-pressed={muted} title={muted ? '뮤트 해제' : '뮤트'} onClick={() => x32.set(onAddr, muted ? 1 : 0)}>뮤트</button>
-                    <input type="range" className="grow" min={0} max={1} step={1 / 1023} value={fader} aria-label={`${name} 페이더`} onChange={(e) => x32.setSoon(faderAddr, Number(e.target.value))} />
-                    <span className="mixer-db small">{formatDb(fader)}</span>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
+      <div className="x32-layers" role="tablist" aria-label="페이더 레이어">
+        {LAYERS.map((l) => <button key={l.id} type="button" role="tab" aria-selected={l.id === layer} className={`x32-btn ${l.id === layer ? 'lit' : ''} blue`} onClick={() => setLayer(l.id)}>{l.label}</button>)}
       </div>
-      <label className="check small"><input type="checkbox" checked={allStrips} onChange={(e) => setAllStrips(e.target.checked)} /> 이름 없는 채널 · Aux · 버스도 보기</label>
-      <p className="hint">채널 이름을 누르면 게인 · 로우 컷 · 게이트 · 컴프레서 · EQ · 모니터 센드를 조절합니다.</p>
+      <div className="x32-surface">
+        <div className="x32-bank">
+          {strips.map((s) => <Strip key={s.id} strip={s} selected={editing === s.id} onSelect={() => setEditing(editing === s.id ? null : s.id)} />)}
+        </div>
+        <Strip strip={main} master selected={editing === main.id} onSelect={() => setEditing(editing === main.id ? null : main.id)} />
+      </div>
       {editing && <X32StripModal stripId={editing} onClose={() => setEditing(null)} />}
     </div>
   );

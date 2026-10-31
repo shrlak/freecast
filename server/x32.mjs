@@ -84,8 +84,8 @@ const STRIPS = [
  * editor opens (see read), and /xremote keeps everything current afterwards.
  */
 export const SNAPSHOT = [
-  ...STRIPS.flatMap((s) => [...(s === 'main/st' ? [] : [`/${s}/config/name`]), `/${s}/mix/on`, `/${s}/mix/fader`, `/${s}/mix/pan`]),
-  ...range(1, 8).flatMap((n) => [`/dca/${n}/config/name`, `/dca/${n}/on`, `/dca/${n}/fader`]),
+  ...STRIPS.flatMap((s) => [...(s === 'main/st' ? [] : [`/${s}/config/name`, `/${s}/config/color`]), `/${s}/mix/on`, `/${s}/mix/fader`, `/${s}/mix/pan`]),
+  ...range(1, 8).flatMap((n) => [`/dca/${n}/config/name`, `/dca/${n}/config/color`, `/dca/${n}/on`, `/dca/${n}/fader`]),
   ...range(0, 99).map((n) => `/-show/showfile/scene/${String(n).padStart(3, '0')}/name`),
   '/-show/prepos/current',
 ];
@@ -109,7 +109,7 @@ const SETTABLE = [
   ['-action\\/goscene', 99],
 ].map(([re, kind]) => [new RegExp(`^\\/${re}$`), kind]);
 const READABLE = [
-  new RegExp(`^\\/(?:${STRIP}|dca\\/[1-8])\\/config\\/name$`),
+  new RegExp(`^\\/(?:${STRIP}|dca\\/[1-8])\\/config\\/(?:name|color)$`),
   /^\/-show\/showfile\/scene\/\d{3}\/name$/, /^\/-show\/prepos\/current$/,
 ];
 
