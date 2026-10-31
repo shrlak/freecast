@@ -1,5 +1,6 @@
-// Behringer X32 / M32 over the network (OSC on UDP 10023): FreeCast operates the mixer over Wi-Fi —
-// mutes, faders and scene recall, by hand from the Mixer tab or from macros and slide actions.
+// Behringer X32 / M32 over the network (OSC on UDP 10023): FreeCast operates the mixer over Wi-Fi like
+// the console itself — faders, mutes, pan, gain, low cut, gate, compressor, EQ, monitor sends and scene
+// recall — by hand from the Mixer, or from macros and slide actions.
 // On connecting it reads names, mutes, faders and scene names, and /xremote keeps them in step with
 // whatever the sound team changes on the console.
 import dgram from 'node:dgram';
@@ -73,29 +74,59 @@ function broadcastAddresses() {
 
 const two = (n) => String(n).padStart(2, '0');
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
-/** What FreeCast reads on connecting: strip names, mutes and faders, scene names and the current scene. */
+const STRIPS = [
+  ...range(1, 32).map((n) => `ch/${two(n)}`), ...range(1, 8).map((n) => `auxin/${two(n)}`),
+  ...range(1, 16).map((n) => `bus/${two(n)}`), 'main/st',
+];
+/**
+ * What FreeCast reads on connecting: every strip's name, mute, fader and pan, DCAs, scene names and the
+ * current scene. A strip's processing (gain, low cut, gate, compressor, EQ, sends) is read when its
+ * editor opens (see read), and /xremote keeps everything current afterwards.
+ */
 export const SNAPSHOT = [
-  ...range(1, 32).flatMap((n) => [`/ch/${two(n)}/config/name`, `/ch/${two(n)}/mix/on`, `/ch/${two(n)}/mix/fader`]),
+  ...STRIPS.flatMap((s) => [...(s === 'main/st' ? [] : [`/${s}/config/name`]), `/${s}/mix/on`, `/${s}/mix/fader`, `/${s}/mix/pan`]),
   ...range(1, 8).flatMap((n) => [`/dca/${n}/config/name`, `/dca/${n}/on`, `/dca/${n}/fader`]),
-  '/main/st/mix/on', '/main/st/mix/fader',
   ...range(0, 99).map((n) => `/-show/showfile/scene/${String(n).padStart(3, '0')}/name`),
   '/-show/prepos/current',
 ];
 
+const STRIP = '(?:ch\\/(?:0[1-9]|[12]\\d|3[0-2])|auxin\\/0[1-8]|bus\\/(?:0[1-9]|1[0-6])|main\\/st)';
+const SEND = '(?:0[1-9]|1[0-6])';
 /**
- * The only things FreeCast may change on the mixer: channel 1–32, DCA 1–8 and main LR mute (on: 1 = on,
- * 0 = muted) and fader (0–1), and scene recall (0–99). Returns the OSC argument, or null when refused.
+ * Everything FreeCast may change, as [pattern, kind]: 'f' = float 0–1 (faders, knobs; the X32 maps it to
+ * dB, Hz, ms…), a number = whole value 0…n (switches and choices). Phantom power, routing, inputs and
+ * setup are deliberately not here.
+ */
+const SETTABLE = [
+  [`${STRIP}\\/mix\\/(?:fader|pan)`, 'f'], [`${STRIP}\\/mix\\/on`, 1],
+  [`${STRIP}\\/mix\\/${SEND}\\/level`, 'f'], [`${STRIP}\\/mix\\/${SEND}\\/on`, 1],
+  [`${STRIP}\\/preamp\\/(?:trim|hpf)`, 'f'], [`${STRIP}\\/preamp\\/(?:invert|hpon)`, 1], [`${STRIP}\\/preamp\\/hpslope`, 2],
+  [`${STRIP}\\/gate\\/on`, 1], [`${STRIP}\\/gate\\/mode`, 4], [`${STRIP}\\/gate\\/(?:thr|range|attack|hold|release)`, 'f'],
+  [`${STRIP}\\/dyn\\/(?:on|mode|det|env|pos|auto)`, 1], [`${STRIP}\\/dyn\\/ratio`, 11],
+  [`${STRIP}\\/dyn\\/(?:thr|knee|mgain|attack|hold|release|mix)`, 'f'],
+  [`${STRIP}\\/eq\\/on`, 1], [`${STRIP}\\/eq\\/[1-6]\\/type`, 5], [`${STRIP}\\/eq\\/[1-6]\\/(?:f|g|q)`, 'f'],
+  ['dca\\/[1-8]\\/fader', 'f'], ['dca\\/[1-8]\\/on', 1],
+  ['-action\\/goscene', 99],
+].map(([re, kind]) => [new RegExp(`^\\/${re}$`), kind]);
+const READABLE = [
+  new RegExp(`^\\/(?:${STRIP}|dca\\/[1-8])\\/config\\/name$`),
+  /^\/-show\/showfile\/scene\/\d{3}\/name$/, /^\/-show\/prepos\/current$/,
+];
+
+/**
+ * The OSC argument for a change FreeCast may make (mute 1 = on / 0 = muted, faders and knobs 0–1,
+ * choices 0…n, scene recall 0–99), or null when it is refused.
  */
 export function checkSet(address, value) {
   if (typeof address !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const strip = /^\/(ch\/(0[1-9]|[12]\d|3[0-2])\/mix|dca\/[1-8]|main\/st\/mix)\/(on|fader)$/.exec(address);
-  if (strip) {
-    if (strip[3] === 'on') return value === 0 || value === 1 ? value : null;
-    return value >= 0 && value <= 1 ? { f: value } : null;
-  }
-  if (address === '/-action/goscene') return Number.isInteger(value) && value >= 0 && value <= 99 ? value : null;
-  return null;
+  const rule = SETTABLE.find(([re]) => re.test(address));
+  if (!rule) return null;
+  if (rule[1] === 'f') return value >= 0 && value <= 1 ? { f: value } : null;
+  return Number.isInteger(value) && value >= 0 && value <= rule[1] ? value : null;
 }
+
+/** Whether FreeCast may ask the mixer for this value. */
+export const checkRead = (address) => typeof address === 'string' && (SETTABLE.some(([re]) => re.test(address)) || READABLE.some((re) => re.test(address)));
 
 /** The X32 link: one at a time, renewed every few seconds, reported to every open console. */
 export function createX32Link({ createSocket = () => dgram.createSocket('udp4'), now = () => Date.now() } = {}) {
@@ -113,9 +144,9 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
     values = { ...values, [address]: value };
     emit({ type: 'value', address, value });
   };
-  /** Ask for everything the Mixer tab shows, a few messages at a time so no reply is dropped. */
-  const readAll = () => {
-    const list = [...SNAPSHOT];
+  /** Ask the mixer for values, a few messages at a time so no reply is dropped. */
+  const ask = (addresses) => {
+    const list = [...addresses];
     const batch = () => {
       if (!socket) return;
       list.splice(0, 16).forEach((a) => send(a));
@@ -123,6 +154,9 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
     };
     batch();
   };
+  /** Everything the Mixer tab shows, plus the strips whose editors have been opened. */
+  const opened = new Set();
+  const readAll = () => ask([...SNAPSHOT, ...opened]);
 
   const tick = () => {
     send('/xremote');
@@ -136,6 +170,7 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
     socket?.close();
     socket = null;
     values = {};
+    opened.clear();
     set({ status: 'off', ip: null, name: null, model: null, version: null });
   }
 
@@ -202,8 +237,17 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
     return { ok: true };
   }
 
+  /** Read values (e.g. one strip's gain, low cut, gate, compressor and EQ when its editor opens). */
+  function read(addresses) {
+    if (!Array.isArray(addresses) || addresses.length > 400 || !addresses.every(checkRead)) throw new Error('읽을 수 없는 믹서 값입니다.');
+    if (!socket || state.status !== 'connected') throw new Error('X32가 연결되어 있지 않습니다.');
+    addresses.forEach((a) => opened.add(a));
+    ask(addresses);
+    return { ok: true };
+  }
+
   return {
-    connect, disconnect, scan, setValue,
+    connect, disconnect, scan, setValue, read,
     get state() { return state; },
     get values() { return values; },
     subscribe(fn) {
@@ -221,7 +265,7 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 /**
  * /api/x32/* for the console on this computer only (phones on the network and the internet
  * address never reach it): GET events (server-sent events), POST connect {ip}, disconnect, scan,
- * set {address, value}.
+ * set {address, value}, read {addresses}.
  */
 export async function x32Middleware(req, res, next) {
   if (!req.url?.startsWith('/api/x32/')) return next();
@@ -243,13 +287,14 @@ export async function x32Middleware(req, res, next) {
   let raw = '';
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 2000) return reply(413, { error: 'Too large' });
+    if (raw.length > 20000) return reply(413, { error: 'Too large' });
   }
   try {
     if (route === 'connect') return reply(200, link.connect(JSON.parse(raw || '{}').ip));
     if (route === 'disconnect') { link.disconnect(); return reply(200, link.state); }
     if (route === 'scan') return reply(200, { found: await link.scan() });
     if (route === 'set') { const { address, value } = JSON.parse(raw || '{}'); return reply(200, link.setValue(address, value)); }
+    if (route === 'read') return reply(200, link.read(JSON.parse(raw || '{}').addresses));
     reply(404, { error: 'Not found' });
   } catch (e) {
     reply(400, { error: e.message });

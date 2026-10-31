@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 // @ts-expect-error plain ESM server module
-import { checkSet, createX32Link, oscMessage, parseOsc, SNAPSHOT, x32Middleware } from '../server/x32.mjs';
+import { checkRead, checkSet, createX32Link, oscMessage, parseOsc, SNAPSHOT, x32Middleware } from '../server/x32.mjs';
 import {
-  dbToFader, describeX32Step, faderToDb, formatDb, normalizeX32Settings, sceneName, stripAddress, stripName, x32Message,
+  dbToFader, describeX32Step, faderToDb, formatDb, formatParam, normalizeX32Settings, paramValue, sceneName, stripAddress, stripAddresses,
+  stripName, stripSections, x32Message, X32_STRIPS,
 } from '../src/domain/x32';
 import { createInitialState, reducer } from '../src/domain/reducer';
 import { createSeedLibrary } from '../src/domain/defaults';
@@ -50,6 +51,35 @@ describe('OSC for the X32', () => {
     expect(checkSet('/-action/initall', 1)).toBeNull();
     expect(checkSet('/config/mute/1', 1)).toBeNull();
     expect(checkSet('/ch/05/mix/on', Number.NaN)).toBeNull();
+  });
+
+  it('lets FreeCast work a strip like the console: gain, low cut, gate, compressor, EQ, pan, sends', () => {
+    expect(checkSet('/ch/05/preamp/trim', 0.5)).toEqual({ f: 0.5 });
+    expect(checkSet('/ch/05/preamp/hpon', 1)).toBe(1);
+    expect(checkSet('/ch/05/preamp/hpf', 0.3)).toEqual({ f: 0.3 });
+    expect(checkSet('/ch/05/preamp/hpslope', 2)).toBe(2);
+    expect(checkSet('/ch/05/gate/mode', 3)).toBe(3);
+    expect(checkSet('/ch/05/dyn/on', 1)).toBe(1);
+    expect(checkSet('/ch/05/dyn/ratio', 11)).toBe(11);
+    expect(checkSet('/ch/05/dyn/ratio', 12)).toBeNull();
+    expect(checkSet('/ch/05/dyn/thr', 0.4)).toEqual({ f: 0.4 });
+    expect(checkSet('/ch/05/eq/3/type', 2)).toBe(2);
+    expect(checkSet('/ch/05/eq/3/g', 0.5)).toEqual({ f: 0.5 });
+    expect(checkSet('/bus/16/eq/6/f', 0.5)).toEqual({ f: 0.5 });
+    expect(checkSet('/main/st/dyn/mgain', 0.1)).toEqual({ f: 0.1 });
+    expect(checkSet('/auxin/08/mix/pan', 0.5)).toEqual({ f: 0.5 });
+    expect(checkSet('/ch/05/mix/16/level', 0.75)).toEqual({ f: 0.75 });
+    expect(checkSet('/ch/05/mix/03/on', 1)).toBe(1);
+    // Not offered: phantom power, routing, setup, channels that do not exist.
+    expect(checkSet('/headamp/000/phantom', 1)).toBeNull();
+    expect(checkSet('/ch/05/config/source', 3)).toBeNull();
+    expect(checkSet('/ch/05/mix/17/level', 0.5)).toBeNull();
+    expect(checkSet('/auxin/09/mix/on', 1)).toBeNull();
+    expect(checkSet('/-prefs/lamp', 0.5)).toBeNull();
+    expect(checkRead('/ch/05/dyn/ratio')).toBe(true);
+    expect(checkRead('/bus/03/config/name')).toBe(true);
+    expect(checkRead('/-show/showfile/scene/012/name')).toBe(true);
+    expect(checkRead('/-prefs/lamp')).toBe(false);
   });
 });
 
@@ -118,6 +148,16 @@ describe('X32 network link', () => {
       vi.advanceTimersByTime(1000);
       expect(s.sent.filter((m) => m.address === '/ch/01/mix/fader')).toHaveLength(1);
       expect(() => link.setValue('/-action/initall', 1)).toThrow();
+      // Opening a strip's editor reads its processing, and it is read again after a later recall.
+      s.sent.length = 0;
+      link.read(['/ch/05/dyn/thr', '/ch/05/eq/1/f']);
+      expect(s.sent.map((m) => m.address)).toEqual(['/ch/05/dyn/thr', '/ch/05/eq/1/f']);
+      s.reply('192.168.0.64', '/ch/05/dyn/ratio', [6]);
+      expect(link.values['/ch/05/dyn/ratio']).toBe(6);
+      link.setValue('/-action/goscene', 4);
+      vi.advanceTimersByTime(1000);
+      expect(s.sent.filter((m) => m.address === '/ch/05/dyn/thr')).toHaveLength(2);
+      expect(() => link.read(['/-prefs/lamp'])).toThrow();
       link.disconnect();
     } finally {
       vi.useRealTimers();
@@ -216,6 +256,48 @@ describe('X32 mixer vocabulary', () => {
     const state = createInitialState({ ...createSeedLibrary(), macros: [{ id: 'sermon', name: 'Sermon', color: '#000', steps: [{ type: 'x32', action: 'unmute', strip: 'ch/05' }, { type: 'black', on: true }] }] });
     expect(reducer(state, { type: 'macro/run', id: 'sermon', now: 1 }).live.black).toBe(true);
   });
+  it('shows processing in the console\'s units', () => {
+    const sec = (kind: Parameters<typeof stripSections>[0], id: string) => stripSections(kind).find((s) => s.id === id)!;
+    const param = (kind: Parameters<typeof stripSections>[0], id: string, key: string) =>
+      [...sec(kind, id).params, ...(sec(kind, id).bands ?? []).flatMap((b) => b.params)].find((p) => p.key === key)!.kind;
+    expect(formatParam(param('ch', 'preamp', 'preamp/trim'), 0.5)).toBe('0.0 dB');
+    expect(formatParam(param('ch', 'preamp', 'preamp/trim'), 1)).toBe('+18.0 dB');
+    expect(formatParam(param('ch', 'preamp', 'preamp/hpf'), 0)).toBe('20 Hz');
+    expect(formatParam(param('ch', 'preamp', 'preamp/hpf'), 1)).toBe('400 Hz');
+    expect(paramValue(param('ch', 'preamp', 'preamp/hpf'), 0.5)).toBeCloseTo(89.4, 1);
+    expect(formatParam(param('ch', 'dyn', 'dyn/thr'), 0.5)).toBe('-30.0 dB');
+    expect(formatParam(param('ch', 'dyn', 'dyn/ratio'), 6)).toBe('4.0:1');
+    expect(formatParam(param('ch', 'dyn', 'dyn/release'), 1)).toBe('4000 ms');
+    expect(formatParam(param('ch', 'dyn', 'dyn/mgain'), 0.5)).toBe('+12.0 dB');
+    expect(formatParam(param('ch', 'eq', 'eq/1/f'), 1)).toBe('20.0 kHz');
+    expect(formatParam(param('ch', 'eq', 'eq/1/q'), 0)).toBe('10.0');
+    expect(formatParam(param('ch', 'eq', 'eq/1/q'), 1)).toBe('0.30');
+    expect(formatParam(param('ch', 'eq', 'eq/2/type'), 0)).toBe('로우 컷');
+    expect(formatParam({ type: 'pan' }, 0.25)).toBe('L50');
+    expect(formatParam({ type: 'pan' }, 0.5)).toBe('C');
+    expect(formatParam({ type: 'bool' }, 1)).toBe('켜짐');
+    expect(formatParam({ type: 'bool' }, undefined)).toBe('…');
+    // Channels have the full strip; buses and main have compressor and 6-band EQ; DCAs only fader and mute.
+    expect(stripSections('ch').map((s) => s.id)).toEqual(['preamp', 'gate', 'dyn', 'eq', 'sends']);
+    expect(stripSections('bus').map((s) => s.id)).toEqual(['dyn', 'eq']);
+    expect(sec('main', 'eq').bands).toHaveLength(6);
+    expect(stripSections('dca')).toEqual([]);
+  });
+
+  it('reads only what an editor shows, and all of it is allowed', () => {
+    for (const s of X32_STRIPS) expect(stripAddresses(s.id).every((a) => checkRead(a))).toBe(true);
+    const ch = stripAddresses('ch/05');
+    expect(ch).toContain('/ch/05/dyn/thr');
+    expect(ch).toContain('/ch/05/preamp/hpf');
+    expect(ch).toContain('/ch/05/eq/4/q');
+    expect(ch).toContain('/ch/05/mix/16/level');
+    expect(ch).toContain('/bus/16/config/name');
+    expect(ch.length).toBeLessThanOrEqual(400);
+    expect(stripAddresses('dca/1')).toEqual([]);
+    // Every editable parameter is also allowed to be changed.
+    expect(ch.filter((a) => !a.endsWith('/config/name')).every((a) => checkSet(a, 0) != null)).toBe(true);
+  });
+
   it('reads saved settings defensively', () => {
     expect(normalizeX32Settings({ on: true, ip: ' 192.168.0.64 ' })).toEqual({ on: true, ip: '192.168.0.64' });
     expect(normalizeX32Settings(null)).toEqual({ on: false, ip: '' });
