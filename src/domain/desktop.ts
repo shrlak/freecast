@@ -43,6 +43,8 @@ export interface DesktopBridge {
   present(url: string): Promise<void>;
   /** Slide show ends: close the window `present` opened. */
   endShow(): Promise<void>;
+  /** The mixer window: float above everything (true) or not; without an argument, just report. Older apps lack it. */
+  setOnTop?(on?: boolean): Promise<boolean>;
   setAiConfig(patch: { proxyUrl?: string; geminiKey?: string; openrouterKey?: string }): Promise<void>;
   setNetworkRemote(on: boolean): Promise<void>;
   setInternetRemote(on: boolean): Promise<void>;

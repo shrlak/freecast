@@ -73,7 +73,7 @@ export function X32StripModal({ stripId, onClose }: { stripId: string; onClose: 
         </header>
         <div className="x32-sel-body">
           <div className="x32-sel-strip">
-            {strip.kind !== 'dca' && <Control address={at('mix/pan')} param={{ key: 'mix/pan', label: '팬', kind: PAN }} values={v} />}
+            {strip.kind !== 'dca' && stripId !== 'main/m' && <Control address={at('mix/pan')} param={{ key: 'mix/pan', label: '팬', kind: PAN }} values={v} />}
             <LitButton tone="red" on={muted} onClick={() => x32.set(onAddr, muted ? 1 : 0)}>MUTE</LitButton>
             <Fader value={fader} label={`${strip.label} 페이더`} readout={formatDb(fader)} onChange={(f) => x32.setSoon(faderAddr, f)} />
             <span className="x32-readout">{formatDb(fader)}</span>

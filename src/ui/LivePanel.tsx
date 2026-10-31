@@ -7,7 +7,7 @@ import { MessagesPanel, MacrosPanel } from './MessagesMacros';
 import { AudioPanel } from './AudioPanel';
 import { desktop } from '../domain/desktop';
 import { MarkerEditor, useMarkerTrigger } from './markers';
-import { MixerPanel } from './MixerPanel';
+import { openMixerWindow } from './MixerPanel';
 
 interface Props {
   state: AppState;
@@ -27,7 +27,7 @@ export function presentOutput() {
   else openOutput('output');
 }
 
-const TABS = ['Macros', 'Messages', 'Timers', 'Props', 'Audio', 'Mixer'] as const;
+const TABS = ['Macros', 'Messages', 'Timers', 'Props', 'Audio'] as const;
 
 export function LivePanel({ state, dispatch }: Props) {
   const { live } = state;
@@ -52,6 +52,7 @@ export function LivePanel({ state, dispatch }: Props) {
         <div className="row gap-xs">
           <button onClick={() => openOutput('output')}>Output ↗</button>
           <button onClick={() => openOutput('stage')}>Stage ↗</button>
+          <button onClick={openMixerWindow} title="X32 믹서를 새 창으로 (다른 창 위에 항상 표시)">Mixer ↗</button>
         </div>
       </div>
 
@@ -104,7 +105,6 @@ export function LivePanel({ state, dispatch }: Props) {
         {tab === 'Messages' && <MessagesPanel state={state} dispatch={dispatch} />}
         {tab === 'Macros' && <MacrosPanel state={state} dispatch={dispatch} />}
         {tab === 'Audio' && <AudioPanel state={state} dispatch={dispatch} />}
-        {tab === 'Mixer' && <MixerPanel />}
       </div>
     </aside>
   );

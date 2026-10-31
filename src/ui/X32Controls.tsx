@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { CURVE_FREQS } from '../domain/eqCurve';
-import { FADER_MARKS } from '../domain/x32';
+import { FADER_MARKS, nudgeFader } from '../domain/x32';
 
 const clamp = (v: number) => Math.min(1, Math.max(0, v));
 
@@ -29,16 +29,33 @@ function useDrag(value: number, onChange: (v: number) => void, pixels: number, s
       const delta = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: 0.1, PageDown: -0.1 }[e.key];
       if (delta == null) return;
       e.preventDefault();
+      e.stopPropagation();
       onChange(snap(value + delta));
     },
   };
 }
 
+/** Arrow keys on a fader: ±1 dB (Shift ±5 dB), Page Up/Down ±10 dB, Home = 0 dB, End = −∞. */
+export function faderKey(key: string, shift: boolean, value: number): number | null {
+  const db = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }[key];
+  if (db != null) return nudgeFader(value, shift && Math.abs(db) === 1 ? db * 5 : db);
+  if (key === 'Home') return 0.75;
+  if (key === 'End') return 0;
+  return null;
+}
+
 /** A console fader: long vertical travel with the dB scale printed beside it, as on the X32 surface. */
 export function Fader({ value, onChange, label, readout }: { value: number; onChange: (v: number) => void; label: string; readout: string }) {
   const drag = useDrag(value, onChange, 180);
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    const next = faderKey(e.key, e.shiftKey, value);
+    if (next == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onChange(next);
+  };
   return (
-    <div className="x32-fader" role="slider" tabIndex={0} aria-label={label} aria-valuemin={0} aria-valuemax={1} aria-valuenow={value} aria-valuetext={readout} {...drag}
+    <div className="x32-fader" role="slider" tabIndex={0} aria-label={label} aria-valuemin={0} aria-valuemax={1} aria-valuenow={value} aria-valuetext={readout} {...drag} onKeyDown={onKeyDown}
       onDoubleClick={() => onChange(0.75)} title={`${label} — 더블클릭: 0 dB`}>
       <div className="x32-fader-scale" aria-hidden>
         {FADER_MARKS.map((m) => <span key={m.label} style={{ bottom: `${m.at * 100}%` }}>{m.label}</span>)}

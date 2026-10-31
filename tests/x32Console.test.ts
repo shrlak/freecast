@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CURVE_FREQS, eqCurve } from '../src/domain/eqCurve';
-import { FADER_MARKS, scribbleColor, shortName } from '../src/domain/x32';
+import { dbToFader, FADER_MARKS, faderToDb, nudgeFader, scribbleColor, shortName, stripSections, X32_STRIPS } from '../src/domain/x32';
+import { faderKey } from '../src/ui/X32Controls';
+// @ts-expect-error plain ESM server module
+import { checkSet } from '../server/x32.mjs';
 
 const at = (f: number) => CURVE_FREQS.findIndex((x) => x >= f);
 
@@ -51,5 +54,33 @@ describe('X32 surface details', () => {
     expect(FADER_MARKS.find((m) => m.label === '+10')!.at).toBe(1);
     expect(FADER_MARKS.find((m) => m.label === '-10')!.at).toBeCloseTo(0.5, 2);
     expect(FADER_MARKS.at(-1)).toEqual({ label: '−∞', at: 0 });
+  });
+});
+
+describe('every X32 fader, and the arrow keys', () => {
+  it('has every strip of the console', () => {
+    const count = (kind: string) => X32_STRIPS.filter((s) => s.kind === kind).length;
+    expect([count('ch'), count('auxin'), count('fxrtn'), count('bus'), count('mtx'), count('dca'), count('main')]).toEqual([32, 8, 8, 16, 6, 8, 2]);
+    for (const s of X32_STRIPS) expect(checkSet(s.id.startsWith('dca/') ? `/${s.id}/fader` : `/${s.id}/mix/fader`, 0.5)).toEqual({ f: 0.5 });
+    expect(stripSections('fxrtn').map((s) => s.id)).toEqual(['eq', 'sends']);
+    expect(stripSections('mtx').map((s) => s.id)).toEqual(['dyn', 'eq']);
+  });
+  it('moves a fader by whole dB', () => {
+    expect(faderToDb(nudgeFader(0.75, 1))).toBeCloseTo(1, 0);
+    expect(faderToDb(nudgeFader(0.75, -1))).toBeCloseTo(-1, 0);
+    expect(faderToDb(nudgeFader(dbToFader(-20), 5))).toBeCloseTo(-15, 0);
+    expect(nudgeFader(1, 1)).toBe(1);
+    expect(nudgeFader(0, -1)).toBe(0);
+    expect(nudgeFader(0, 1)).toBeGreaterThan(0);
+    // Even where 1 dB is less than one fader step, a key press always moves the fader.
+    expect(nudgeFader(0.01, 1)).toBeGreaterThan(0.01);
+  });
+  it('maps keys like the console: ↑/↓ 1 dB, Shift 5 dB, Page 10 dB, Home 0 dB, End −∞', () => {
+    expect(faderToDb(faderKey('ArrowUp', false, 0.75)!)).toBeCloseTo(1, 0);
+    expect(faderToDb(faderKey('ArrowDown', true, 0.75)!)).toBeCloseTo(-5, 0);
+    expect(faderToDb(faderKey('PageDown', false, 0.75)!)).toBeCloseTo(-10, 0);
+    expect(faderKey('Home', false, 0.2)).toBe(0.75);
+    expect(faderKey('End', false, 0.6)).toBe(0);
+    expect(faderKey('a', false, 0.6)).toBeNull();
   });
 });

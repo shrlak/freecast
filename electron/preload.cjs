@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('freecastDesktop', {
   openView: (url, displayId) => ipcRenderer.invoke('desktop:openView', url, displayId),
   present: (url) => ipcRenderer.invoke('desktop:present', url),
   endShow: () => ipcRenderer.invoke('desktop:endShow'),
+  setOnTop: (on) => ipcRenderer.invoke('desktop:setOnTop', on),
   setAiConfig: (patch) => ipcRenderer.invoke('desktop:setAiConfig', patch),
   setNetworkRemote: (on) => ipcRenderer.invoke('desktop:setNetworkRemote', on),
   setInternetRemote: (on) => ipcRenderer.invoke('desktop:setInternetRemote', on),
