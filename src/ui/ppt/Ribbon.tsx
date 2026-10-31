@@ -11,7 +11,6 @@ import { swatchStyle } from '../backgroundSwatch';
 import { putMedia } from '../../domain/media';
 import { uid } from '../../domain/lyrics';
 import { SlideCanvas, assetUrl } from '../SlideCanvas';
-import { Recorder } from '../Recorder';
 import { openOutput } from '../LivePanel';
 import { useMediaUrl } from '../hooks';
 import { ACCEPT, type Commands } from './commands';
@@ -351,7 +350,6 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Small icon="◆" label="로고 (L)" active={state.live.logo} onClick={() => dispatch({ type: 'live/logo' })} />
               <Small icon="✕" label="모두 지우기" onClick={() => dispatch({ type: 'live/clearAll' })} />
             </Group>
-            <Group label="녹화"><Recorder /></Group>
           </>
         )}
         {tab === '예배' && (

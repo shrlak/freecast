@@ -225,7 +225,7 @@ export function RemoteView() {
           </div>
         </section>
       </fieldset>
-      {requestsOpen && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setRequestsOpen(false)}><section className="modal team-sender-modal" role="dialog" aria-modal="true" aria-label="방송실 요청" onKeyDown={(e) => { if (e.key === 'Escape') setRequestsOpen(false); }}><header className="modal-head"><h2>방송실 요청</h2><button autoFocus aria-label="닫기" onClick={() => setRequestsOpen(false)}>✕</button></header><div className="feature-scroll"><TeamRequestPanel requests={requests} error={requestError} ready={ready} send={(m) => { setRequestError(null); send(m); }} /></div></section></div>}
+      {requestsOpen && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setRequestsOpen(false)}><section className="modal team-sender-modal" role="dialog" aria-modal="true" aria-label="운영자 요청" onKeyDown={(e) => { if (e.key === 'Escape') setRequestsOpen(false); }}><header className="modal-head"><h2>운영자 요청</h2><button autoFocus aria-label="닫기" onClick={() => setRequestsOpen(false)}>✕</button></header><div className="feature-scroll"><TeamRequestPanel requests={requests} error={requestError} ready={ready} send={(m) => { setRequestError(null); send(m); }} /></div></section></div>}
     </div>
   );
 }

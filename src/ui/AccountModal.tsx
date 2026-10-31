@@ -53,7 +53,7 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
               <CloudStoragePanel cloud={cloud} />
               <h3>현재 기기</h3>
               <p className="small">{device.platform}{device.computerName ? ` · ${device.computerName}` : ''}{device.appVersion ? ` · FreeCast ${device.appVersion}` : ''}<br />기기 ID: {device.id}</p>
-              <label className="stack">기기 이름<input maxLength={60} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="예: 교회 방송실 Mac" /></label>
+              <label className="stack">기기 이름<input maxLength={60} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="예: 교회 본당 Mac" /></label>
               <label className="stack">기기 사용자 이름<input maxLength={60} value={deviceUser} onChange={(e) => setDeviceUser(e.target.value)} placeholder="예: 김철수" /></label>
               <button onClick={() => { try { cloud.renameDevice(deviceName, deviceUser); setDone('이 기기의 이름과 사용자를 저장했습니다.'); setError(null); } catch (e) { setError((e as Error).message); } }}>기기 정보 저장</button>
               {error && <p role="alert">{error}</p>}

@@ -1,28 +1,25 @@
-// MIDI control: map notes, control changes and program changes to console actions.
-// Built for the user-assign buttons of a Behringer X32 / M32 (connected through the X-USB card or
-// the MIDI DIN ports), and works the same with any other MIDI controller, keyboard or foot pedal.
+// Mixer control: map MIDI notes, control changes and program changes, and X32 buttons heard over
+// the network (OSC), to console actions. Built for a Behringer X32 / M32 — over Wi-Fi, through the
+// X-USB card or the MIDI DIN ports — and works the same with any MIDI controller, keyboard or pedal.
 import type { Action } from './reducer';
 import type { Macro } from './types';
 
 export type MidiKind = 'note' | 'cc' | 'pc';
 
-/** One button press: note-on, control change going up from 0, or program change. Channel is 1–16. */
-export interface MidiPress {
-  kind: MidiKind;
-  channel: number;
-  number: number;
-}
+/**
+ * One button press: note-on, control change going up from 0 or program change (channel 1–16),
+ * or an X32 control changing over the network (its OSC address, e.g. /ch/32/mix/on).
+ */
+export type MidiPress = { kind: MidiKind; channel: number; number: number } | { kind: 'osc'; address: string };
 
 export type MidiCommand = 'next' | 'prev' | 'clearAll' | 'clearText' | 'clearBackground' | 'black' | 'logo';
 export type MidiTarget = { type: 'command'; command: MidiCommand } | { type: 'macro'; macroId: string };
 
-export interface MidiBinding {
-  kind: MidiKind;
-  /** 1–16, or null for any channel. */
-  channel: number | null;
-  number: number;
-  target: MidiTarget;
-}
+export type MidiTrigger =
+  /** channel 1–16, or null for any channel. */
+  | { kind: MidiKind; channel: number | null; number: number }
+  | { kind: 'osc'; address: string };
+export type MidiBinding = MidiTrigger & { target: MidiTarget };
 
 export interface MidiSettings {
   enabled: boolean;
@@ -31,6 +28,8 @@ export interface MidiSettings {
   bindings: MidiBinding[];
   /** Notes 36–51 run macros 1–16 (in the order of the Macros list). */
   macroNotes: boolean;
+  /** The X32 over Wi-Fi / the network: its IP address (X32 SETUP → network). */
+  network: { on: boolean; ip: string };
 }
 
 export const MIDI_COMMANDS: { id: MidiCommand; label: string }[] = [
@@ -55,7 +54,7 @@ export const DEFAULT_MIDI_BINDINGS: MidiBinding[] = [
   { kind: 'cc', channel: null, number: 64, target: command('next') },
 ];
 
-export const defaultMidiSettings = (): MidiSettings => ({ enabled: false, input: null, bindings: DEFAULT_MIDI_BINDINGS.map((b) => ({ ...b })), macroNotes: true });
+export const defaultMidiSettings = (): MidiSettings => ({ enabled: false, input: null, bindings: DEFAULT_MIDI_BINDINGS.map((b) => ({ ...b })), macroNotes: true, network: { on: false, ip: '' } });
 
 /** Port names a Behringer X32 / M32 shows up as (X-USB card, or the console's own name). */
 export const isX32Port = (name: string) => /x-?usb|x32|m32|behringer|midas/i.test(name);
@@ -86,13 +85,36 @@ export function createMidiDecoder() {
   };
 }
 
-const matches = (b: Pick<MidiBinding, 'kind' | 'channel' | 'number'>, p: MidiPress) =>
-  b.kind === p.kind && b.number === p.number && (b.channel == null || b.channel === p.channel);
+// Console state the X32 also reports over the network, which a button press never is.
+const NOT_BUTTONS = /^\/-(?!stat\/(userpar|solosw)\/)/;
+
+/**
+ * Turns X32 changes heard over the network into presses. A mute (0/1) fires on every change, so each
+ * press of a spare channel's MUTE button counts; a user-assign button going back to 0 after a value
+ * above 1 (127 → 0) is its release. Screen, selection and other UI state is ignored.
+ */
+export function createOscDecoder() {
+  const last = new Map<string, number>();
+  return (address: string, value: number): MidiPress | null => {
+    if (!address.startsWith('/') || NOT_BUTTONS.test(address) || !Number.isInteger(value)) return null;
+    const prev = last.get(address);
+    last.set(address, value);
+    if (prev === value) return null;
+    if (value === 0 && prev != null && prev > 1) return null;
+    return { kind: 'osc', address };
+  };
+}
+
+const matches = (b: MidiTrigger, p: MidiPress) => {
+  if (b.kind === 'osc' || p.kind === 'osc') return b.kind === p.kind && (b as { address: string }).address === (p as { address: string }).address;
+  return b.kind === p.kind && b.number === p.number && (b.channel == null || b.channel === p.channel);
+};
+const channelOf = (b: MidiTrigger) => (b.kind === 'osc' ? null : b.channel);
 
 /** What a press should do, or null when nothing is mapped to it. */
 export function midiTarget(settings: MidiSettings, press: MidiPress, macros: Macro[]): MidiTarget | null {
   // A channel-specific binding wins over an any-channel one.
-  const hits = settings.bindings.filter((b) => matches(b, press)).sort((x, y) => Number(y.channel != null) - Number(x.channel != null));
+  const hits = settings.bindings.filter((b) => matches(b, press)).sort((x, y) => Number(channelOf(y) != null) - Number(channelOf(x) != null));
   const hit = hits.find((b) => b.target.type === 'command' || macros.some((m) => m.id === (b.target as { macroId: string }).macroId));
   if (hit) return hit.target;
   if (settings.macroNotes && press.kind === 'note' && press.number >= 36 && press.number <= 51) {
@@ -120,8 +142,9 @@ const sameTarget = (a: MidiTarget, b: MidiTarget) =>
 
 /** Map a learned press to a target. The press is taken away from whatever else it did. */
 export function learnBinding(settings: MidiSettings, press: MidiPress, target: MidiTarget): MidiSettings {
-  const others = settings.bindings.filter((b) => !(b.kind === press.kind && b.number === press.number && (b.channel == null || b.channel === press.channel)));
-  return { ...settings, bindings: [...others, { kind: press.kind, channel: press.channel, number: press.number, target }] };
+  const others = settings.bindings.filter((b) => !matches(b, press));
+  const trigger: MidiTrigger = press.kind === 'osc' ? { kind: 'osc', address: press.address } : { kind: press.kind, channel: press.channel, number: press.number };
+  return { ...settings, bindings: [...others, { ...trigger, target }] };
 }
 
 export const bindingsFor = (settings: MidiSettings, target: MidiTarget) => settings.bindings.filter((b) => sameTarget(b.target, target));
@@ -130,8 +153,22 @@ export function removeBinding(settings: MidiSettings, binding: MidiBinding): Mid
   return { ...settings, bindings: settings.bindings.filter((b) => b !== binding) };
 }
 
-/** “Note 60 · ch 1”, “CC 64”, “PC 3 · ch 16” — program changes shown 1–128 like on the X32. */
-export function describeMidi(b: Pick<MidiBinding, 'kind' | 'channel' | 'number'>): string {
+/** An X32 OSC address in console words: “Ch 32 뮤트”, “뮤트 그룹 1”, “사용자 버튼 13”. */
+export function describeX32(address: string): string {
+  const n = (s: string) => String(Number(s));
+  let m: RegExpExecArray | null;
+  if ((m = /^\/(ch|bus|auxin|fxrtn|mtx)\/(\d+)\/mix\/on$/.exec(address))) return `${({ ch: 'Ch', bus: 'Bus', auxin: 'Aux In', fxrtn: 'FX Rtn', mtx: 'Matrix' } as Record<string, string>)[m[1]]} ${n(m[2])} 뮤트`;
+  if ((m = /^\/dca\/(\d+)\/on$/.exec(address))) return `DCA ${n(m[1])} 뮤트`;
+  if ((m = /^\/config\/mute\/(\d+)$/.exec(address))) return `뮤트 그룹 ${n(m[1])}`;
+  if ((m = /^\/-stat\/userpar\/(\d+)\/value$/.exec(address))) return `사용자 버튼 ${n(m[1])}`;
+  if ((m = /^\/-stat\/solosw\/(\d+)$/.exec(address))) return `솔로 ${n(m[1])}`;
+  if (/^\/main\/st\/mix\/on$/.test(address)) return 'Main LR 뮤트';
+  return address;
+}
+
+/** “Note 60 · ch 1”, “CC 64”, “PC 3 · ch 16” (program changes 1–128 like on the X32), “X32 Ch 32 뮤트”. */
+export function describeMidi(b: MidiTrigger | MidiPress): string {
+  if (b.kind === 'osc') return `X32 ${describeX32(b.address)}`;
   const what = b.kind === 'note' ? `Note ${b.number}` : b.kind === 'cc' ? `CC ${b.number}` : `PC ${b.number + 1}`;
   return b.channel == null ? what : `${what} · ch ${b.channel}`;
 }
@@ -140,6 +177,7 @@ const KEY = 'freecast.midi.v2';
 const LEGACY_KEY = 'freecast.midi';
 
 const isKind = (k: unknown): k is MidiKind => k === 'note' || k === 'cc' || k === 'pc';
+const isAddress = (a: unknown): a is string => typeof a === 'string' && a.startsWith('/') && a.length <= 64;
 const isByte = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 127;
 const isTarget = (t: unknown): t is MidiTarget => {
   const x = t as MidiTarget | null;
@@ -150,15 +188,21 @@ export function normalizeMidiSettings(value: unknown, legacyOn = false): MidiSet
   const base = defaultMidiSettings();
   if (!value || typeof value !== 'object') return { ...base, enabled: legacyOn };
   const v = value as Partial<MidiSettings>;
-  const bindings = Array.isArray(v.bindings)
-    ? v.bindings.filter((b) => !!b && isKind(b.kind) && isByte(b.number) && (b.channel == null || (Number.isInteger(b.channel) && b.channel >= 1 && b.channel <= 16)) && isTarget(b.target))
-      .map((b) => ({ kind: b.kind, channel: b.channel ?? null, number: b.number, target: b.target }))
+  const bindings: MidiBinding[] = Array.isArray(v.bindings)
+    ? v.bindings.flatMap((b): MidiBinding[] => {
+      if (!b || !isTarget(b.target)) return [];
+      if (b.kind === 'osc') return isAddress(b.address) ? [{ kind: 'osc', address: b.address, target: b.target }] : [];
+      return isKind(b.kind) && isByte(b.number) && (b.channel == null || (Number.isInteger(b.channel) && b.channel >= 1 && b.channel <= 16))
+        ? [{ kind: b.kind, channel: b.channel ?? null, number: b.number, target: b.target }] : [];
+    })
     : base.bindings;
+  const net = (v.network ?? {}) as Partial<MidiSettings['network']>;
   return {
     enabled: v.enabled === true,
     input: typeof v.input === 'string' && v.input ? v.input : null,
     bindings,
     macroNotes: v.macroNotes !== false,
+    network: { on: net.on === true, ip: typeof net.ip === 'string' ? net.ip.trim().slice(0, 15) : '' },
   };
 }
 

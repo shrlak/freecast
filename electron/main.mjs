@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 // FreeCast desktop app: runs the FreeCast server inside the app and shows the console,
 // audience outputs and stage displays as native windows placed on your displays.
-import { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, powerMonitor, safeStorage, screen, session, shell, dialog } from 'electron';
+import { app, BrowserWindow, clipboard, ipcMain, Menu, powerMonitor, safeStorage, screen, shell, dialog } from 'electron';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -456,12 +456,6 @@ app.whenReady().then(async () => {
   }
   // Waking from sleep can leave cloudflared alive with a disconnected quick tunnel.
   powerMonitor.on('resume', () => { if (settings.internetRemote) tunnel?.restart(); });
-  // Output recording: hand the FreeCast audience window to getDisplayMedia without a picker.
-  session.defaultSession.setDisplayMediaRequestHandler(async (_req, callback) => {
-    const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
-    const out = sources.find((s) => s.name.startsWith('FreeCast — ') && !s.name.includes('Stage')) ?? sources.find((s) => s.id.startsWith('screen')) ?? sources[0];
-    callback(out ? { video: out } : {});
-  });
   buildMenu();
   createMainWindow();
   if (!SMOKE) {

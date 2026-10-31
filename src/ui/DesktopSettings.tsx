@@ -177,7 +177,7 @@ export function DesktopRemote({ info, refresh }: DesktopSettingsState) {
       {info.internet.team && <section className="settings-card team-link-settings">
         <h4>무대팀 전용 웹앱</h4>
         <code className="small selectable">{info.internet.team.webAppUrl}</code>
-        <p className="hint">무대팀은 현재 송출을 보고 방송실에 비공개 요청을 보낼 수 있습니다. 슬라이드 조작권은 주어지지 않습니다. 일반 리모컨과 다른 연결 코드이며, 재시작·인터넷 재연결·일반 리모컨 키 재발급으로 바뀌지 않습니다.</p>
+        <p className="hint">무대팀은 현재 송출을 보고 운영자에게 비공개 요청을 보낼 수 있습니다. 슬라이드 조작권은 주어지지 않습니다. 일반 리모컨과 다른 연결 코드이며, 재시작·인터넷 재연결·일반 리모컨 키 재발급으로 바뀌지 않습니다.</p>
         {info.internet.team.pairingUrl && (
           <div className="settings-pair">
             {info.internet.team.status === 'ok' && <img src={qrDataUrl(info.internet.team.pairingUrl)} alt="무대팀 전용 연결 QR 코드" width={150} height={150} />}

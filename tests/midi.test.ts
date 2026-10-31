@@ -83,7 +83,7 @@ describe('MIDI mapping', () => {
       { kind: 'cc', channel: null, number: 200, target: { type: 'command', command: 'prev' } },
       { kind: 'cc', channel: null, number: 20, target: { type: 'command', command: 'explode' } },
     ] });
-    expect(s).toEqual({ enabled: true, input: 'X-USB', macroNotes: false, bindings: [{ kind: 'note', channel: 3, number: 61, target: { type: 'command', command: 'prev' } }] });
+    expect(s).toEqual({ enabled: true, input: 'X-USB', macroNotes: false, network: { on: false, ip: '' }, bindings: [{ kind: 'note', channel: 3, number: 61, target: { type: 'command', command: 'prev' } }] });
   });
 });
 

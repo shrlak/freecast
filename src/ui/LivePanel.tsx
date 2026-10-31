@@ -6,7 +6,6 @@ import { TimersPanel, PropsPanel } from './TimersProps';
 import { MessagesPanel, MacrosPanel } from './MessagesMacros';
 import { AudioPanel } from './AudioPanel';
 import { desktop } from '../domain/desktop';
-import { Recorder } from './Recorder';
 import { MarkerEditor, useMarkerTrigger } from './markers';
 
 interface Props {
@@ -52,7 +51,6 @@ export function LivePanel({ state, dispatch }: Props) {
         <div className="row gap-xs">
           <button onClick={() => openOutput('output')}>Output ↗</button>
           <button onClick={() => openOutput('stage')}>Stage ↗</button>
-          <Recorder />
         </div>
       </div>
 
