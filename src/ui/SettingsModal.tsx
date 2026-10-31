@@ -9,8 +9,8 @@ import { contentServer, DEFAULT_SERVER, setContentServer } from '../domain/onlin
 import { dmxSettings, saveDmxSettings, sendDmx } from '../domain/effects';
 import { FEATURES, loadFeatures, setFeature, type FeatureId } from '../domain/features';
 import { NameDialog } from './NameDialog';
-import { MidiSettingsCard } from './MidiSettingsCard';
-import type { MidiSettings } from '../domain/midi';
+import { X32SettingsCard } from './X32SettingsCard';
+import type { X32Settings } from '../domain/x32';
 
 export type SettingsPage = 'general' | 'outputs' | 'stage' | 'remote' | 'ai' | 'devices';
 
@@ -18,8 +18,8 @@ interface Props {
   state: AppState;
   dispatch: Dispatch<Action>;
   relayConnected: boolean;
-  midi: MidiSettings;
-  onMidi: (s: MidiSettings) => void;
+  mixer: X32Settings;
+  onMixer: (s: X32Settings) => void;
   /** 실험 기능 were switched on or off. */
   onFeatures: () => void;
   initialPage?: SettingsPage;
@@ -32,7 +32,7 @@ const PAGES: { id: SettingsPage; icon: string; label: string; intro: string; des
   { id: 'stage', icon: '🎤', label: '무대 화면', intro: '찬양팀 · 설교자가 보는 화면' },
   { id: 'remote', icon: '📱', label: '리모컨 · 휴대폰', intro: '휴대폰 · 태블릿으로 조작하기' },
   { id: 'ai', icon: '✨', label: 'AI', intro: '콘티 인식 · 가사 찾기에 쓰는 AI', desktopOnly: true },
-  { id: 'devices', icon: '🎛', label: '장비 · 연결', intro: 'X32 믹서(Wi-Fi · USB) · MIDI, 조명(DMX), 찬양 서버' },
+  { id: 'devices', icon: '🎛', label: '장비 · 연결', intro: 'X32 믹서, 조명(DMX), 찬양 서버' },
 ];
 
 const LAYERS: { id: keyof ScreenLayers; label: string }[] = [
@@ -52,7 +52,7 @@ const SHORTCUTS: [string, string][] = [
 ];
 
 /** ⚙ 설정: one page per topic instead of everything on one screen. */
-export function SettingsModal({ state, dispatch, relayConnected, midi, onMidi, onFeatures, initialPage = 'general', onClose }: Props) {
+export function SettingsModal({ state, dispatch, relayConnected, mixer, onMixer, onFeatures, initialPage = 'general', onClose }: Props) {
   const [page, setPage] = useState<SettingsPage>(initialPage);
   const desk = useDesktopInfo();
   const pages = PAGES.filter((p) => !p.desktopOnly || desktop);
@@ -84,7 +84,7 @@ export function SettingsModal({ state, dispatch, relayConnected, midi, onMidi, o
             {current.id === 'stage' && <StagePage state={state} dispatch={dispatch} />}
             {current.id === 'remote' && (desk ? <DesktopRemote {...desk} /> : <WebRemote relayConnected={relayConnected} />)}
             {current.id === 'ai' && (desk ? <DesktopAi {...desk} /> : <Loading />)}
-            {current.id === 'devices' && <DevicesPage midi={midi} onMidi={onMidi} state={state} />}
+            {current.id === 'devices' && <DevicesPage mixer={mixer} onMixer={onMixer} />}
           </div>
         </div>
       </div>
@@ -259,10 +259,10 @@ function WebRemote({ relayConnected }: { relayConnected: boolean }) {
   );
 }
 
-function DevicesPage({ midi, onMidi, state }: { midi: MidiSettings; onMidi: (s: MidiSettings) => void; state: AppState }) {
+function DevicesPage({ mixer, onMixer }: { mixer: X32Settings; onMixer: (s: X32Settings) => void }) {
   return (
     <>
-      <MidiSettingsCard midi={midi} onMidi={onMidi} macros={state.library.macros} />
+      <X32SettingsCard settings={mixer} onChange={onMixer} />
       <Card title="조명 (DMX · Art-Net)" hint="매크로와 슬라이드 동작으로 DMX 채널을 바꿀 수 있습니다. Art-Net 노드나 조명 콘솔의 IP를 넣으세요 (255.255.255.255 = 전체).">
         <div className="row gap-xs wrap">
           <input className="grow" defaultValue={dmxSettings().ip} aria-label="Art-Net IP" onBlur={(e) => saveDmxSettings({ ip: e.target.value.trim() || '255.255.255.255' })} />

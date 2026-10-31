@@ -1,6 +1,7 @@
-// Behringer X32 / M32 over the network (OSC on UDP 10023), so the mixer can work FreeCast over Wi-Fi.
-// FreeCast subscribes with /xremote, and the X32 then reports every change made on the console
-// (a mute button, a user-assign button…); the console page turns the learned ones into slide actions.
+// Behringer X32 / M32 over the network (OSC on UDP 10023): FreeCast operates the mixer over Wi-Fi —
+// mutes, faders and scene recall, by hand from the Mixer tab or from macros and slide actions.
+// On connecting it reads names, mutes, faders and scene names, and /xremote keeps them in step with
+// whatever the sound team changes on the console.
 import dgram from 'node:dgram';
 import os from 'node:os';
 
@@ -11,13 +12,17 @@ const LOST_MS = 20000;
 const pad4 = (b) => Buffer.concat([b, Buffer.alloc(4 - (b.length % 4))]);
 const oscString = (s) => pad4(Buffer.from(s, 'utf8'));
 
-/** One OSC message. args: numbers are sent as int32 when whole, float32 otherwise; strings as s. */
+/**
+ * One OSC message. args: strings are sent as s, numbers as int32 when whole and float32 otherwise;
+ * { f: n } forces a float (an X32 fader at exactly 0 or 1 is still a float).
+ */
 export function oscMessage(address, args = []) {
-  const tags = ',' + args.map((a) => (typeof a === 'string' ? 's' : Number.isInteger(a) ? 'i' : 'f')).join('');
+  const isFloat = (a) => typeof a === 'object' || !Number.isInteger(a);
+  const tags = ',' + args.map((a) => (typeof a === 'string' ? 's' : isFloat(a) ? 'f' : 'i')).join('');
   const data = args.map((a) => {
     if (typeof a === 'string') return oscString(a);
     const b = Buffer.alloc(4);
-    if (Number.isInteger(a)) b.writeInt32BE(a); else b.writeFloatBE(a);
+    if (isFloat(a)) b.writeFloatBE(typeof a === 'object' ? a.f : a); else b.writeInt32BE(a);
     return b;
   });
   return Buffer.concat([oscString(address), oscString(tags), ...data]);
@@ -66,21 +71,63 @@ function broadcastAddresses() {
   return [...out];
 }
 
+const two = (n) => String(n).padStart(2, '0');
+const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
+/** What FreeCast reads on connecting: strip names, mutes and faders, scene names and the current scene. */
+export const SNAPSHOT = [
+  ...range(1, 32).flatMap((n) => [`/ch/${two(n)}/config/name`, `/ch/${two(n)}/mix/on`, `/ch/${two(n)}/mix/fader`]),
+  ...range(1, 8).flatMap((n) => [`/dca/${n}/config/name`, `/dca/${n}/on`, `/dca/${n}/fader`]),
+  '/main/st/mix/on', '/main/st/mix/fader',
+  ...range(0, 99).map((n) => `/-show/showfile/scene/${String(n).padStart(3, '0')}/name`),
+  '/-show/prepos/current',
+];
+
+/**
+ * The only things FreeCast may change on the mixer: channel 1–32, DCA 1–8 and main LR mute (on: 1 = on,
+ * 0 = muted) and fader (0–1), and scene recall (0–99). Returns the OSC argument, or null when refused.
+ */
+export function checkSet(address, value) {
+  if (typeof address !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const strip = /^\/(ch\/(0[1-9]|[12]\d|3[0-2])\/mix|dca\/[1-8]|main\/st\/mix)\/(on|fader)$/.exec(address);
+  if (strip) {
+    if (strip[3] === 'on') return value === 0 || value === 1 ? value : null;
+    return value >= 0 && value <= 1 ? { f: value } : null;
+  }
+  if (address === '/-action/goscene') return Number.isInteger(value) && value >= 0 && value <= 99 ? value : null;
+  return null;
+}
+
 /** The X32 link: one at a time, renewed every few seconds, reported to every open console. */
 export function createX32Link({ createSocket = () => dgram.createSocket('udp4'), now = () => Date.now() } = {}) {
   let socket = null;
   let timer = null;
   let state = { status: 'off', ip: null, name: null, model: null, version: null };
   let lastReply = 0;
+  let values = {};
   const listeners = new Set();
   const emit = (event) => listeners.forEach((fn) => fn(event));
   const set = (patch) => { state = { ...state, ...patch }; emit({ type: 'status', ...state }); };
   const send = (address, args) => socket?.send(oscMessage(address, args), PORT, state.ip);
+  const remember = (address, value) => {
+    if (values[address] === value) return;
+    values = { ...values, [address]: value };
+    emit({ type: 'value', address, value });
+  };
+  /** Ask for everything the Mixer tab shows, a few messages at a time so no reply is dropped. */
+  const readAll = () => {
+    const list = [...SNAPSHOT];
+    const batch = () => {
+      if (!socket) return;
+      list.splice(0, 16).forEach((a) => send(a));
+      if (list.length) setTimeout(batch, 20);
+    };
+    batch();
+  };
 
   const tick = () => {
     send('/xremote');
     send('/info');
-    if (state.status === 'connected' && now() - lastReply > LOST_MS) set({ status: 'lost' });
+    if ((state.status === 'connected' || state.status === 'connecting') && now() - lastReply > LOST_MS) set({ status: 'lost' });
   };
 
   function disconnect() {
@@ -88,6 +135,7 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
     timer = null;
     socket?.close();
     socket = null;
+    values = {};
     set({ status: 'off', ip: null, name: null, model: null, version: null });
   }
 
@@ -102,15 +150,18 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
       const m = parseOsc(msg);
       if (!m) return;
       lastReply = now();
+      // First answer, or back after the mixer was gone: read everything again.
+      const arrived = state.status !== 'connected';
       if (m.address === '/info' || m.address === '/xinfo') {
         const s = m.args.map((a) => a.value);
         set(m.address === '/info' ? { status: 'connected', model: s[2] ?? null, version: s[3] ?? null } : { status: 'connected', name: s[1] ?? null, model: s[2] ?? null, version: s[3] ?? null });
-        return;
+      } else {
+        if (arrived) set({ status: 'connected' });
+        if (m.args.length === 1 && m.args[0].type !== 'b') remember(m.address, m.args[0].value);
       }
-      if (state.status !== 'connected') set({ status: 'connected' });
-      // Buttons and mutes are whole numbers; faders and knobs (floats) never turn a slide.
-      if (m.args.length === 1 && m.args[0].type === 'i') emit({ type: 'osc', address: m.address, value: m.args[0].value });
+      if (arrived) readAll();
     });
+    lastReply = now();
     set({ status: 'connecting', ip, name: null, model: null, version: null });
     socket.bind(() => { send('/xinfo'); tick(); });
     timer = setInterval(tick, RENEW_MS);
@@ -137,10 +188,30 @@ export function createX32Link({ createSocket = () => dgram.createSocket('udp4'),
     });
   }
 
+  /** Change one thing on the mixer (see checkSet). The X32 does not echo a client's own change, so it is remembered here. */
+  function setValue(address, value) {
+    const arg = checkSet(address, value);
+    if (arg == null) throw new Error('이 믹서 값은 바꿀 수 없습니다.');
+    if (!socket || state.status !== 'connected') throw new Error('X32가 연결되어 있지 않습니다.');
+    send(address, [arg]);
+    if (address === '/-action/goscene') {
+      remember('/-show/prepos/current', value);
+      // A recalled scene changes mutes and faders everywhere: read them again once it has loaded.
+      setTimeout(readAll, 300);
+    } else remember(address, value);
+    return { ok: true };
+  }
+
   return {
-    connect, disconnect, scan,
+    connect, disconnect, scan, setValue,
     get state() { return state; },
-    subscribe(fn) { listeners.add(fn); fn({ type: 'status', ...state }); return () => listeners.delete(fn); },
+    get values() { return values; },
+    subscribe(fn) {
+      listeners.add(fn);
+      fn({ type: 'status', ...state });
+      fn({ type: 'snapshot', values });
+      return () => listeners.delete(fn);
+    },
   };
 }
 
@@ -149,7 +220,8 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 /**
  * /api/x32/* for the console on this computer only (phones on the network and the internet
- * address never reach it): GET events (server-sent events), POST connect {ip}, disconnect, scan.
+ * address never reach it): GET events (server-sent events), POST connect {ip}, disconnect, scan,
+ * set {address, value}.
  */
 export async function x32Middleware(req, res, next) {
   if (!req.url?.startsWith('/api/x32/')) return next();
@@ -177,6 +249,7 @@ export async function x32Middleware(req, res, next) {
     if (route === 'connect') return reply(200, link.connect(JSON.parse(raw || '{}').ip));
     if (route === 'disconnect') { link.disconnect(); return reply(200, link.state); }
     if (route === 'scan') return reply(200, { found: await link.scan() });
+    if (route === 'set') { const { address, value } = JSON.parse(raw || '{}'); return reply(200, link.setValue(address, value)); }
     reply(404, { error: 'Not found' });
   } catch (e) {
     reply(400, { error: e.message });

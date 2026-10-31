@@ -3,6 +3,8 @@ import type { Action, AppState } from '../domain/reducer';
 import type { Macro, MacroStep } from '../domain/types';
 import { uid } from '../domain/lyrics';
 import { parseChannels } from '../domain/effects';
+import { describeX32Step } from '../domain/x32';
+import { X32StepPicker } from './X32StepPicker';
 
 interface Props {
   state: AppState;
@@ -77,6 +79,7 @@ function describe(step: MacroStep, state: AppState): string {
     case 'audio': return step.mediaId ? `Play ${state.library.media.find((m) => m.id === step.mediaId)?.name ?? 'audio'}` : 'Stop audio';
     case 'black': return step.on ? 'Black on' : 'Black off';
     case 'dmx': return `DMX u${step.universe}: ${Object.entries(step.channels).map(([c, v]) => `${c}=${v}`).join(', ')}`;
+    case 'x32': return describeX32Step(step);
     case 'logo': return step.on ? 'Logo on' : 'Logo off';
     case 'stageMessage': return step.text ? `Stage message “${step.text}”` : 'Clear stage message';
     case 'announce': return step.presentationId ? 'Start announcements' : 'Stop announcements';
@@ -149,6 +152,7 @@ export function MacrosPanel({ state, dispatch }: Props) {
               <button onClick={() => save({ ...m, steps: snapshot(state) })}>Re-capture look</button>
               <button className="danger" onClick={() => { dispatch({ type: 'macro/delete', id: m.id }); setEditing(null); }}>Delete</button>
             </div>
+            <X32StepPicker onAdd={(step) => save({ ...m, steps: [...m.steps, step] })} />
           </div>
         );
       })()}

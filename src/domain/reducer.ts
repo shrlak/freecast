@@ -249,6 +249,7 @@ function stepToAction(step: MacroStep, now: number): Action {
   switch (step.type) {
     case 'logo': return { type: 'live/logo', on: step.on };
     case 'dmx': return { type: 'noop' };
+    case 'x32': return { type: 'noop' };
     case 'stageMessage': return { type: 'live/stageMessage', message: step.text };
     case 'announce': return step.presentationId ? { type: 'announce/start', presentationId: step.presentationId } : { type: 'announce/stop' };
     case 'clearAll': return { type: 'live/clearAll' };
