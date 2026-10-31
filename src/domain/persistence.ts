@@ -25,6 +25,27 @@ export function clearTransitions(list: Library['presentations']): Library['prese
   });
 }
 
+/** Step types older versions saved that FreeCast no longer runs (OBS scenes, stream, recording). */
+const RETIRED_STEPS = new Set(['obs']);
+const keepStep = (s: unknown) => !(isObj(s) && RETIRED_STEPS.has(s.type as string));
+/** The OBS lyrics overlay screen older versions created (kept if it was renamed, i.e. set up on purpose). */
+const isRetiredScreen = (s: unknown) => isObj(s) && s.id === 'screen_stream' && s.name === 'OBS lyrics overlay (lower third)';
+
+/** Macros and slide actions without retired step types. */
+function withoutRetiredSteps<T extends { steps: unknown[] }>(macros: T[]): T[] {
+  return macros.map((m) => (Array.isArray(m?.steps) && !m.steps.every(keepStep) ? { ...m, steps: m.steps.filter(keepStep) } : m));
+}
+function withoutRetiredActions(list: Library['presentations']): Library['presentations'] {
+  return list.map((p) => (p.slides.some((s) => s.actions && !s.actions.every(keepStep))
+    ? { ...p, slides: p.slides.map((s) => {
+      if (!s.actions || s.actions.every(keepStep)) return s;
+      const actions = s.actions.filter(keepStep);
+      const { actions: _a, ...rest } = s;
+      return actions.length ? { ...rest, actions } : rest;
+    }) }
+    : p));
+}
+
 export function normalizeLibrary(value: unknown): Library | null {
   if (!isObj(value) || value.version !== 1) return null;
   const { presentations, themes } = value;
@@ -44,7 +65,8 @@ export function normalizeLibrary(value: unknown): Library | null {
   const templates = seed.presentations.filter((p) => p.folder === 'Templates' && !ids.has(p.id) && wanted(p.id));
   const laidOut = value.aspect === '4:3' ? (presentations as Library['presentations']) : toFourThree(presentations as Library['presentations']);
   // Once: every transition the library had is cleared, so all of them are the default (없음, 1 ms).
-  const own = value.transitionsReset === true ? laidOut : clearTransitions(laidOut);
+  const screens = arr<Library['screens'][number]>(value.screens, seed.screens);
+  const own = withoutRetiredActions(value.transitionsReset === true ? laidOut : clearTransitions(laidOut));
   return {
     version: 1,
     cloudResetId: typeof value.cloudResetId === 'string' ? value.cloudResetId : undefined,
@@ -65,8 +87,8 @@ export function normalizeLibrary(value: unknown): Library | null {
     timers: arr(value.timers, seed.timers),
     props: arr(value.props, seed.props),
     messageTemplates: arr(value.messageTemplates, seed.messageTemplates),
-    macros: arr(value.macros, seed.macros),
-    screens: arr(value.screens, seed.screens),
+    macros: withoutRetiredSteps(arr(value.macros, seed.macros)),
+    screens: screens.some((x) => !isRetiredScreen(x)) ? screens.filter((x) => !isRetiredScreen(x)) : screens,
     usage: arr(value.usage, []),
     schedules: arr(value.schedules, []),
     looks: arr(value.looks, []),

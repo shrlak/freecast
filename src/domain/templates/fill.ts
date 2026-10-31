@@ -86,8 +86,8 @@ export function templateLyricsTheme(tpl: ServiceTemplates): Theme {
  * A song in the church template's design (as the ppt program builds it from template.pptx): a title
  * slide (watercolor), then each part split as evenly as possible into slides of at most `maxLines`
  * lines, on the white lyric background with the song title in the corner and the logo. The lyrics
- * stay slide text drawn by the lyrics theme (font, size, colour), so arrangements, the stage display
- * and the OBS overlay keep working. Keeps the song's id, folder and arrangements; per-slide font /
+ * stay slide text drawn by the lyrics theme (font, size, colour), so arrangements and the stage display
+ * keep working. Keeps the song's id, folder and arrangements; per-slide font /
  * colour / background overrides are cleared so every song looks the same.
  */
 export function restyleSong(song: Presentation, tpl: ServiceTemplates, maxLines: number): Presentation {

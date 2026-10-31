@@ -1,6 +1,5 @@
 import type { Background, Library, MediaMeta, Slide, SlideAction, TransitionKind } from '../domain/types';
 import { parseChannels } from '../domain/effects';
-import { obs } from '../domain/obs';
 import { AutoTextarea } from './AutoTextarea';
 import { isPdfSlide } from '../domain/importedSlides';
 import { PdfReadOnly } from './PdfReadOnly';
@@ -31,7 +30,6 @@ function describe(a: SlideAction, lib: Library): string {
     case 'announce': return a.presentationId ? `Start announcements “${name(lib.presentations, a.presentationId)}”` : 'Stop announcements';
     case 'logo': return a.on ? 'Show logo' : 'Hide logo';
     case 'black': return a.on ? 'Black screen' : 'Black off';
-    case 'obs': return a.action === 'scene' ? `OBS scene “${a.scene}”` : `OBS ${a.action}`;
     case 'dmx': return `DMX u${a.universe}: ${Object.entries(a.channels).map(([c, v]) => `${c}=${v}`).join(', ')}`;
     default: return a.type.replace(/([A-Z])/g, ' $1').toLowerCase();
   }
@@ -64,8 +62,6 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
     else if (kind === 'stage') {
       const text = prompt('Stage message (shown to the band/speaker only)');
       if (text) a = { type: 'stageMessage', text };
-    } else if (kind === 'obs') {
-      a = id === 'startStream' || id === 'stopStream' ? { type: 'obs', action: id } : { type: 'obs', action: 'scene', scene: id };
     } else if (kind === 'dmx') {
       const uni = Number(prompt('DMX universe (0 = first)', '0') ?? 'x');
       const ch = parseChannels(prompt('Channels, e.g. 1=255, 2=128') ?? '');
@@ -135,9 +131,7 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
             <option value="logo:on">Show logo</option><option value="logo:off">Hide logo</option>
             <option value="stage:">Stage message…</option><option value="message:">Audience message…</option>
           </optgroup>
-          <optgroup label="OBS & lighting">
-            {obs.state.scenes.map((sc) => <option key={sc} value={`obs:${sc}`}>OBS scene: {sc}</option>)}
-            <option value="obs:startStream">OBS start stream</option><option value="obs:stopStream">OBS stop stream</option>
+          <optgroup label="Lighting">
             <option value="dmx:">DMX lighting…</option>
           </optgroup>
         </select>

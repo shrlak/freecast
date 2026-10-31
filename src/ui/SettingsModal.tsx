@@ -9,6 +9,8 @@ import { contentServer, DEFAULT_SERVER, setContentServer } from '../domain/onlin
 import { dmxSettings, saveDmxSettings, sendDmx } from '../domain/effects';
 import { FEATURES, loadFeatures, setFeature, type FeatureId } from '../domain/features';
 import { NameDialog } from './NameDialog';
+import { MidiSettingsCard } from './MidiSettingsCard';
+import type { MidiSettings } from '../domain/midi';
 
 export type SettingsPage = 'general' | 'outputs' | 'stage' | 'remote' | 'ai' | 'devices';
 
@@ -16,8 +18,8 @@ interface Props {
   state: AppState;
   dispatch: Dispatch<Action>;
   relayConnected: boolean;
-  midi: boolean;
-  onMidi: (on: boolean) => void;
+  midi: MidiSettings;
+  onMidi: (s: MidiSettings) => void;
   /** 실험 기능 were switched on or off. */
   onFeatures: () => void;
   initialPage?: SettingsPage;
@@ -26,11 +28,11 @@ interface Props {
 
 const PAGES: { id: SettingsPage; icon: string; label: string; intro: string; desktopOnly?: boolean }[] = [
   { id: 'general', icon: '⚙', label: '일반', intro: '업데이트, 단축키, 실험 기능' },
-  { id: 'outputs', icon: '🖵', label: '출력 화면', intro: '프로젝터 · TV · 방송으로 보내는 화면' },
+  { id: 'outputs', icon: '🖵', label: '출력 화면', intro: '프로젝터 · TV로 보내는 화면' },
   { id: 'stage', icon: '🎤', label: '무대 화면', intro: '찬양팀 · 설교자가 보는 화면' },
   { id: 'remote', icon: '📱', label: '리모컨 · 휴대폰', intro: '휴대폰 · 태블릿으로 조작하기' },
   { id: 'ai', icon: '✨', label: 'AI', intro: '콘티 인식 · 가사 찾기에 쓰는 AI', desktopOnly: true },
-  { id: 'devices', icon: '🎛', label: '장비 · 연결', intro: 'MIDI, 조명(DMX), 찬양 서버' },
+  { id: 'devices', icon: '🎛', label: '장비 · 연결', intro: 'MIDI · X32 믹서, 조명(DMX), 찬양 서버' },
 ];
 
 const LAYERS: { id: keyof ScreenLayers; label: string }[] = [
@@ -82,7 +84,7 @@ export function SettingsModal({ state, dispatch, relayConnected, midi, onMidi, o
             {current.id === 'stage' && <StagePage state={state} dispatch={dispatch} />}
             {current.id === 'remote' && (desk ? <DesktopRemote {...desk} /> : <WebRemote relayConnected={relayConnected} />)}
             {current.id === 'ai' && (desk ? <DesktopAi {...desk} /> : <Loading />)}
-            {current.id === 'devices' && <DevicesPage midi={midi} onMidi={onMidi} />}
+            {current.id === 'devices' && <DevicesPage midi={midi} onMidi={onMidi} state={state} />}
           </div>
         </div>
       </div>
@@ -135,7 +137,7 @@ function OutputsPage({ state, dispatch, desk }: { state: AppState; dispatch: Dis
   return (
     <>
       {desktop && (desk ? <DesktopDisplays {...desk} screens={screens} /> : <Loading />)}
-      <Card title="출력 화면" hint="화면마다 따로 창이 열립니다. 프로젝터 · TV · 보조 모니터로 옮기고 F를 누르면 전체 화면이 됩니다. 방송(OBS)용 화면은 빈 곳을 크로마 그린이나 투명으로 두고 가사만 보내세요.">
+      <Card title="출력 화면" hint="화면마다 따로 창이 열립니다. 프로젝터 · TV · 보조 모니터로 옮기고 F를 누르면 전체 화면이 됩니다.">
         {screens.map((s) => (
           <div key={s.id} className="settings-item">
             <div className="settings-item-head">
@@ -153,7 +155,7 @@ function OutputsPage({ state, dispatch, desk }: { state: AppState; dispatch: Dis
                 </label>
                 <label>빈 곳
                   <select value={s.key} onChange={(e) => save({ ...s, key: e.target.value as Screen['key'] })}>
-                    <option value="black">검은색</option><option value="green">크로마 그린</option><option value="transparent">투명 (OBS)</option><option value="matte">키 (매트)</option>
+                    <option value="black">검은색</option><option value="green">크로마 그린</option><option value="transparent">투명</option><option value="matte">키 (매트)</option>
                   </select>
                 </label>
                 <label>가장자리 가리기
@@ -191,7 +193,7 @@ function OutputsPage({ state, dispatch, desk }: { state: AppState; dispatch: Dis
         </div>
         <p className="hint">영상 스위처용 키 · 필 출력: “키 (매트)” 화면 하나와 일반 화면 하나를 함께 쓰세요.</p>
       </Card>
-      <Card title="화면 구성 저장 (Look)" hint="모든 화면이 무엇을 보여 주는지 저장해 두고 한 번에 바꿉니다. 예) 예배 · 광고만 · 방송">
+      <Card title="화면 구성 저장 (Look)" hint="모든 화면이 무엇을 보여 주는지 저장해 두고 한 번에 바꿉니다. 예) 예배 · 광고만">
         <div className="row gap-xs wrap">
           {state.library.looks.map((l) => (
             <span key={l.id} className="look-chip">
@@ -257,16 +259,10 @@ function WebRemote({ relayConnected }: { relayConnected: boolean }) {
   );
 }
 
-function DevicesPage({ midi, onMidi }: { midi: boolean; onMidi: (on: boolean) => void }) {
+function DevicesPage({ midi, onMidi, state }: { midi: MidiSettings; onMidi: (s: MidiSettings) => void; state: AppState }) {
   return (
     <>
-      <section className="settings-card">
-        <label className="settings-switch">
-          <span><b>MIDI 컨트롤러</b><small className="muted">건반 · 패드로 슬라이드를 넘깁니다.</small></span>
-          <input type="checkbox" checked={midi} onChange={(e) => onMidi(e.target.checked)} />
-        </label>
-        <p className="hint">노트 60 (C4) 다음 · 59 이전 · 58 모두 지우기 · 57 글자 지우기 · 56 검은 화면 · 노트 36–51 매크로 1–16 · CC 64가 64보다 크면 다음.</p>
-      </section>
+      <MidiSettingsCard midi={midi} onMidi={onMidi} macros={state.library.macros} />
       <Card title="조명 (DMX · Art-Net)" hint="매크로와 슬라이드 동작으로 DMX 채널을 바꿀 수 있습니다. Art-Net 노드나 조명 콘솔의 IP를 넣으세요 (255.255.255.255 = 전체).">
         <div className="row gap-xs wrap">
           <input className="grow" defaultValue={dmxSettings().ip} aria-label="Art-Net IP" onBlur={(e) => saveDmxSettings({ ip: e.target.value.trim() || '255.255.255.255' })} />

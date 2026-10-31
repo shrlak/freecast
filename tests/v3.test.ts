@@ -129,14 +129,6 @@ describe('ProPresenter-style live features', () => {
   });
 });
 
-describe('OBS WebSocket', () => {
-  it('computes the authentication string like the obs-websocket protocol example', async () => {
-    const { obsAuth } = await import('../src/domain/obs');
-    expect(await obsAuth('supersecretpassword', 'lM1GncleQOaCu9lT1yeUZhFYnqhsLLP1G5lAGo3ixaI=', '+IxH4CnCiqpX1rM9scsNynZzbOe4KhDeYcTNS3PDaeY='))
-      .toBe('1Ct943GAT+6YQUUX47Ia/ncufilbe6+oD6lY+5kaCu4=');
-  });
-});
-
 describe('updater version compare', () => {
   it('orders versions numerically', async () => {
     // @ts-expect-error plain ESM module
