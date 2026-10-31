@@ -1,7 +1,7 @@
 {
   "name": "freecast",
   "private": true,
-  "version": "0.7.6",
+  "version": "0.7.7",
   "description": "Free presentation software for worship and live events",
   "type": "module",
   "scripts": {
@@ -80,7 +80,8 @@
           ]
         }
       ],
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": false,
       "extendInfo": {
         "NSCameraUsageDescription": "FreeCast shows live camera feeds as slide backgrounds.",
         "NSLocalNetworkUsageDescription": "FreeCast lets phones on your network act as remotes and stage displays, and connects to your Behringer X32 mixer over Wi-Fi."
