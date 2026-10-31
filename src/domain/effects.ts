@@ -1,5 +1,6 @@
-// Side effects that macros and slide actions trigger outside the app: DMX lighting.
+// Side effects that macros and slide actions trigger outside the app: DMX lighting and the X32 mixer.
 import type { MacroStep } from './types';
+import { x32Message } from './x32';
 
 const DMX_KEY = 'freecast.dmx';
 export function dmxSettings(): { ip: string } {
@@ -19,9 +20,17 @@ export function sendDmx(universe: number, channels: Record<string, number>) {
   }).catch(() => undefined);
 }
 
+/** Change the X32 through the FreeCast server (quietly does nothing when the mixer is not connected). */
+export function sendX32(step: Extract<MacroStep, { type: 'x32' }>) {
+  const msg = x32Message(step);
+  if (!msg) return Promise.resolve();
+  return fetch('/api/x32/set', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(msg) }).catch(() => undefined);
+}
+
 /** Run the external part of a step (no-op for steps the reducer handles). */
 export function runExternal(step: MacroStep) {
   if (step.type === 'dmx') sendDmx(step.universe, step.channels);
+  else if (step.type === 'x32') sendX32(step);
 }
 
 /** "1=255, 2=128" → { "1": 255, "2": 128 } */

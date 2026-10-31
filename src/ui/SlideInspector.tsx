@@ -1,5 +1,7 @@
 import type { Background, Library, MediaMeta, Slide, SlideAction, TransitionKind } from '../domain/types';
 import { parseChannels } from '../domain/effects';
+import { describeX32Step } from '../domain/x32';
+import { X32StepPicker } from './X32StepPicker';
 import { AutoTextarea } from './AutoTextarea';
 import { isPdfSlide } from '../domain/importedSlides';
 import { PdfReadOnly } from './PdfReadOnly';
@@ -31,6 +33,7 @@ function describe(a: SlideAction, lib: Library): string {
     case 'logo': return a.on ? 'Show logo' : 'Hide logo';
     case 'black': return a.on ? 'Black screen' : 'Black off';
     case 'dmx': return `DMX u${a.universe}: ${Object.entries(a.channels).map(([c, v]) => `${c}=${v}`).join(', ')}`;
+    case 'x32': return describeX32Step(a);
     default: return a.type.replace(/([A-Z])/g, ' $1').toLowerCase();
   }
 }
@@ -135,6 +138,7 @@ export function SlideInspector({ slide, library: lib, onChange, onDesign, onClos
             <option value="dmx:">DMX lighting…</option>
           </optgroup>
         </select>
+        <X32StepPicker onAdd={(step) => setActions([...actions, step])} />
       </div>
       <label>Stage notes<AutoTextarea rows={3} value={slide.notes ?? ''} onChange={(e) => onChange({ notes: e.target.value || undefined })} /></label>
       <label>QR links (one per line)<AutoTextarea rows={2} value={(slide.qr ?? []).join('\n')} onChange={(e) => {

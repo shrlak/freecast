@@ -7,6 +7,7 @@ import { MessagesPanel, MacrosPanel } from './MessagesMacros';
 import { AudioPanel } from './AudioPanel';
 import { desktop } from '../domain/desktop';
 import { MarkerEditor, useMarkerTrigger } from './markers';
+import { MixerPanel } from './MixerPanel';
 
 interface Props {
   state: AppState;
@@ -26,7 +27,7 @@ export function presentOutput() {
   else openOutput('output');
 }
 
-const TABS = ['Macros', 'Messages', 'Timers', 'Props', 'Audio'] as const;
+const TABS = ['Macros', 'Messages', 'Timers', 'Props', 'Audio', 'Mixer'] as const;
 
 export function LivePanel({ state, dispatch }: Props) {
   const { live } = state;
@@ -103,6 +104,7 @@ export function LivePanel({ state, dispatch }: Props) {
         {tab === 'Messages' && <MessagesPanel state={state} dispatch={dispatch} />}
         {tab === 'Macros' && <MacrosPanel state={state} dispatch={dispatch} />}
         {tab === 'Audio' && <AudioPanel state={state} dispatch={dispatch} />}
+        {tab === 'Mixer' && <MixerPanel />}
       </div>
     </aside>
   );

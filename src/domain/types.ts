@@ -354,7 +354,13 @@ export type MacroStep =
   | { type: 'stageMessage'; text: string | null }
   | { type: 'announce'; presentationId: string | null }
   /** DMX lighting over Art-Net: set channels (1–512) of a universe. Run by the console. */
-  | { type: 'dmx'; universe: number; channels: Record<string, number> };
+  | { type: 'dmx'; universe: number; channels: Record<string, number> }
+  /**
+   * Behringer X32 over Wi-Fi: mute / unmute / set the fader (0–1) of a strip ('ch/05', 'dca/2',
+   * 'main/st'), or recall a scene (0–99). Run by the console.
+   */
+  | { type: 'x32'; action: 'mute' | 'unmute' | 'fader'; strip: string; value?: number }
+  | { type: 'x32'; action: 'scene'; scene: number };
 
 export interface Macro {
   id: string;

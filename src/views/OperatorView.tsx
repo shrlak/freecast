@@ -44,8 +44,8 @@ import { AudioPlayer } from '../ui/AudioPanel';
 import { filesToSlides } from '../ui/importFiles';
 import { remoteInfoMessages, remotePositionMessage, remoteSlideInfo } from '../domain/remoteSlides';
 import { mediaIdsFor, resetSentMedia, sendMediaToRemotes } from '../domain/remoteMedia';
-import { useMidi } from '../ui/midi';
-import { loadMidiSettings, saveMidiSettings, type MidiSettings } from '../domain/midi';
+import { x32 } from '../ui/x32';
+import { loadX32Settings, saveX32Settings, type X32Settings } from '../domain/x32';
 import { UpdateBanner } from '../ui/UpdateBanner';
 import { useCloudSync } from '../ui/useCloudSync';
 import { deleteMedia, forgetMediaUrl } from '../domain/media';
@@ -110,8 +110,8 @@ export function OperatorView() {
   const [remoteControl, setRemoteControl] = useState<RemoteControlState | null>(null);
   useEffect(() => { const expire = () => dispatchRaw({ type: 'trash/expire', now: Date.now() }); expire(); const t = setInterval(expire, 60000); return () => clearInterval(t); }, []);
   const [toast, setToast] = useState<string | null>(null);
-  const [midi, setMidiState] = useState(loadMidiSettings);
-  const setMidi = (next: MidiSettings) => { setMidiState(next); saveMidiSettings(next); };
+  const [mixer, setMixerState] = useState(loadX32Settings);
+  const setMixer = (next: X32Settings) => { setMixerState(next); saveX32Settings(next); };
   const [online, setOnline] = useState<{ status: 'loading' | 'ok' | 'error'; count: number; error?: string }>({ status: 'loading', count: 0 });
   const [view, setView] = useState<PptViewMode>('normal');
   const [slideId, setSlideIdState] = useState<string | null>(null);
@@ -345,7 +345,12 @@ export function OperatorView() {
     if (remotes > 0) sendMediaToRemotes(mediaIdsFor({ live: state.live }));
   }, [remotes, state.live]);
 
-  useMidi(midi, (a) => { if (modalRef.current === 'rehearsal') rehearsalCommandRef.current?.(a as unknown as Record<string, unknown>); else dispatch(a); }, state.library.macros);
+  // The X32 link lives in the FreeCast server; the console only says which mixer to talk to.
+  const mixerIp = mixer.on && mixer.ip ? mixer.ip : null;
+  useEffect(() => {
+    if (!mixerIp && x32.state.status === 'off') return;
+    x32.connect(mixerIp);
+  }, [mixerIp]);
 
   // Slide auto-advance ("go to next" timers) — restarts whenever a different slide goes live.
   const liveSlide = state.live.slide;
@@ -640,8 +645,8 @@ export function OperatorView() {
       )}
       {modal === 'ai' && <AiModal onClose={() => setModal(null)} onCreate={(p) => { dispatch({ type: 'presentation/create', presentation: p }); setModal(null); }} />}
       {(modal === 'settings' || modal === 'screens') && (
-        <SettingsModal state={state} dispatch={dispatch} relayConnected={relay.connected} midi={midi} initialPage={modal === 'screens' ? 'outputs' : 'general'}
-          onMidi={setMidi}
+        <SettingsModal state={state} dispatch={dispatch} relayConnected={relay.connected} mixer={mixer} initialPage={modal === 'screens' ? 'outputs' : 'general'}
+          onMixer={setMixer}
           onFeatures={() => setMarketOn(featureEnabled('templateMarket'))} onClose={() => setModal(null)} />
       )}
       {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}

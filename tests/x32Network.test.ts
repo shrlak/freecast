@@ -2,20 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import http from 'node:http';
 // @ts-expect-error plain ESM server module
-import { createX32Link, oscMessage, parseOsc, x32Middleware } from '../server/x32.mjs';
+import { checkSet, createX32Link, oscMessage, parseOsc, SNAPSHOT, x32Middleware } from '../server/x32.mjs';
 import {
-  createOscDecoder, defaultMidiSettings, describeMidi, learnBinding, midiTarget, normalizeMidiSettings, type MidiSettings,
-} from '../src/domain/midi';
+  dbToFader, describeX32Step, faderToDb, formatDb, normalizeX32Settings, sceneName, stripAddress, stripName, x32Message,
+} from '../src/domain/x32';
+import { createInitialState, reducer } from '../src/domain/reducer';
+import { createSeedLibrary } from '../src/domain/defaults';
 
+type Arg = { type: string; value: unknown };
 /** A UDP socket stand-in: records what is sent, and lets the test play the X32's replies. */
 class FakeSocket extends EventEmitter {
-  sent: { address: string; port: number; host: string }[] = [];
+  sent: { address: string; args: Arg[]; port: number; host: string }[] = [];
   closed = false;
   bind(cb: () => void) { cb(); }
   setBroadcast() {}
-  send(buf: Buffer, port: number, host: string) { this.sent.push({ address: parseOsc(buf)!.address, port, host }); }
+  send(buf: Buffer, port: number, host: string) { const m = parseOsc(buf)!; this.sent.push({ address: m.address, args: m.args, port, host }); }
   close() { this.closed = true; }
-  reply(from: string, address: string, args: (number | string)[] = []) { this.emit('message', oscMessage(address, args), { address: from }); }
+  reply(from: string, address: string, args: (number | string | { f: number })[] = []) { this.emit('message', oscMessage(address, args), { address: from }); }
 }
 
 describe('OSC for the X32', () => {
@@ -24,12 +27,29 @@ describe('OSC for the X32', () => {
     expect(buf.length % 4).toBe(0);
     expect(buf.subarray(0, 16).toString('latin1')).toBe('/ch/32/mix/on\0\0\0');
     expect(parseOsc(buf)).toEqual({ address: '/ch/32/mix/on', args: [{ type: 'i', value: 1 }] });
-    expect(parseOsc(oscMessage('/info', ['V2.07', 'osc-server', 'X32', '4.06'])).args.map((a: { value: string }) => a.value)).toEqual(['V2.07', 'osc-server', 'X32', '4.06']);
+    expect(parseOsc(oscMessage('/info', ['V2.07', 'osc-server', 'X32', '4.06'])).args.map((a: Arg) => a.value)).toEqual(['V2.07', 'osc-server', 'X32', '4.06']);
     const fader = parseOsc(oscMessage('/ch/01/mix/fader', [0.75]));
     expect(fader.args[0].type).toBe('f');
     expect(fader.args[0].value).toBeCloseTo(0.75);
+    // A fader at the very top or bottom is still sent as a float.
+    expect(parseOsc(oscMessage('/ch/01/mix/fader', [{ f: 1 }])).args[0]).toEqual({ type: 'f', value: 1 });
     expect(parseOsc(Buffer.from('#bundle\0garbage'))).toBeNull();
     expect(parseOsc(Buffer.from([1, 2, 3]))).toBeNull();
+  });
+
+  it('only lets FreeCast change mutes, faders and scenes', () => {
+    expect(checkSet('/ch/05/mix/on', 0)).toBe(0);
+    expect(checkSet('/ch/32/mix/fader', 1)).toEqual({ f: 1 });
+    expect(checkSet('/dca/8/on', 1)).toBe(1);
+    expect(checkSet('/main/st/mix/fader', 0.5)).toEqual({ f: 0.5 });
+    expect(checkSet('/-action/goscene', 12)).toBe(12);
+    expect(checkSet('/ch/33/mix/on', 1)).toBeNull();
+    expect(checkSet('/ch/05/mix/on', 0.5)).toBeNull();
+    expect(checkSet('/ch/05/mix/fader', 1.2)).toBeNull();
+    expect(checkSet('/-action/goscene', 100)).toBeNull();
+    expect(checkSet('/-action/initall', 1)).toBeNull();
+    expect(checkSet('/config/mute/1', 1)).toBeNull();
+    expect(checkSet('/ch/05/mix/on', Number.NaN)).toBeNull();
   });
 });
 
@@ -43,24 +63,68 @@ describe('X32 network link', () => {
     return { link, sockets, events, advance: (ms: number) => { t += ms; } };
   };
 
-  it('subscribes with /xremote, becomes connected on the reply and forwards whole-number changes only', () => {
-    const { link, sockets, events } = setup();
-    link.connect('192.168.0.64');
-    const s = sockets[0];
-    expect(s.sent.map((m) => m.address)).toEqual(['/xinfo', '/xremote', '/info']);
-    expect(s.sent.every((m) => m.port === 10023 && m.host === '192.168.0.64')).toBe(true);
-    s.reply('192.168.0.64', '/xinfo', ['192.168.0.64', 'Church X32', 'X32', '4.06']);
-    expect(link.state).toMatchObject({ status: 'connected', name: 'Church X32', model: 'X32' });
-    s.reply('192.168.0.64', '/ch/32/mix/on', [0]);
-    s.reply('192.168.0.64', '/ch/01/mix/fader', [0.5]);
-    s.reply('10.0.0.9', '/ch/31/mix/on', [0]); // someone else's packet
-    expect(events.filter((e) => e.type === 'osc')).toEqual([{ type: 'osc', address: '/ch/32/mix/on', value: 0 }]);
-    link.disconnect();
-    expect(s.closed).toBe(true);
-    expect(link.state.status).toBe('off');
+  it('subscribes, reads the mixer once it answers, and keeps up with changes made on the console', () => {
+    vi.useFakeTimers();
+    try {
+      const { link, sockets, events } = setup();
+      link.connect('192.168.0.64');
+      const s = sockets[0];
+      expect(s.sent.map((m) => m.address)).toEqual(['/xinfo', '/xremote', '/info']);
+      expect(s.sent.every((m) => m.port === 10023 && m.host === '192.168.0.64')).toBe(true);
+      s.reply('192.168.0.64', '/xinfo', ['192.168.0.64', 'Church X32', 'X32', '4.06']);
+      expect(link.state).toMatchObject({ status: 'connected', name: 'Church X32', model: 'X32' });
+      vi.advanceTimersByTime(1000);
+      const asked = s.sent.slice(3).map((m) => m.address);
+      expect(asked).toEqual(SNAPSHOT);
+      expect(s.sent.slice(3).every((m) => m.args.length === 0)).toBe(true);
+      s.reply('192.168.0.64', '/ch/05/config/name', ['Pastor']);
+      s.reply('192.168.0.64', '/ch/05/mix/fader', [{ f: 0.75 }]);
+      s.reply('10.0.0.9', '/ch/06/mix/on', [0]); // someone else's packet
+      expect(link.values).toEqual({ '/ch/05/config/name': 'Pastor', '/ch/05/mix/fader': 0.75 });
+      expect(events.filter((e) => e.type === 'value').map((e) => e.address)).toEqual(['/ch/05/config/name', '/ch/05/mix/fader']);
+      // A new console gets everything known so far.
+      const late: Record<string, unknown>[] = [];
+      link.subscribe((e: Record<string, unknown>) => late.push(e));
+      expect(late[1]).toEqual({ type: 'snapshot', values: link.values });
+      link.disconnect();
+      expect(s.closed).toBe(true);
+      expect(link.state.status).toBe('off');
+      expect(link.values).toEqual({});
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('reports a lost mixer when it stops answering, and refuses a bad address', () => {
+  it('sends mutes, faders (as floats) and scene recalls, and remembers them', () => {
+    vi.useFakeTimers();
+    try {
+      const { link, sockets } = setup();
+      expect(() => link.setValue('/ch/05/mix/on', 1)).toThrow(); // not connected yet
+      link.connect('192.168.0.64');
+      const s = sockets[0];
+      s.reply('192.168.0.64', '/info', ['V2.07', 'osc-server', 'X32', '4.06']);
+      vi.advanceTimersByTime(1000);
+      s.sent.length = 0;
+      link.setValue('/ch/05/mix/on', 1);
+      link.setValue('/main/st/mix/fader', 1);
+      link.setValue('/-action/goscene', 3);
+      expect(s.sent.slice(0, 3)).toEqual([
+        { address: '/ch/05/mix/on', args: [{ type: 'i', value: 1 }], port: 10023, host: '192.168.0.64' },
+        { address: '/main/st/mix/fader', args: [{ type: 'f', value: 1 }], port: 10023, host: '192.168.0.64' },
+        { address: '/-action/goscene', args: [{ type: 'i', value: 3 }], port: 10023, host: '192.168.0.64' },
+      ]);
+      expect(link.values).toMatchObject({ '/ch/05/mix/on': 1, '/main/st/mix/fader': 1, '/-show/prepos/current': 3 });
+      // After a scene recall the mixer is read again.
+      vi.advanceTimersByTime(1000);
+      expect(s.sent.filter((m) => m.address === '/ch/01/mix/fader')).toHaveLength(1);
+      expect(() => link.setValue('/-action/initall', 1)).toThrow();
+      link.disconnect();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a mixer that stops answering, and refuses a bad address', () => {
     vi.useFakeTimers();
     try {
       const { link, sockets, advance } = setup();
@@ -70,7 +134,6 @@ describe('X32 network link', () => {
       advance(25000);
       vi.advanceTimersByTime(8000);
       expect(link.state.status).toBe('lost');
-      expect(sockets[0].sent.filter((m) => m.address === '/xremote').length).toBe(2);
       link.connect('192.168.0.64'); // same IP: keeps the link
       expect(sockets).toHaveLength(1);
       expect(() => link.connect('mixer.local')).toThrow();
@@ -97,6 +160,8 @@ describe('X32 network link', () => {
     try {
       const bad = await fetch(`http://127.0.0.1:${port}/api/x32/connect`, { method: 'POST', body: JSON.stringify({ ip: 'nope' }) });
       expect(bad.status).toBe(400);
+      const notConnected = await fetch(`http://127.0.0.1:${port}/api/x32/set`, { method: 'POST', body: JSON.stringify({ address: '/ch/01/mix/on', value: 0 }) });
+      expect(notConnected.status).toBe(400);
       const get = await fetch(`http://127.0.0.1:${port}/api/x32/connect`);
       expect(get.status).toBe(405);
       const off = await fetch(`http://127.0.0.1:${port}/api/x32/disconnect`, { method: 'POST' });
@@ -106,51 +171,54 @@ describe('X32 network link', () => {
     } finally {
       server.close();
     }
-    const res = { writeHead: (status: number) => ({ status }), end: () => undefined, status: 0 } as unknown as http.ServerResponse;
     let status = 0;
-    (res as unknown as { writeHead: (s: number) => void }).writeHead = (s: number) => { status = s; };
-    await x32Middleware({ url: '/api/x32/scan', method: 'POST', headers: {}, socket: { remoteAddress: '192.168.0.20' } }, res, () => undefined);
+    const res = { writeHead: (s: number) => { status = s; }, end: () => undefined } as unknown as http.ServerResponse;
+    await x32Middleware({ url: '/api/x32/set', method: 'POST', headers: {}, socket: { remoteAddress: '192.168.0.20' } }, res, () => undefined);
     expect(status).toBe(403);
   });
 });
 
-describe('X32 buttons over the network', () => {
-  it('fires on every mute change, and on a user button press but not its release', () => {
-    const decode = createOscDecoder();
-    expect(decode('/ch/32/mix/on', 0)).toEqual({ kind: 'osc', address: '/ch/32/mix/on' });
-    expect(decode('/ch/32/mix/on', 1)).toEqual({ kind: 'osc', address: '/ch/32/mix/on' });
-    expect(decode('/ch/32/mix/on', 1)).toBeNull();
-    expect(decode('/-stat/userpar/13/value', 127)).toEqual({ kind: 'osc', address: '/-stat/userpar/13/value' });
-    expect(decode('/-stat/userpar/13/value', 0)).toBeNull();
-    expect(decode('/-stat/userpar/13/value', 127)).toEqual({ kind: 'osc', address: '/-stat/userpar/13/value' });
+describe('X32 mixer vocabulary', () => {
+  it('converts fader positions to dB like the console', () => {
+    expect(faderToDb(0.75)).toBeCloseTo(0);
+    expect(faderToDb(1)).toBeCloseTo(10);
+    expect(faderToDb(0.5)).toBeCloseTo(-10);
+    expect(faderToDb(0.25)).toBeCloseTo(-30);
+    expect(faderToDb(0)).toBe(-Infinity);
+    for (const db of [10, 0, -5, -10, -20, -30, -45, -60, -75]) expect(faderToDb(dbToFader(db))).toBeCloseTo(db, 0);
+    expect(dbToFader(-120)).toBe(0);
+    expect(formatDb(0.75)).toBe('0.0 dB');
+    expect(formatDb(1)).toBe('+10.0 dB');
+    expect(formatDb(0)).toBe('−∞ dB');
   });
-  it('ignores screen and selection changes on the console', () => {
-    const decode = createOscDecoder();
-    expect(decode('/-stat/selidx', 4)).toBeNull();
-    expect(decode('/-stat/screen/screen', 2)).toBeNull();
-    expect(decode('/-prefs/bright', 50)).toBeNull();
-    expect(decode('/-stat/solosw/05', 1)).toEqual({ kind: 'osc', address: '/-stat/solosw/05' });
+  it('names strips and scenes from what the mixer reported', () => {
+    const values = { '/ch/05/config/name': 'Pastor', '/dca/2/config/name': ' ', '/-show/showfile/scene/003/name': 'Sunday 1' };
+    expect(stripName('ch/05', values)).toBe('Ch 05 · Pastor');
+    expect(stripName('dca/2', values)).toBe('DCA 2');
+    expect(stripName('main/st', values)).toBe('Main LR');
+    expect(sceneName(3, values)).toBe('03 · Sunday 1');
+    expect(sceneName(4, values)).toBe('04');
+    expect(stripAddress('dca/2', 'on')).toBe('/dca/2/on');
+    expect(stripAddress('ch/05', 'fader')).toBe('/ch/05/mix/fader');
   });
-  it('learns an X32 button heard over Wi-Fi and maps it', () => {
-    const on: MidiSettings = { ...defaultMidiSettings(), enabled: true };
-    const press = { kind: 'osc' as const, address: '/ch/32/mix/on' };
-    const s = learnBinding(on, press, { type: 'command', command: 'next' });
-    expect(midiTarget(s, press, [])).toEqual({ type: 'command', command: 'next' });
-    expect(midiTarget(s, { kind: 'osc', address: '/ch/31/mix/on' }, [])).toBeNull();
-    // MIDI defaults are untouched.
-    expect(midiTarget(s, { kind: 'note', channel: 1, number: 60 }, [])).toEqual({ type: 'command', command: 'next' });
-    expect(describeMidi(press)).toBe('X32 Ch 32 뮤트');
-    expect(describeMidi({ kind: 'osc', address: '/config/mute/2' })).toBe('X32 뮤트 그룹 2');
-    expect(describeMidi({ kind: 'osc', address: '/-stat/userpar/13/value' })).toBe('X32 사용자 버튼 13');
-    expect(describeMidi({ kind: 'osc', address: '/dca/3/on' })).toBe('X32 DCA 3 뮤트');
+  it('turns macro steps into mixer changes', () => {
+    expect(x32Message({ type: 'x32', action: 'unmute', strip: 'ch/05' })).toEqual({ address: '/ch/05/mix/on', value: 1 });
+    expect(x32Message({ type: 'x32', action: 'mute', strip: 'dca/3' })).toEqual({ address: '/dca/3/on', value: 0 });
+    expect(x32Message({ type: 'x32', action: 'fader', strip: 'main/st', value: 0.75 })).toEqual({ address: '/main/st/mix/fader', value: 0.75 });
+    expect(x32Message({ type: 'x32', action: 'scene', scene: 7 })).toEqual({ address: '/-action/goscene', value: 7 });
+    expect(x32Message({ type: 'x32', action: 'mute', strip: 'ch/40' })).toBeNull();
+    expect(x32Message({ type: 'x32', action: 'fader', strip: 'ch/01' })).toBeNull();
+    expect(describeX32Step({ type: 'x32', action: 'unmute', strip: 'ch/05' }, { '/ch/05/config/name': 'Pastor' })).toBe('X32 Ch 05 · Pastor 뮤트 해제');
+    expect(describeX32Step({ type: 'x32', action: 'fader', strip: 'main/st', value: 0.75 })).toBe('X32 Main LR 페이더 0.0 dB');
+    expect(describeX32Step({ type: 'x32', action: 'scene', scene: 2 })).toBe('X32 장면 불러오기 02');
   });
-  it('saves the X32 address and network bindings', () => {
-    const s = normalizeMidiSettings({ enabled: true, network: { on: true, ip: ' 192.168.0.64 ' }, bindings: [
-      { kind: 'osc', address: '/ch/32/mix/on', target: { type: 'command', command: 'next' } },
-      { kind: 'osc', address: 'no-slash', target: { type: 'command', command: 'next' } },
-    ] });
-    expect(s.network).toEqual({ on: true, ip: '192.168.0.64' });
-    expect(s.bindings).toEqual([{ kind: 'osc', address: '/ch/32/mix/on', target: { type: 'command', command: 'next' } }]);
-    expect(normalizeMidiSettings({ enabled: true }).network).toEqual({ on: false, ip: '' });
+  it('leaves the slide show alone when a macro has mixer steps', () => {
+    const state = createInitialState({ ...createSeedLibrary(), macros: [{ id: 'sermon', name: 'Sermon', color: '#000', steps: [{ type: 'x32', action: 'unmute', strip: 'ch/05' }, { type: 'black', on: true }] }] });
+    expect(reducer(state, { type: 'macro/run', id: 'sermon', now: 1 }).live.black).toBe(true);
+  });
+  it('reads saved settings defensively', () => {
+    expect(normalizeX32Settings({ on: true, ip: ' 192.168.0.64 ' })).toEqual({ on: true, ip: '192.168.0.64' });
+    expect(normalizeX32Settings(null)).toEqual({ on: false, ip: '' });
+    expect(normalizeX32Settings({ on: 'yes', ip: 5 })).toEqual({ on: false, ip: '' });
   });
 });
