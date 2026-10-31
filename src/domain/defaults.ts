@@ -138,7 +138,6 @@ function seed(id: string, title: string, text: string, themeId: string, bg?: Bac
 
 export const DEFAULT_SCREENS: Screen[] = [
   { id: 'screen_main', name: 'Audience', themeId: null, key: 'black', layers: { background: true, slide: true, props: true, messages: true, timer: true, announcements: true } },
-  { id: 'screen_stream', name: 'OBS lyrics overlay (lower third)', themeId: 'theme_lower', key: 'transparent', layers: { background: false, slide: true, props: false, messages: false, timer: false, announcements: false } },
 ];
 
 export function createSeedLibrary(): Library {

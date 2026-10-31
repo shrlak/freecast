@@ -248,7 +248,6 @@ function reconcileLive(before: AppState, after: AppState): AppState {
 function stepToAction(step: MacroStep, now: number): Action {
   switch (step.type) {
     case 'logo': return { type: 'live/logo', on: step.on };
-    case 'obs': return { type: 'noop' };
     case 'dmx': return { type: 'noop' };
     case 'stageMessage': return { type: 'live/stageMessage', message: step.text };
     case 'announce': return step.presentationId ? { type: 'announce/start', presentationId: step.presentationId } : { type: 'announce/stop' };
@@ -263,6 +262,8 @@ function stepToAction(step: MacroStep, now: number): Action {
     case 'prop': return { type: 'prop/toggle', id: step.propId, on: step.on };
     case 'message': return { type: 'live/message', message: step.text };
     case 'audio': return { type: 'audio/play', mediaId: step.mediaId };
+    // Step types from older versions (e.g. the removed OBS steps) do nothing.
+    default: return { type: 'noop' };
   }
 }
 

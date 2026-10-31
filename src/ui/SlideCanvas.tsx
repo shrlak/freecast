@@ -399,7 +399,7 @@ function TimerOverlay({ timer }: { timer: Timer }) {
 
 const KEY_FILL = { black: '#000', green: '#00b140', transparent: 'transparent', matte: '#000' } as const;
 
-/** App-relative asset path → absolute URL (works for the console, output windows and OBS). */
+/** App-relative asset path → absolute URL (works for the console and output windows). */
 export const assetUrl = (url: string) => (/^(https?:|data:|blob:)/.test(url) ? url : `${location.origin}${document.body?.dataset.view === 'team' && location.pathname.startsWith('/freecast/team/') ? '/freecast/team' : ''}/${url.replace(/^\//, '')}`);
 
 /** Full-screen church logo ("clear to logo"); falls back to the FreeCast mark. */

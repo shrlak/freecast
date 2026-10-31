@@ -1,6 +1,5 @@
-// Side effects that macros and slide actions trigger outside the app: OBS and DMX lighting.
+// Side effects that macros and slide actions trigger outside the app: DMX lighting.
 import type { MacroStep } from './types';
-import { runObsStep } from './obs';
 
 const DMX_KEY = 'freecast.dmx';
 export function dmxSettings(): { ip: string } {
@@ -22,8 +21,7 @@ export function sendDmx(universe: number, channels: Record<string, number>) {
 
 /** Run the external part of a step (no-op for steps the reducer handles). */
 export function runExternal(step: MacroStep) {
-  if (step.type === 'obs') runObsStep(step.action, step.scene);
-  else if (step.type === 'dmx') sendDmx(step.universe, step.channels);
+  if (step.type === 'dmx') sendDmx(step.universe, step.channels);
 }
 
 /** "1=255, 2=128" → { "1": 255, "2": 128 } */

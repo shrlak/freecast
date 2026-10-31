@@ -8,7 +8,7 @@ import { openLiveChannel } from '../domain/sync';
 /**
  * Audience output. Open it on the projector screen and press F (or double-click) for fullscreen.
  * Keys pressed here (arrows, Space, Esc…) are passed to the console, so a show on a single screen still runs.
- * `?screen=<id>` picks a screen configuration (e.g. lower-third livestream on chroma green).
+ * `?screen=<id>` picks a screen configuration (e.g. lyrics only on chroma green).
  */
 export function OutputView() {
   const live = useLiveFeed();

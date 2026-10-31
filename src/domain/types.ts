@@ -353,8 +353,6 @@ export type MacroStep =
   | { type: 'logo'; on: boolean }
   | { type: 'stageMessage'; text: string | null }
   | { type: 'announce'; presentationId: string | null }
-  /** OBS Studio (WebSocket): switch scene, start/stop stream or recording. Run by the console, not the reducer. */
-  | { type: 'obs'; action: 'scene' | 'startStream' | 'stopStream' | 'startRecord' | 'stopRecord'; scene?: string }
   /** DMX lighting over Art-Net: set channels (1–512) of a universe. Run by the console. */
   | { type: 'dmx'; universe: number; channels: Record<string, number> };
 
@@ -384,9 +382,9 @@ export interface Screen {
   id: string;
   name: string;
   layers: ScreenLayers;
-  /** Override theme for this screen (e.g. lower-third for the livestream). */
+  /** Override theme for this screen (e.g. a lower-third look). */
   themeId: string | null;
-  /** Fill for transparent areas: black, chroma green, or truly transparent (for browser sources). */
+  /** Fill for transparent areas: black, chroma green, or truly transparent. */
   /** 'matte' = key output: white where content is, black elsewhere (pair with a fill screen). */
   key: 'black' | 'green' | 'transparent' | 'matte';
   mask?: ScreenMask;

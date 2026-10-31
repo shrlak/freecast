@@ -3,7 +3,6 @@ import type { Action, AppState } from '../domain/reducer';
 import type { Macro, MacroStep } from '../domain/types';
 import { uid } from '../domain/lyrics';
 import { parseChannels } from '../domain/effects';
-import { obs } from '../domain/obs';
 
 interface Props {
   state: AppState;
@@ -77,7 +76,6 @@ function describe(step: MacroStep, state: AppState): string {
     case 'message': return step.text ? `Message “${step.text}”` : 'Hide message';
     case 'audio': return step.mediaId ? `Play ${state.library.media.find((m) => m.id === step.mediaId)?.name ?? 'audio'}` : 'Stop audio';
     case 'black': return step.on ? 'Black on' : 'Black off';
-    case 'obs': return step.action === 'scene' ? `OBS scene “${step.scene}”` : `OBS ${step.action}`;
     case 'dmx': return `DMX u${step.universe}: ${Object.entries(step.channels).map(([c, v]) => `${c}=${v}`).join(', ')}`;
     case 'logo': return step.on ? 'Logo on' : 'Logo off';
     case 'stageMessage': return step.text ? `Stage message “${step.text}”` : 'Clear stage message';
@@ -140,9 +138,6 @@ export function MacrosPanel({ state, dispatch }: Props) {
                   const uni = Number(prompt('DMX universe (0 = first)', '0') ?? 'x');
                   const ch = parseChannels(prompt('Channels, e.g. 1=255, 2=128, 3=0') ?? '');
                   if (Number.isInteger(uni) && Object.keys(ch).length) save({ ...m, steps: [...m.steps, { type: 'dmx', universe: uni, channels: ch }] });
-                } else if (v.startsWith('obs:')) {
-                  const [, action, scene] = v.split(':');
-                  save({ ...m, steps: [...m.steps, { type: 'obs', action: action as 'scene', scene: scene || undefined }] });
                 }
               }}>
                 <option value="">Add step…</option>
@@ -150,9 +145,6 @@ export function MacrosPanel({ state, dispatch }: Props) {
                 <option value="clearBackground">Clear background</option><option value="clearProps">Clear props</option>
                 <option value="black">Black screen</option><option value="look">Set current background</option><option value="stopAudio">Stop audio</option>
                 <option value="dmx">DMX lighting…</option>
-                {obs.state.scenes.map((sc) => <option key={sc} value={`obs:scene:${sc}`}>OBS scene: {sc}</option>)}
-                <option value="obs:startStream:">OBS start stream</option><option value="obs:stopStream:">OBS stop stream</option>
-                <option value="obs:startRecord:">OBS start recording</option><option value="obs:stopRecord:">OBS stop recording</option>
               </select>
               <button onClick={() => save({ ...m, steps: snapshot(state) })}>Re-capture look</button>
               <button className="danger" onClick={() => { dispatch({ type: 'macro/delete', id: m.id }); setEditing(null); }}>Delete</button>
