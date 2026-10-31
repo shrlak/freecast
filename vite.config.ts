@@ -11,6 +11,8 @@ import { controlMiddleware } from './server/control.mjs';
 // @ts-expect-error plain ESM server modules
 import { dmxMiddleware } from './server/dmx.mjs';
 // @ts-expect-error plain ESM server modules
+import { x32Middleware } from './server/x32.mjs';
+// @ts-expect-error plain ESM server modules
 import { cloudMiddleware } from './server/cloud.mjs';
 // @ts-expect-error plain ESM server modules
 import { recognitionMiddleware } from './server/recognition.mjs';
@@ -23,6 +25,7 @@ function freecastServer(): Plugin {
       server.middlewares.use(aiMiddleware);
       server.middlewares.use(recognitionMiddleware);
       server.middlewares.use(dmxMiddleware);
+      server.middlewares.use(x32Middleware);
       server.middlewares.use(cloudMiddleware);
       if (server.httpServer) {
         const wss = attachRelay(server.httpServer);

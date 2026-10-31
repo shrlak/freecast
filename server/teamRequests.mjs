@@ -28,7 +28,7 @@ export function teamRequests(wss) {
       if (Date.now() - (entry.lastRequestAt ?? 0) < 2000) return error('잠시 기다린 뒤 보내 주세요.');
       requests = requests.filter((r) => Date.now() - r.at < 3600000);
       if (requests.length >= 100) requests = requests.filter((r) => r.status !== 'done');
-      if (requests.length >= 100) return error('대기 중인 요청이 많습니다. 방송실 확인 후 다시 보내 주세요.');
+      if (requests.length >= 100) return error('대기 중인 요청이 많습니다. 운영자 확인 후 다시 보내 주세요.');
       entry.lastRequestAt = Date.now();
       requests.push({ id: randomUUID(), clientRequestId: msg.id, senderId: entry.id, name: entry.name, text, at: Date.now(), status: 'pending' });
       publish();

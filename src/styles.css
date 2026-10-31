@@ -1259,6 +1259,7 @@ body[data-view='remote'] .pastor-root { position: fixed; inset: 0; z-index: 5; }
 .settings-chip { position: relative; display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px; border: 1px solid var(--line); background: #fff; font-size: 12px; cursor: pointer; user-select: none; }
 .settings-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .settings-chip.on { background: #e6f5ec; border-color: #2e9e66; color: #14532d; font-weight: 600; }
+.midi-sub { margin: 10px 0 0; font-size: 12px; font-weight: 600; color: var(--muted); }
 .midi-map { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; }
 .midi-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 13px; }
 .midi-row + .midi-row { border-top: 1px solid var(--line); }

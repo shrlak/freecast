@@ -32,7 +32,7 @@ const PAGES: { id: SettingsPage; icon: string; label: string; intro: string; des
   { id: 'stage', icon: '🎤', label: '무대 화면', intro: '찬양팀 · 설교자가 보는 화면' },
   { id: 'remote', icon: '📱', label: '리모컨 · 휴대폰', intro: '휴대폰 · 태블릿으로 조작하기' },
   { id: 'ai', icon: '✨', label: 'AI', intro: '콘티 인식 · 가사 찾기에 쓰는 AI', desktopOnly: true },
-  { id: 'devices', icon: '🎛', label: '장비 · 연결', intro: 'MIDI · X32 믹서, 조명(DMX), 찬양 서버' },
+  { id: 'devices', icon: '🎛', label: '장비 · 연결', intro: 'X32 믹서(Wi-Fi · USB) · MIDI, 조명(DMX), 찬양 서버' },
 ];
 
 const LAYERS: { id: keyof ScreenLayers; label: string }[] = [
