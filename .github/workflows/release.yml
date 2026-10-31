@@ -77,6 +77,20 @@ jobs:
       # uploaded with `gh` instead, to the release the tag job made.
       - name: Package
         run: npx electron-builder ${{ matrix.os == 'macos-latest' && '--mac --arm64 --x64' || '--win --x64' }} --publish never
+      # An app bundle without a signature (not even ad-hoc) is refused by macOS as "damaged and can't be
+      # opened" once downloaded, with no way to open it from Finder. Every Mac build must be sealed.
+      - name: Check the Mac apps are signed
+        if: matrix.os == 'macos-latest'
+        run: |
+          set -e
+          found=0
+          for app in release/mac*/FreeCast.app; do
+            found=1
+            echo "== $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            codesign -dv "$app" 2>&1 | tee /dev/stderr | grep -Eq 'Signature=adhoc|Authority='
+          done
+          [ "$found" = 1 ] || { echo "::error::no FreeCast.app was built"; exit 1; }
       - name: Upload to the release
         shell: bash
         env:
