@@ -69,8 +69,8 @@ export function ServicePreparationModal({ library, playlistId, onClose, onSettin
     finally { setBusy(false); }
   };
   return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-    <div className="modal" role="dialog" aria-label={mode === 'preflight' ? '예배 시작 전 점검' : '예배 준비'}>
-      <header className="modal-head"><h2>{mode === 'preflight' ? '예배 시작 전 점검' : '예배 준비'} · {pl?.name ?? '예배를 먼저 선택하세요'}</h2><button onClick={onClose} aria-label="닫기">✕</button></header>
+    <div className="modal" role="dialog" aria-label={mode === 'preflight' ? '예배 시작 전 점검' : '예배 준비 · 점검'}>
+      <header className="modal-head"><h2>{mode === 'preflight' ? '예배 시작 전 점검' : '예배 준비 · 점검'} · {pl?.name ?? '예배를 먼저 선택하세요'}</h2><button onClick={onClose} aria-label="닫기">✕</button></header>
       <div className="wizard-body stack">
         {mode === 'preparation' && <><h3>준비 체크리스트 · {done.length}/{TASKS.length}</h3>
         <p className="hint">선택한 예배별로 이 컴퓨터에 저장됩니다. 새 예배를 만들면 새 목록으로 시작합니다. 파일 내용과 순서를 직접 확인한 뒤 표시하세요.</p>

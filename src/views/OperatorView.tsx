@@ -404,9 +404,7 @@ export function OperatorView() {
       if (modal === 'rehearsal') return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f' && !modal) {
         e.preventDefault();
-        const box = document.getElementById('library-search') as HTMLInputElement | null;
-        box?.focus();
-        box?.select();
+        window.dispatchEvent(new Event('freecast:find-library'));
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k' && (!modal || modal === 'find')) {
@@ -670,7 +668,7 @@ export function OperatorView() {
       {modal === 'chords' && <ChordSheetModal state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'retreatBg' && <RetreatBackgroundModal library={state.library} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'sync' && <SyncStatusModal cloud={cloud} library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} onAccount={() => setModal('account')} />}
-      {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} onActivity={() => setModal('activity')} />}
+      {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} onActivity={() => setModal('activity')} onSync={() => setModal('sync')} />}
       {deviceSetup && <DeviceSetupDialog cloud={cloud} onClose={() => setDeviceSetup(false)} />}
       {(modal === 'song' || modal === 'songNew') && (
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />

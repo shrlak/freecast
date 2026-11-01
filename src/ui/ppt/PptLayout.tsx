@@ -21,6 +21,7 @@ import { NameDialog } from '../NameDialog';
 import { AutoTextarea } from '../AutoTextarea';
 import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
 import { SUNDAY_STEPS } from '../../domain/sunday/wizardSteps';
+import { AddToPlaylistMenu } from '../AddToPlaylist';
 
 const LOCK_MSG = '🔒 화면에 표시 중이라 삭제·추가가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요';
 
@@ -38,6 +39,14 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
   /** The object selected on the canvas (shown in the Format pane). */
   const [selEl, setSelEl] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string; seq: number } | null>(null);
+  const [addMenu, setAddMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [findTick, setFindTick] = useState(0);
+  // ⌘/Ctrl+F (or 홈 → 찾기) opens the 라이브러리 tab and its search box, wherever the left pane was.
+  useEffect(() => {
+    const onFind = () => { setLeftTab('library'); setFindTick((n) => n + 1); };
+    window.addEventListener('freecast:find-library', onFind);
+    return () => window.removeEventListener('freecast:find-library', onFind);
+  }, []);
   const menuRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!menu || !menuRef.current) return;
@@ -243,11 +252,12 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
             <button className={leftTab === 'media' ? 'on' : ''} onClick={() => setLeftTab('media')} title="배경 · 그림 · 영상 · 카메라">미디어</button>
           </div>
           {leftTab === 'library' ? (
-            <LibraryPanel state={state} dispatch={dispatch} onNew={() => cmd.open('new')} online={cmd.online} onReloadOnline={cmd.reloadOnline} />
+            <LibraryPanel state={state} dispatch={dispatch} onNew={() => cmd.open('new')} notify={cmd.notify} focusSearch={findTick} online={cmd.online} onReloadOnline={cmd.reloadOnline} />
           ) : leftTab === 'media' ? (
             <MediaBin state={state} dispatch={dispatch} />
           ) : (
-            <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick} multi={multi} onClickSlide={onClickSlide}
+            <SlidePane state={state} dispatch={dispatch} rows={rows} p={p} item={item} selected={selected} pick={pick} multi={multi} onClickSlide={onClickSlide} notify={cmd.notify}
+              playlistId={source && 'playlist' in source ? source.playlist.id : null}
               heading={source && 'playlist' in source ? source.playlist.name : p?.title ?? ''}
               onMenu={(x, y, id, seq) => setMenu({ x, y, id, seq })}
               onAdd={() => { if (!p) return; const n = { id: uid('s'), group: slide?.group ?? 'Slide', text: '' }; updateSlides([...p.slides, n]); cmd.setSlideId(n.id); }} />
@@ -321,6 +331,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           <button onClick={() => slideMenu(menu.id, 'up')}>↑ 위로 이동</button>
           <button onClick={() => slideMenu(menu.id, 'down')}>↓ 아래로 이동</button>
           <button onClick={() => slideMenu(menu.id, 'skip')}>⏭ 슬라이드 숨기기/해제</button>
+          {p && <button onClick={() => { setAddMenu({ id: p.id, x: menu.x, y: menu.y }); setMenu(null); }}>📋 “{p.title}” 재생목록에 넣기…</button>}
           <button className="danger" onClick={() => {
             const row = paneSlides.find((r) => r.presentation.id === p?.id && r.seq === menu.seq && r.itemIndex === selected?.itemIndex);
             setMenu(null); if (row) deleteSlides([row]);
@@ -328,6 +339,7 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
           {multi.length > 1 && <button className="danger" onClick={() => { const chosen = picked(); setMenu(null); deleteSlides(chosen); }}>🗑 선택한 슬라이드 삭제 ({multi.length}장)</button>}
         </div>
       )}
+      {addMenu && <AddToPlaylistMenu state={state} dispatch={dispatch} presentationId={addMenu.id} x={addMenu.x} y={addMenu.y} notify={cmd.notify} onClose={() => setAddMenu(null)} />}
       {designing && p && slide && (
         <SlideDesigner readOnly={p.protected} slide={slide} theme={theme} background={background} media={state.library.media}
           addMedia={(m) => dispatch({ type: 'media/add', media: m })}
@@ -345,18 +357,12 @@ function StatusBar({ cmd, text }: { cmd: Commands; text: string }) {
     <footer className="ppt-status">
       <span className="truncate">{text}</span>
       <span className="ppt-team" title="KCCP 빛주사랑 대학청년부 미디어팀"><img src="/media-team-logo.png" alt="" />KCCP 미디어팀</span>
-      <span className={`ppt-online ${cmd.online.status}`}>☁ {cmd.online.status === 'ok' ? `온라인 찬양 ${cmd.online.count}곡` : cmd.online.status === 'loading' ? '불러오는 중…' : '오프라인'}</span>
-      <button className="ppt-cloud" onClick={() => cmd.open(cmd.cloud.session ? 'sync' : 'account')} title={cmd.cloud.message ?? ''}>
-        {cmd.cloud.session ? `☁ ${cmd.cloud.session.username} · ${cmd.cloud.state === 'syncing' ? '동기화 중' : cmd.cloud.state === 'error' ? '동기화 오류' : cmd.cloud.state === 'offline' ? `오프라인${cmd.cloud.pending?.total ? ` · 보낼 변경 ${cmd.cloud.pending.total}` : ''}` : '동기화됨'}` : '☁ 로그인 안 됨 (이 컴퓨터에만 저장)'}
-      </button>
       <button className={`ppt-cloud ppt-lock ${cmd.locked ? 'on' : ''}`} onClick={() => cmd.setLocked(!cmd.locked)}
         title={cmd.locked ? '잠금 켜짐: 화면에 표시 중에는 Enter·Delete로 슬라이드를 추가/삭제하지 않습니다 (클릭하면 해제)' : '잠금 꺼짐 (클릭하면 켜기)'}>{cmd.locked ? '🔒 잠금' : '🔓 잠금 해제됨'}</button>
-      <span title={cmd.relayConnected ? '리모컨 연결됨' : '리모컨 오프라인'}><span className={`dot ${cmd.relayConnected ? 'ok' : ''}`} /></span>
-      <span className="ppt-views">
-        <button className={cmd.view === 'normal' ? 'on' : ''} title="기본" onClick={() => cmd.setView('normal')}>▭</button>
-        <button className={cmd.view === 'sorter' ? 'on' : ''} title="여러 슬라이드" onClick={() => cmd.setView('sorter')}>▦</button>
-        <button className={cmd.view === 'presenter' ? 'on' : ''} title="발표자 보기" onClick={() => cmd.setView('presenter')}>🧑‍🏫</button>
-        <button title="슬라이드 쇼 (F5)" onClick={() => cmd.startShow(true)}>▶</button>
+      <span className="ppt-views" role="group" aria-label="보기">
+        <button className={cmd.view === 'normal' ? 'on' : ''} title="기본 — 슬라이드 하나씩 편집" onClick={() => cmd.setView('normal')}>▭ 기본</button>
+        <button className={cmd.view === 'sorter' ? 'on' : ''} title="여러 슬라이드 — 한눈에 보고 순서 바꾸기" onClick={() => cmd.setView('sorter')}>▦ 여러 슬라이드</button>
+        <button className={cmd.view === 'presenter' ? 'on' : ''} title="발표자 보기 — 지금 · 다음 슬라이드와 노트" onClick={() => cmd.setView('presenter')}>🧑‍🏫 발표자</button>
       </span>
     </footer>
   );
