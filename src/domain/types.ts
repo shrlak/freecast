@@ -248,6 +248,8 @@ export interface Presentation {
   songSource?: { sections: { label: string; lines: string[] }[]; order?: string[] };
   /** Lyrics already laid out the church's way (each part once, blank-line breaks) at this many lines per slide. */
   lyricsLayout?: { linesPerSlide: number };
+  /** Sheet-music slides of a song found on the internet (기도회 찬양): the title searched, the file and the page it came from. */
+  scoreSheet?: { title: string; file: string; page: string };
   /** Individual slide content/design was edited; automatic song styling must preserve it. */
   slidesEdited?: boolean;
   /** Existing lyric boxes have received the centered default; later individual edits are kept. */

@@ -64,9 +64,11 @@ export interface ServiceUploads {
 export interface WizardSync {
   songs: SongDraft[]; refs: string; sermonTitle: string; preacher: string; confession: string;
   sermonSlides: Slide[]; prayer: string; announcements: string; extraSlides: Slide[];
+  /** 기도회 찬양: the sheet-music deck (in the library) sung before the Front, if any. */
+  openingDeckId?: string | null;
 }
-export type WizardPart = 'songs' | 'scripture' | 'sermon' | 'prayer' | 'announcements' | 'extra' | 'confession';
-export const WIZARD_PARTS: WizardPart[] = ['songs', 'scripture', 'sermon', 'prayer', 'announcements', 'extra', 'confession'];
+export type WizardPart = 'opening' | 'songs' | 'scripture' | 'sermon' | 'prayer' | 'announcements' | 'extra' | 'confession';
+export const WIZARD_PARTS: WizardPart[] = ['opening', 'songs', 'scripture', 'sermon', 'prayer', 'announcements', 'extra', 'confession'];
 
 export interface ScriptureInput { refs: string; sermonTitle: string; preacher: string; translations: string[]; versesPerSlide: number }
 
@@ -392,7 +394,19 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
       };
 
       for (const part of parts) {
-        if (part === 'songs') {
+        if (part === 'opening') {
+          // The sheet-music deck stays in the library (기도회 찬양 악보) for another week; only the playlist changes.
+          const deck = d.openingDeckId && lib.current.presentations.some((p) => p.id === d.openingDeckId) ? d.openingDeckId : null;
+          const pl = playlist(id);
+          if (deck || (pl && sectionRange(pl, SECTION.opening))) await place(id, SECTION.opening, deck ? [deck] : [], true);
+          if (!deck) {
+            // An emptied section loses its heading too.
+            await tick();
+            const now = playlist(id);
+            const r = now && sectionRange(now, SECTION.opening);
+            if (now && r && r[1] === r[0]) dispatch({ type: 'playlist/set', playlist: { ...now, items: now.items.filter((_, i) => i !== r[0] - 1) } });
+          }
+        } else if (part === 'songs') {
           for (const [section, postSermon] of [[SECTION.songs, false], [SECTION.after, true]] as const) {
             const pl = playlist(id);
             const old = pl ? sectionPresentations(pl, section, lib.current.presentations) : [];

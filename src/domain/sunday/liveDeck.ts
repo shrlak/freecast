@@ -2,10 +2,11 @@
 // templates. Uploads (콘티, 가사, 설교 슬라이드) are dropped straight into their section, so the
 // service builds itself while it is open — even while it is on screen.
 //
-//   Front → 찬양 → 기도 → 성경 말씀 → 설교 → 기도 → 설교 후 찬양 (+ 기도) → 광고 → Back / End
+//   (기도회 찬양) → Front → 찬양 → 기도 → 성경 말씀 → 설교 → 기도 → 설교 후 찬양 (+ 기도) → 광고 → Back / End
 import type { Library, Playlist, PlaylistItem, Presentation } from '../types';
 import { uid } from '../lyrics';
 import { mdy, mmdd } from './notice';
+import { OPENING_SECTION } from './openingSong';
 import { parsePrayerTopics } from './prayer';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
 import { DEFAULT_CONFESSION_SONG } from '../defaults';
@@ -19,6 +20,8 @@ export function confessionBack(lib: Library, slides: Presentation['slides'], pic
 }
 
 export const SECTION = {
+  /** The song before the 기도회 (sheet music found on the internet); only there when one is chosen. */
+  opening: OPENING_SECTION,
   front: 'Front',
   songs: '찬양',
   bible: '성경 말씀',

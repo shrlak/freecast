@@ -16,6 +16,8 @@ import { x32Middleware } from './server/x32.mjs';
 import { cloudMiddleware } from './server/cloud.mjs';
 // @ts-expect-error plain ESM server modules
 import { recognitionMiddleware } from './server/recognition.mjs';
+// @ts-expect-error plain ESM server modules
+import { songPptMiddleware } from './server/songPpt.mjs';
 
 /** Dev server gets the same AI endpoints and remote relay as `npm start`. */
 function freecastServer(): Plugin {
@@ -24,6 +26,7 @@ function freecastServer(): Plugin {
     configureServer(server) {
       server.middlewares.use(aiMiddleware);
       server.middlewares.use(recognitionMiddleware);
+      server.middlewares.use(songPptMiddleware);
       server.middlewares.use(dmxMiddleware);
       server.middlewares.use(x32Middleware);
       server.middlewares.use(cloudMiddleware);

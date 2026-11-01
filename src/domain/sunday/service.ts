@@ -5,6 +5,7 @@ import { findSong, songToPresentation, withProgression, type SongDraft } from '.
 import { planPrayerSlides, prayerSlideText, type PrayerTopic } from './prayer';
 import type { Announcement } from './announcements';
 import { mmdd } from './notice';
+import { OPENING_SECTION } from './openingSong';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
 import { applyConfessionSong, pickConfessionSong } from '../templates/confession';
 import { announcementSlides, backSlides, fillFront, updateFrontDate, isPlaceholderBack, prayerSlide, scriptureSlides, sermonTitleSlide, songInTemplate, type ScriptureFill } from '../templates/fill';
@@ -23,6 +24,8 @@ export interface ServiceInput {
   templates?: ServiceTemplates | null;
   /** Verses for the Bible template (used instead of scriptureSlides when templates are given). */
   scripture?: ScriptureFill;
+  /** 기도회 찬양: the sheet-music deck sung before the Front (기도제목) slides; already in the library. */
+  openingSong?: Presentation | null;
 }
 
 export interface BuiltService {
@@ -35,7 +38,7 @@ const cloneSlides = (slides: Slide[]) => slides.map((s) => ({ ...s, id: uid('s')
 
 /**
  * Build this Sunday's presentations and playlist in the fixed order:
- * Front → 찬양 → 기도 → 성경 말씀 → 설교 → 기도 → 설교 후 찬양 → 기도 → 광고 → Back/End → 추가 자료.
+ * (기도회 찬양) → Front → 찬양 → 기도 → 성경 말씀 → 설교 → 기도 → 설교 후 찬양 → 기도 → 광고 → Back/End → 추가 자료.
  * Sections with nothing in them are skipped, along with the prayer that follows them.
  */
 export function buildService(lib: Library, input: ServiceInput): BuiltService {
@@ -62,6 +65,12 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
     add(prayer, !!tplPrayer && !prayerAdded);
     prayerAdded = true;
   };
+
+  // The song sung before the 기도회 opens the service, ahead of the Front's 기도제목.
+  if (input.openingSong?.slides.length) {
+    header(OPENING_SECTION);
+    add(input.openingSong, !lib.presentations.some((p) => p.id === input.openingSong!.id));
+  }
 
   // Front keeps the source design; its date and 기도제목 change.
   const front = byId(sunday.frontId);
