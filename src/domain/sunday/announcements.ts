@@ -1,13 +1,30 @@
-export interface Announcement {
-  title: string;
+/** One slide of an announcement: its lines and the links shown as QR codes on it. */
+export interface AnnouncementPage {
   body: string[];
   links: string[];
 }
 
-const ITEM_BRACKET = /^\s*\d{1,2}\s*[.)]\s*<\s*(.+?)\s*>\s*(.*)$/;
-const ITEM_PLAIN = /^\s*\d{1,2}\s*[.)]\s*(.+)$/;
+export interface Announcement {
+  title: string;
+  /** Every line, all slides together. */
+  body: string[];
+  /** Every link, all slides together. */
+  links: string[];
+  /** One entry per slide (an empty line in the text starts the next one). Missing = one slide of `body` / `links`. */
+  pages?: AnnouncementPage[];
+}
+
+/** The slides of an announcement (at least one). */
+export const announcementPages = (a: Announcement): AnnouncementPage[] =>
+  a.pages?.length ? a.pages : [{ body: a.body, links: a.links }];
+
 const MD_LINK = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 const URL = /(?:https?:\/\/|www\.)[^\s<>()\]]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s<>()\]]+/gi;
+/** "1." "1)" "(1)" "１．" "①" at the start of a line, then the rest. Not "3.14", "10:30" or "2026.". */
+const NUMBERED = /^(\s*)(?:\(\s*(\d{1,2})\s*\)|(\d{1,2})\s*[.)．。](?!\d)|([①-⑳]))\s*(.*)$/;
+/** "<제목>" (or ＜제목＞, 《제목》), and what follows it on the line. */
+const BRACKETED = /^[<＜《〈]\s*(.+?)\s*[>＞》〉]\s*(.*)$/;
+const FULL_WIDTH_DIGIT = /[０-９]/g;
 
 function normalizeLink(u: string): string {
   const trimmed = u.replace(/[.,;:!?)]+$/, '');
@@ -34,31 +51,100 @@ function stripLinks(line: string, links: string[]): string | null {
   return out;
 }
 
+interface Head {
+  /** The number written (null for "<제목>" without one). */
+  n: number | null;
+  indented: boolean;
+  /** Title in <brackets>: always an announcement, never a numbered body line. */
+  bracketed: boolean;
+  title: string;
+  /** Text after "<제목>" on the same line. */
+  tail: string;
+}
+
+function readHead(line: string): Head | null {
+  const plain = line.replace(FULL_WIDTH_DIGIT, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+  const m = NUMBERED.exec(plain);
+  const rest = m ? m[5] : plain.trim();
+  const b = BRACKETED.exec(rest);
+  if (!m) return b ? { n: null, indented: false, bracketed: true, title: b[1], tail: b[2].trim() } : null;
+  const n = m[4] ? m[4].charCodeAt(0) - 0x2460 + 1 : Number(m[2] ?? m[3]);
+  const indented = /\t| {2,}/.test(m[1]);
+  if (b) return { n, indented, bracketed: true, title: b[1], tail: b[2].trim() };
+  return rest.trim() ? { n, indented, bracketed: false, title: rest.trim(), tail: '' } : null;
+}
+
 /**
- * Read announcements written as "1. <제목>" followed by body lines. Numbering is
- * redone in order; links become QR codes instead of text.
+ * Read announcements written as "1. <제목>" (or "1. 제목") followed by their lines. Numbering is
+ * redone in order. A numbered line counts as a new announcement when it has a <제목>, or when it
+ * carries the next number and is not continuing a numbered list inside the announcement
+ * ("1. 일시 / 2. 장소" under "1. <수련회>" stay its lines); an indented one never does. An empty
+ * line inside an announcement puts what follows on a new slide of the same announcement. Links
+ * become QR codes instead of text. Text without any numbers: each block (split by empty lines) is
+ * one announcement, its first line the title.
  */
 export function parseAnnouncements(text: string): Announcement[] {
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
-  const useBrackets = lines.some((l) => ITEM_BRACKET.test(l));
-  const items: Announcement[] = [];
+  const items: { title: string; pages: AnnouncementPage[] }[] = [];
+  let last = 0; // the number of the last announcement, as written
+  let sub = 0; // the number of the last numbered line inside the current announcement
+  let afterBlank = true;
+  let newPage = false;
+  const page = () => items[items.length - 1].pages[items[items.length - 1].pages.length - 1];
+  const addLine = (line: string) => {
+    const cur = items[items.length - 1];
+    if (newPage && (page().body.length || page().links.length)) cur.pages.push({ body: [], links: [] });
+    newPage = false;
+    const kept = stripLinks(line, page().links);
+    if (kept) page().body.push(kept);
+  };
+
   for (const raw of lines) {
     const line = raw.trimEnd();
-    const head = useBrackets ? ITEM_BRACKET.exec(line) : ITEM_PLAIN.exec(line);
-    if (head) {
-      const item: Announcement = { title: head[1].trim(), body: [], links: [] };
-      const tail = useBrackets ? head[2]?.trim() : '';
-      if (tail) {
-        const kept = stripLinks(tail, item.links);
-        if (kept) item.body.push(kept);
-      }
-      items.push(item);
+    if (!line.trim()) {
+      afterBlank = true;
+      sub = 0;
+      newPage = true;
       continue;
     }
-    const current = items[items.length - 1];
-    if (!current || !line.trim()) continue;
-    const kept = stripLinks(line.trim(), current.links);
-    if (kept) current.body.push(kept);
+    const head = readHead(line);
+    let isItem = false;
+    if (head?.bracketed) isItem = true;
+    else if (head && head.n !== null && !head.indented) {
+      if (!items.length) isItem = true;
+      else if (head.n === last + 1) isItem = sub !== head.n - 1;
+      else if (head.n > last + 1) isItem = afterBlank;
+    }
+    if (isItem && head) {
+      items.push({ title: head.title, pages: [{ body: [], links: [] }] });
+      last = head.n ?? last + 1;
+      sub = 0;
+      newPage = false;
+      if (head.tail) addLine(head.tail);
+    } else if (items.length) {
+      if (head?.n != null) sub = head.n;
+      addLine(line.trim());
+    }
+    afterBlank = false;
   }
-  return items;
+
+  if (!items.length) {
+    // No numbers at all: one announcement per block.
+    for (const block of text.replace(/\r\n?/g, '\n').split(/\n\s*\n/)) {
+      const [title, ...rest] = block.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (!title) continue;
+      const p: AnnouncementPage = { body: [], links: [] };
+      for (const l of rest) {
+        const kept = stripLinks(l, p.links);
+        if (kept) p.body.push(kept);
+      }
+      items.push({ title, pages: [p] });
+    }
+  }
+
+  return items.map(({ title, pages }) => {
+    const kept = pages.filter((p) => p.body.length || p.links.length);
+    const all = kept.length ? kept : [pages[0]];
+    return { title, body: all.flatMap((p) => p.body), links: all.flatMap((p) => p.links), pages: all };
+  });
 }

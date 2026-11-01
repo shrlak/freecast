@@ -7,7 +7,7 @@ import { TextFormatPanel, type TextFormatValue } from './TextFormatPanel';
 import { changeCase } from '../../domain/textFormat';
 import { AutoTextarea } from '../AutoTextarea';
 
-const KIND: Record<string, string> = { text: '텍스트 상자', image: '그림', shape: '도형', video: '동영상', camera: '카메라' };
+const KIND: Record<string, string> = { text: '텍스트 상자', image: '그림', shape: '도형', video: '동영상', camera: '카메라', qr: 'QR 코드' };
 
 /** The size a text box shows (its first real line's size when lines are styled one by one). */
 export const sizeOf = (el: SlideElement) => el.paragraphs?.find((p) => p.text.trim())?.fontSize ?? el.fontSize ?? 64;
@@ -85,6 +85,15 @@ export function ElementFormat({ el, onChange, onDelete, onOrder, addMedia }: {
           {el.kind === 'image' && <button onClick={() => fileRef.current?.click()}>그림 바꾸기…</button>}
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { replaceImage(e.target.files?.[0]); e.target.value = ''; }} />
         </div>
+      )}
+
+      {el.kind === 'qr' && (
+        <>
+          <label className="stack">QR 코드 링크
+            <input value={el.link ?? ''} placeholder="https://forms.gle/…" onChange={(e) => onChange({ link: e.target.value.trim() || undefined })} />
+          </label>
+          <p className="hint">휴대폰으로 찍으면 이 주소가 열립니다. 모서리를 끌어 크기를, 가운데를 끌어 위치를 바꾸고, 🗑 또는 Delete 키로 지웁니다.</p>
+        </>
       )}
 
       {el.kind === 'shape' && (

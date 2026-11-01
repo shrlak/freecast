@@ -11,6 +11,7 @@ import { AutoTextarea } from './AutoTextarea';
 import { isPdfSlide, PDF_READ_ONLY } from '../domain/importedSlides';
 import { useAutoTextBoxes } from './textBoxLayout';
 import { PROTECTED_MESSAGE } from '../domain/materialProtection';
+import { QR_SIZE } from '../domain/qrElements';
 
 interface Props {
   readOnly?: boolean;
@@ -119,6 +120,7 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
             <button onClick={() => add({ kind: 'camera', deviceId: '', w: 800, h: 450 })} title="Live camera / capture input as an object">＋ Camera</button>
             <button onClick={() => add({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, w: 1240, h: 220, x: 100, y: 820 })}>＋ Box</button>
             <button onClick={() => add({ kind: 'shape', fill: '#4bc789', ellipse: true, w: 300, h: 300 })}>＋ Circle</button>
+            <button title="링크 QR 코드 — 오른쪽에서 링크를 입력하세요" onClick={() => add({ kind: 'qr', w: QR_SIZE, h: QR_SIZE })}>＋ QR 코드</button>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => uploadImage(e.target.files?.[0])} />
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
@@ -170,6 +172,14 @@ export function SlideDesigner({ slide, theme, background, media, addMedia, onSav
                       <label className="check"><input type="checkbox" checked={!!selected.italic} onChange={(e) => update(selected.id, { italic: e.target.checked })} /> Italic</label>
                       <label className="check"><input type="checkbox" checked={!!selected.shadow} onChange={(e) => update(selected.id, { shadow: e.target.checked })} /> Shadow</label>
                     </div>
+                  </>
+                )}
+                {selected.kind === 'qr' && (
+                  <>
+                    <label className="stack">QR 코드 링크
+                      <input autoFocus={!selected.link} value={selected.link ?? ''} placeholder="https://forms.gle/…" onChange={(e) => update(selected.id, { link: e.target.value.trim() || undefined })} />
+                    </label>
+                    <p className="hint">휴대폰으로 찍으면 이 주소가 열립니다. 끌어서 옮기고, 모서리를 끌어 크기를 바꾸고, Delete 키로 지웁니다.</p>
                   </>
                 )}
                 {selected.kind === 'shape' && (

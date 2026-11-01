@@ -98,8 +98,10 @@ describe('church template filling', () => {
   it('makes a 광고 title slide and one slide per announcement', () => {
     const slides = announcementSlides(TPL, [{ title: '수련회', body: ['등록 마감', '이번 주'], links: ['https://x.y'] }, { title: '식사', body: ['점심'], links: [] }]);
     expect(slides).toHaveLength(3);
-    expect(els(slides[1])).toEqual(['광고\nAnnouncements', '1. <수련회>', '등록 마감\n이번 주']);
-    expect(slides[1].qr).toEqual(['https://x.y']);
+    expect(els(slides[1])).toEqual(['광고\nAnnouncements', '1. <수련회>', '등록 마감\n이번 주', undefined]);
+    // The link is a QR code object on the slide (movable, resizable, deletable), in the bottom-right corner.
+    expect(slides[1].qr).toBeUndefined();
+    expect(slides[1].elements![3]).toMatchObject({ kind: 'qr', link: 'https://x.y', x: 1140, y: 780, w: 240, h: 240 });
     expect(els(slides[2])[1]).toBe('2. <식사>');
     expect(announcementSlides(TPL, [])).toEqual([]);
   });

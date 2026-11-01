@@ -3,7 +3,8 @@ import { defaultRetreatLook, retreatBackground, withTheme } from './motion';
 import { uid } from './lyrics';
 import { CHURCH_BACKGROUNDS, presetBackground } from './defaults';
 import { findSong } from './sunday/songs';
-import { parseAnnouncements } from './sunday/announcements';
+import { announcementPages, parseAnnouncements } from './sunday/announcements';
+import { qrElements } from './qrElements';
 import { mmdd } from './sunday/notice';
 
 export interface RetreatSong {
@@ -176,7 +177,7 @@ export function buildMeeting(lib: Library, draft: RetreatDraft, m: Meeting, scri
         break;
       case 'announcements': {
         const anns = parseAnnouncements(b.text);
-        const slides = [s('광고', b.heading || '광고'), ...anns.map((a, i) => s('광고', a.body.join('\n'), { title: `${i + 1}. ${a.title}`, qr: a.links.length ? a.links : undefined, caption }))];
+        const slides = [s('광고', b.heading || '광고'), ...anns.flatMap((a, i) => announcementPages(a).map((pg) => s('광고', pg.body.join('\n'), { title: `${i + 1}. ${a.title}`, elements: pg.links.length ? qrElements(pg.links) : undefined, caption })))];
         add(b.heading || '광고', slides, 'theme_info', {}, false);
         break;
       }

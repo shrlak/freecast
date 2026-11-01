@@ -105,7 +105,7 @@ export interface MediaMeta {
   markers?: PlaybackMarker[];
 }
 
-export type ElementKind = 'text' | 'image' | 'shape' | 'video' | 'camera';
+export type ElementKind = 'text' | 'image' | 'shape' | 'video' | 'camera' | 'qr';
 
 /** One line of a text element with its own formatting (kept from imported PowerPoint text boxes). */
 export interface ElementParagraph {
@@ -148,6 +148,8 @@ export interface SlideElement {
   ellipse?: boolean;
   /** Camera / capture device for 'camera' objects. */
   deviceId?: string;
+  /** The address a 'qr' object encodes. */
+  link?: string;
   /** Per-line formatting; `text` stays the plain text (lines joined by \n). */
   paragraphs?: ElementParagraph[];
   /** Grow the box to fit its text, preserving font sizes (default on). */

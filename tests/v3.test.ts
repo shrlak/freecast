@@ -78,7 +78,7 @@ describe('수련회 builder', () => {
     const titles = built.playlist.items.map((i) => (i.kind === 'header' ? `#${i.title}` : lib.presentations.concat(built.presentations).find((p) => p.id === i.presentationId)?.title));
     expect(titles).toEqual(['#금요일 저녁예배', '0116 금요일 저녁예배', '수련회 제목', '#찬양', '찬양', 'Amazing Grace', '새 노래', '설교말씀', '설교 제목', '빈 화면', '기도회', '기도', '축도', 'OT | 광고']);
     const annPres = built.presentations.find((p) => p.title === 'OT | 광고')!;
-    expect(annPres.slides[1].qr).toEqual(['https://forms.gle/x']);
+    expect(annPres.slides[1].elements).toMatchObject([{ kind: 'qr', link: 'https://forms.gle/x' }]);
     expect(built.presentations.find((p) => p.title === '새 노래')!.slides.map((s) => s.caption)).toEqual(['새 노래', '새 노래']);
   });
 

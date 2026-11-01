@@ -17,7 +17,8 @@ import { announcementSlides, scriptureSlides, sermonTitleSlide, songInTemplate, 
 import { createLiveService, findLiveService, ensureServiceSection, insertIntoSection, liveFolder, SECTION, sectionRange, sectionPresentations, type SectionTitle } from '../../domain/sunday/liveDeck';
 import { DEFAULT_CONFESSION_SONG } from '../../domain/defaults';
 import { withSharedSongs } from '../../domain/online';
-import { parseAnnouncements } from '../../domain/sunday/announcements';
+import { announcementPages, parseAnnouncements } from '../../domain/sunday/announcements';
+import { qrElements } from '../../domain/qrElements';
 import { applyConfessionSong, pickConfessionSong } from '../../domain/templates/confession';
 import { loadTranslations } from '../BibleModal';
 import { saveRestorePoint } from '../../domain/restorePoints';
@@ -435,7 +436,7 @@ export function useServiceUploads(library: Library, dispatch: Dispatch<Action>, 
           const items = parseAnnouncements(d.announcements);
           const slides = t
             ? announcementSlides(t, items)
-            : items.map((a, i) => ({ id: uid('s'), group: '광고', title: `${i + 1}. ${a.title}`, text: a.body.join('\n'), qr: a.links.length ? a.links : undefined }));
+            : items.flatMap((a, i) => announcementPages(a).map((pg) => ({ id: uid('s'), group: '광고', title: `${i + 1}. ${a.title}`, text: pg.body.join('\n'), elements: pg.links.length ? qrElements(pg.links) : undefined })));
           await setDeck(SECTION.announcements, '광고', slides);
         } else if (part === 'extra') {
           await setDeck('추가 자료' as SectionTitle, '추가 자료', d.extraSlides);

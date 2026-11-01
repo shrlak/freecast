@@ -18,6 +18,7 @@ import { useMediaUrl } from '../hooks';
 import { ACCEPT, type Commands } from './commands';
 import { sequence } from '../../domain/arrangement';
 import { SUNDAY_STEPS } from '../../domain/sunday/wizardSteps';
+import { qrElement } from '../../domain/qrElements';
 import { SLIDE_TEMPLATES, type SlideTemplate } from '../../domain/slideTemplates';
 
 interface Props {
@@ -262,6 +263,7 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
                 <Small icon="⬛" label="사각형" disabled={!canAdd} onClick={() => addElement({ kind: 'shape', fill: 'rgba(0,0,0,0.55)', radius: 24, x: 100, y: 820, w: 1240, h: 200 })} />
                 <Small icon="⚪" label="원" disabled={!canAdd} onClick={() => addElement({ kind: 'shape', fill: '#4bc789', ellipse: true, x: 570, y: 390, w: 300, h: 300 })} />
                 <Small icon="📷" label="카메라" disabled={!canAdd} onClick={() => addElement({ kind: 'camera', deviceId: '', x: 320, y: 315, w: 800, h: 450 })} />
+                <Small icon="▣" label="QR 코드" title="링크 QR 코드를 슬라이드에 넣습니다 — 오른쪽 서식에서 링크를 입력하세요" disabled={!canAdd} onClick={() => { const { id: _, ...qr } = qrElement('', (slide?.elements ?? []).filter((e) => e.kind === 'qr').length); addElement(qr); cmd.notify('QR 코드를 넣었습니다 — 열린 편집 창에서 QR 코드를 눌러 링크를 입력하세요'); }} />
               </div>
             </Group>
             <Group label="자동 글자">

@@ -207,6 +207,7 @@ export function ElementView({ el }: { el: SlideElement }) {
   if (el.kind === 'image') return url ? <img src={url} alt="" decoding="sync" style={{ ...box, objectFit: el.fit ?? 'contain' }} /> : null;
   if (el.kind === 'video') return videoUrl ? <video src={videoUrl} style={{ ...box, objectFit: el.fit ?? 'cover' }} autoPlay muted loop playsInline /> : <div style={{ ...box, outline: '2px dashed #555' }} />;
   if (el.kind === 'camera') return <div style={box}><CameraBg deviceId={el.deviceId ?? ''} label="Camera" animate /></div>;
+  if (el.kind === 'qr') return el.link ? <img className="qr-object" src={qrDataUrl(el.link)} alt={el.link} title={el.link} style={box} /> : <div className="qr-object empty" style={box}>QR</div>;
   if (el.kind === 'shape') {
     return <div style={{ ...box, background: el.fill ?? '#ffffff', borderRadius: el.ellipse ? '50%' : el.radius ?? 0, border: el.stroke ? `4px solid ${el.stroke}` : undefined }} />;
   }

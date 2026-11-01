@@ -126,7 +126,7 @@ describe('service builder', () => {
     expect(front.slides.some((s) => s.subtext === '07/12/2026')).toBe(true);
     const back = presentations.find((p) => p.title === '0712 Back')!;
     expect(back.slides[0].group).toMatch(/^공동체 고백/);
-    expect(presentations.find((p) => p.title === '광고')!.slides[0].qr).toEqual(['https://x.org']);
+    expect(presentations.find((p) => p.title === '광고')!.slides[0].elements).toMatchObject([{ kind: 'qr', link: 'https://x.org' }]);
     expect(warnings).toEqual([]);
   });
 });

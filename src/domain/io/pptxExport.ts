@@ -122,6 +122,8 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       } else if (el.kind === 'image' && el.mediaId) {
         const data = await dataUrl(el.mediaId);
         if (data) s.addImage({ ...box, data, sizing: { type: el.fit === 'cover' ? 'cover' : 'contain', w: box.w, h: box.h } });
+      } else if (el.kind === 'qr' && el.link) {
+        s.addImage({ ...box, data: qrDataUrl(el.link) });
       } else if (el.kind === 'shape') {
         const solid = /#([0-9a-f]{6})/i.exec(el.fill ?? '')?.[1] ?? 'FFFFFF';
         s.addShape(el.ellipse ? 'ellipse' : 'roundRect', { ...box, fill: { color: solid }, rectRadius: el.radius ? Math.min(0.5, (el.radius * PX) / Math.min(box.w, box.h)) : 0 });
