@@ -19,6 +19,7 @@ import { loadTranslations } from '../BibleModal';
 import { filesToSlides } from '../importFiles';
 import { SundaySongs, type CoverInfo } from './SundaySongs';
 import { AutoTextarea } from '../AutoTextarea';
+import { OpeningSongField } from './OpeningSongField';
 
 interface Props {
   state: AppState;
@@ -41,14 +42,17 @@ interface Draft {
   prayer: string;
   announcements: string;
   extraSlides: Slide[];
+  /** 기도회 찬양 (before the Front): the title typed and the sheet-music deck found for it. */
+  openingTitle: string;
+  openingDeckId: string | null;
 }
 
 const DRAFT_KEY = 'freecast.sundayDraft';
-const STEPS = ['찬양', '성경 말씀', '설교', '기도제목', '광고', '추가 자료', '생성'] as const;
+const STEPS = ['찬양', '성경 말씀', '설교', '기도회 · 기도제목', '광고', '추가 자료', '생성'] as const;
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function emptyDraft(): Draft {
-  return { date: iso(upcomingSunday(new Date())), notice: '', songs: [], refs: '', sermonTitle: '', preacher: '', confession: '', sermonSlides: [], prayer: '', announcements: '', extraSlides: [] };
+  return { date: iso(upcomingSunday(new Date())), notice: '', songs: [], refs: '', sermonTitle: '', preacher: '', confession: '', sermonSlides: [], prayer: '', announcements: '', extraSlides: [], openingTitle: '', openingDeckId: null };
 }
 
 function loadDraft(): Draft {
@@ -101,6 +105,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
       if (prev.date !== d.date) return;
       const ids = (l: Slide[]) => l.map((x) => x.id).join();
       const parts: WizardPart[] = [];
+      if (prev.openingDeckId !== d.openingDeckId) parts.push('opening');
       if (JSON.stringify(prev.songs) !== JSON.stringify(d.songs) || settingsChanged) parts.push('songs');
       if (prev.refs !== d.refs || prev.sermonTitle !== d.sermonTitle || prev.preacher !== d.preacher || settingsChanged) parts.push('scripture');
       if (ids(prev.sermonSlides) !== ids(d.sermonSlides)) parts.push('sermon');
@@ -122,6 +127,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
   const prayerPlan = planPrayerSlides(topics);
   const ann = parseAnnouncements(d.announcements);
   const addMedia = (m: MediaMeta) => dispatch({ type: 'media/add', media: m });
+  const openingDeck = (d.openingDeckId && state.library.presentations.find((p) => p.id === d.openingDeckId)) || null;
 
   const importInto = async (files: FileList | null, key: 'sermonSlides' | 'extraSlides') => {
     if (!files?.length) return;
@@ -155,6 +161,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
         date, songs: d.songs, scriptureSlides, sermonSlides: d.sermonSlides, prayerTopics: topics,
         announcements: ann, extraSlides: d.extraSlides, confessionSong: d.confession,
         templates, scripture: { refs: refs.refs, chunks, sermonTitle: d.sermonTitle, preacher: d.preacher },
+        openingSong: openingDeck,
       });
       // That week's playlist already exists: update it in place instead of adding a second one.
       const existing = findLiveService(state.library, date);
@@ -236,12 +243,18 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
             </div>
           )}
           {step === 3 && (
-            <div className="two-col">
-              <AutoTextarea rows={16} placeholder={'1. 회개와 마음의 정결\n- 지난 한 주간 …\n- …\n\n2. 예배를 위한 기도\n- …'} value={d.prayer} onChange={(e) => set({ prayer: e.target.value })} />
-              <div className="stack">
-                <strong>기도제목 {topics.length}개 → 기도 준비 슬라이드 {prayerPlan.length || 1}장</strong>
-                {prayerPlan.map((g, i) => <div key={i} className="card small">{i + 1}장: {g.map((t) => t.title).join(' · ')}</div>)}
-                <p className="hint">Numbered lines start a topic; lines under it become ● points. Up to 3 topics per slide, spread evenly. Empty = the template's placeholder slide.</p>
+            <div className="stack">
+              <OpeningSongField title={d.openingTitle} setTitle={(openingTitle) => set({ openingTitle })}
+                deck={openingDeck} setDeck={(deck) => set({ openingDeckId: deck?.id ?? null, ...(deck ? { openingTitle: deck.title } : {}) })}
+                presentations={state.library.presentations} theme={state.library.themes.find((t) => t.id === 'theme_classic') ?? state.library.themes[0]}
+                addMedia={addMedia} create={(deck) => dispatch({ type: 'presentation/createMany', presentations: [deck] })} notify={notify} />
+              <div className="two-col">
+                <AutoTextarea rows={16} placeholder={'1. 회개와 마음의 정결\n- 지난 한 주간 …\n- …\n\n2. 예배를 위한 기도\n- …'} value={d.prayer} onChange={(e) => set({ prayer: e.target.value })} />
+                <div className="stack">
+                  <strong>기도제목 {topics.length}개 → 기도 준비 슬라이드 {prayerPlan.length || 1}장</strong>
+                  {prayerPlan.map((g, i) => <div key={i} className="card small">{i + 1}장: {g.map((t) => t.title).join(' · ')}</div>)}
+                  <p className="hint">Numbered lines start a topic; lines under it become ● points. Up to 3 topics per slide, spread evenly. Empty = the template's placeholder slide.</p>
+                </div>
               </div>
             </div>
           )}
@@ -283,6 +296,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
                 ))}
               </div>
               <ol className="order-preview">
+                <li>기도회 찬양: {openingDeck ? `${openingDeck.title} (악보 ${openingDeck.slides.length}장)` : '—'}</li>
                 <li>Front (기도제목 {topics.length}개, 날짜 {mdy(date)})</li>
                 <li>찬양: {d.songs.filter((s) => !s.postSermon).map((s) => s.title).join(', ') || '—'} → 기도</li>
                 <li>성경 말씀: {refs.refs.map((r) => formatRef(r)).join(', ') || '—'} {d.sermonTitle && `· “${d.sermonTitle}”`}</li>

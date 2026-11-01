@@ -291,6 +291,13 @@ body.transparent, body.transparent #root { background: transparent !important; }
 .order-preview { background: var(--panel-2); border-radius: 8px; padding: 10px 10px 10px 30px; line-height: 1.8; }
 .ann-preview { flex-direction: row; justify-content: space-between; align-items: flex-start; }
 .ann-preview img { width: 64px; height: 64px; background: #fff; border-radius: 4px; }
+.opening-song { gap: 8px; }
+.opening-song .row input { flex: 1; min-width: 0; }
+.opening-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.opening-thumbs > div { aspect-ratio: 4 / 3; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+.opening-candidates { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.opening-candidates li { display: flex; align-items: center; gap: 6px; }
+.opening-candidates li button { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* stage layouts */
 .stage-timer small { font-size: .5em; color: #9ca3af; font-weight: 500; }
