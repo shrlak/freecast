@@ -1,6 +1,6 @@
 import type { Presentation, Slide, SlideElement } from './types';
 import { CANVAS_W } from './canvas';
-import { correctMixedTextSizes } from './textBoxFonts';
+import { correctMixedTextSizes, uniformTextBoxFont } from './textBoxFonts';
 import { isFrontPresentation, isFrontSlide, keepFrontLayout, withoutPrayerCornerLogo } from './frontLayout';
 
 /** Earlier versions kept text boxes out of a 300 px strip for the QR codes on the right. */
@@ -25,22 +25,45 @@ const HEADING = /^\s*광고\s*\n\s*announcements?\b/i;
 /** Where the template (and earlier versions) left a box: tight against the left edge. */
 const inCorner = (e: SlideElement) => e.kind === 'text' && e.x >= 50 && e.x < ANNOUNCEMENT_LEFT;
 
+/** The right edge of the template's 광고 boxes. */
+const TEMPLATE_RIGHT = TEMPLATE_X + TEMPLATE_W;
+
+/**
+ * The "광고 / Announcements" heading as a fixed box at ANNOUNCEMENT_LEFT / ANNOUNCEMENT_TOP. The
+ * template's heading box ends in three empty paragraphs (20-25 pt): left to grow, the box took them
+ * for overflow, filled the space above the title and so went back up into the corner (and across
+ * the whole slide). Without them, and fixed in place, it stays where it is put.
+ */
+function placedHeading(original: SlideElement): SlideElement {
+  // A size the growing box shrank the heading to goes back to the one it asked for.
+  const e = original.preferredFontSize ? uniformTextBoxFont(original, original.preferredFontSize) : original;
+  let paragraphs = e.paragraphs;
+  while (paragraphs && paragraphs.length > 1 && !paragraphs[paragraphs.length - 1].text.trim()) paragraphs = paragraphs.slice(0, -1);
+  const text = (paragraphs ? paragraphs.map((p) => p.text).join('\n') : e.text ?? '').replace(/\s+$/, '');
+  const lineHeight = e.lineHeight ?? 1.2;
+  const sizes = paragraphs?.map((p) => p.fontSize ?? e.fontSize ?? 40) ?? text.split('\n').map(() => e.fontSize ?? 40);
+  const h = Math.ceil(sizes.reduce((sum, size) => sum + size * lineHeight, 0)) + 8;
+  const next: SlideElement = { ...e, text, ...(paragraphs ? { paragraphs } : {}), x: ANNOUNCEMENT_LEFT, y: ANNOUNCEMENT_TOP,
+    w: TEMPLATE_RIGHT - ANNOUNCEMENT_LEFT, h, autoFit: false, preferredFontSize: undefined };
+  const same = e === original && (['text', 'x', 'y', 'w', 'h', 'autoFit'] as const).every((k) => next[k] === e[k]) && next.paragraphs === e.paragraphs && e.preferredFontSize === undefined;
+  return same ? original : next;
+}
+
 /**
  * The church template's 광고 slide has its "광고 / Announcements" heading tucked into the top-left
- * corner. On a slide whose heading is still there, the heading moves in from the corner, and the
- * boxes under it that start at the same edge ("1. <제목>", the text) move with it so everything
- * stays lined up; their right edges stay put. A box placed elsewhere by hand is left alone.
+ * corner. The heading moves in from the corner as a fixed box (see placedHeading), and the boxes
+ * under it that start at the template's left edge ("1. <제목>", the text) move in with it so
+ * everything stays lined up; their right edges stay put. A heading placed elsewhere by hand (away
+ * from the top-left) and boxes placed elsewhere are left alone.
  */
 function outOfCorner(elements: SlideElement[]): SlideElement[] {
-  const heading = elements.find((e) => inCorner(e) && e.y < ANNOUNCEMENT_TOP && HEADING.test(e.text ?? ''));
+  const heading = elements.find((e) => e.kind === 'text' && e.x < 200 && e.y < 200 && HEADING.test(e.text ?? ''));
   if (!heading) return elements;
   return elements.map((e) => {
+    if (e === heading) return placedHeading(e);
     if (!inCorner(e)) return e;
     const dx = ANNOUNCEMENT_LEFT - e.x;
-    const moved = { ...e, x: ANNOUNCEMENT_LEFT, w: Math.max(1, e.w - dx) };
-    if (e !== heading || e.y >= ANNOUNCEMENT_TOP || e.y < 40) return moved;
-    const dy = ANNOUNCEMENT_TOP - e.y;
-    return { ...moved, y: ANNOUNCEMENT_TOP, h: Math.max(1, e.h - dy) };
+    return { ...e, x: ANNOUNCEMENT_LEFT, w: Math.max(1, e.w - dx) };
   });
 }
 

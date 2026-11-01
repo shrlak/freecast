@@ -9,7 +9,8 @@ import { normalizeLibrary } from '../src/domain/persistence';
 import type { Presentation, Slide, SlideElement } from '../src/domain/types';
 
 const box = (id: string, text: string, y: number, h = 100): SlideElement => ({ id, kind: 'text', text, x: 120, y, w: 1200, h, fontSize: 32 });
-const deck = (): Presentation => ({ id: 'ads', title: '광고', themeId: 'theme_classic', slides: [{ id: 'ad', group: '광고', text: '', elements: [box('heading', '광고\nAnnouncements', 30), box('title', '1. 새가족 환영', 180), box('body', '환영합니다', 320, 600)] }] });
+// (The heading sits where FreeCast places it: 120 / 100, fixed.)
+const deck = (): Presentation => ({ id: 'ads', title: '광고', themeId: 'theme_classic', slides: [{ id: 'ad', group: '광고', text: '', elements: [{ ...box('heading', '광고\nAnnouncements', 100, 85), x: 120, w: 1244, autoFit: false }, box('title', '1. 새가족 환영', 236), box('body', '환영합니다', 339, 600)] }] });
 
 describe('initial maximum text size', () => {
   it('finds the largest fitting half-pixel size with a bounded number of layout measurements', () => {
@@ -59,11 +60,27 @@ describe('initial maximum text size', () => {
   it('moves the 광고 heading out of the top-left corner, with the boxes under it lined up', () => {
     const fixed = prepareAnnouncementSlide(adSlide());
     const [h, title, body] = fixed.elements!;
-    expect(h).toMatchObject({ x: 120, y: 100, w: 1244, h: 108 });
+    // A fixed box, without the template's trailing empty lines, just tall enough for its two lines.
+    expect(h).toMatchObject({ x: 120, y: 100, w: 1244, h: 104, autoFit: false, text: '광고\nAnnouncements' });
     expect(title).toMatchObject({ x: 120, y: 236, w: 1238 });
     expect(body).toMatchObject({ x: 120, y: 339, w: 1244, h: 573 });
     // Right edges stay where the template has them.
     expect([h.x + h.w, body.x + body.w]).toEqual([1364, 1364]);
+    expect(prepareAnnouncementSlide(fixed)).toBe(fixed);
+  });
+  it('brings back a heading the growing box spread over the whole top of the slide', () => {
+    // As saved by the editor: the empty template lines counted as overflow, so the box took the
+    // full width and the space above the title, at 0 / 0, and its font was shrunk.
+    const s = adSlide();
+    s.elements![0] = { ...heading(), x: 0, y: 0, w: 1440, h: 220, fontSize: 30, preferredFontSize: 40,
+      paragraphs: [{ text: '광고', fontSize: 30 }, { text: 'Announcements', fontSize: 30, bold: true }, { text: '', fontSize: 30 }, { text: '', fontSize: 30 }, { text: '', fontSize: 30 }] };
+    s.elements![1] = { ...s.elements![1], x: 120, w: 1238 };
+    s.elements![2] = { ...s.elements![2], x: 120, w: 1244 };
+    const fixed = prepareAnnouncementSlide(s);
+    expect(fixed.elements![0]).toMatchObject({ x: 120, y: 100, w: 1244, h: 104, autoFit: false, fontSize: 40, text: '광고\nAnnouncements' });
+    expect(fixed.elements![0].paragraphs).toEqual([{ text: '광고', fontSize: 40 }, { text: 'Announcements', fontSize: 40, bold: true }]);
+    expect(fixed.elements![0].preferredFontSize).toBeUndefined();
+    expect(fixed.elements!.slice(1)).toEqual(s.elements!.slice(1));
     expect(prepareAnnouncementSlide(fixed)).toBe(fixed);
   });
   it('fixes a QR slide pushed to the left edge by an earlier version the same way', () => {
