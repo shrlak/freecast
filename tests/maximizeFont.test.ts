@@ -47,11 +47,35 @@ describe('initial maximum text size', () => {
     const pushed = { ...box('body', '본문', 320, 600), x: 0, w: 1140 };
     const s: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [pushed] };
     const fixed = prepareAnnouncementSlide(s);
-    expect(fixed.elements![0]).toMatchObject({ x: 62, w: 1316, y: pushed.y, h: pushed.h });
+    expect(fixed.elements![0]).toMatchObject({ x: 77, w: 1287, y: pushed.y, h: pushed.h });
     expect(prepareAnnouncementSlide(fixed)).toBe(fixed);
     // Without QR codes, or placed there by hand elsewhere, a box stays where it is.
     const plain = { ...s, qr: undefined };
     expect(prepareAnnouncementSlide(plain)).toBe(plain);
+  });
+  // The church template's 광고 item slide (canvas px): heading, "1. <제목>", text.
+  const heading = (): SlideElement => ({ id: 'h', kind: 'text', text: '광고\nAnnouncements\n\n\n', x: 77, y: 74, w: 1287, h: 134, fontSize: 40 });
+  const adSlide = (): Slide => ({ id: 'ad', group: '광고', text: '', elements: [heading(), { ...box('title', '1. <새가족 환영>', 236, 75), x: 71, w: 1287 }, { ...box('body', '환영합니다', 339, 573), x: 77, w: 1287 }] });
+  it('moves the 광고 heading out of the top-left corner, with the boxes under it lined up', () => {
+    const fixed = prepareAnnouncementSlide(adSlide());
+    const [h, title, body] = fixed.elements!;
+    expect(h).toMatchObject({ x: 120, y: 100, w: 1244, h: 108 });
+    expect(title).toMatchObject({ x: 120, y: 236, w: 1238 });
+    expect(body).toMatchObject({ x: 120, y: 339, w: 1244, h: 573 });
+    // Right edges stay where the template has them.
+    expect([h.x + h.w, body.x + body.w]).toEqual([1364, 1364]);
+    expect(prepareAnnouncementSlide(fixed)).toBe(fixed);
+  });
+  it('fixes a QR slide pushed to the left edge by an earlier version the same way', () => {
+    const s = adSlide(); s.qr = ['https://example.org'];
+    s.elements = s.elements!.map((e) => ({ ...e, x: 0, w: 1140 }));
+    expect(prepareAnnouncementSlide(s).elements!.map((e) => [e.x, e.x + e.w])).toEqual([[120, 1364], [120, 1364], [120, 1364]]);
+  });
+  it('leaves a heading moved by hand, and slides without the heading, as they are', () => {
+    const moved = adSlide(); moved.elements![0] = { ...moved.elements![0], x: 300, y: 40 };
+    expect(prepareAnnouncementSlide(moved)).toBe(moved);
+    const other: Slide = { id: 'x', group: '광고', text: '', elements: [{ ...box('body', '본문', 74), x: 77 }] };
+    expect(prepareAnnouncementSlide(other)).toBe(other);
   });
   it('preserves plain-text ads and explicit manual font choices', () => {
     const p = deck(); p.slides = [{ id: 'plain', group: '광고', text: '광고 본문', style: { fontSize: 32 } }];
