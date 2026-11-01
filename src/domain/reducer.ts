@@ -61,7 +61,8 @@ type DomainAction =
   | { type: 'playlist/retention'; id: string; until?: number }
   | { type: 'playlist/rename'; id: string; name: string }
   | { type: 'playlist/activate'; id: string }
-  | { type: 'playlist/addItem'; item: PlaylistItem }
+  /** Add to the active playlist, or to `playlistId`; at the end, or at `index`. */
+  | { type: 'playlist/addItem'; item: PlaylistItem; playlistId?: string; index?: number }
   | { type: 'playlist/removeItem'; index: number }
   | { type: 'playlist/move'; from: number; to: number }
   | { type: 'playlist/select'; index: number }
@@ -406,8 +407,19 @@ function core(s: AppState, a: Action): AppState {
       return setLib(s, { playlists: lib.playlists.map((p) => (p.id === a.id ? { ...p, name: a.name } : p)) });
     case 'playlist/activate':
       return { ...s, activePlaylistId: a.id, playlistIndex: null };
-    case 'playlist/addItem':
-      return mapPlaylist(s, (p) => ({ ...p, items: [...p.items, a.item] }));
+    case 'playlist/addItem': {
+      const id = a.playlistId ?? activePlaylist(s)?.id;
+      const target = lib.playlists.find((p) => p.id === id);
+      if (!target) return s;
+      const at = a.index == null ? target.items.length : Math.max(0, Math.min(target.items.length, a.index));
+      const items = [...target.items];
+      items.splice(at, 0, a.item);
+      const next = setLib(s, { playlists: lib.playlists.map((p) => (p.id === target.id ? { ...p, items } : p)) });
+      if (target.id !== activePlaylist(s)?.id) return next;
+      // The selected and the live item stay the same items when the new one goes in before them.
+      const moved = (i: number | null | undefined) => (i != null && at <= i ? i + 1 : i);
+      return { ...next, playlistIndex: moved(s.playlistIndex) ?? null, cursor: s.cursor && { ...s.cursor, playlistIndex: moved(s.cursor.playlistIndex) } };
+    }
     case 'playlist/removeItem':
       return { ...mapPlaylist(s, (p) => ({ ...p, items: p.items.filter((_, i) => i !== a.index) })), playlistIndex: null };
     case 'playlist/move': {

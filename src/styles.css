@@ -1404,3 +1404,55 @@ body[data-view='mixer'] { background: #15171b; overflow: auto; }
 .presenter-edit button, .presenter-edit input, .presenter-edit select, .presenter-edit textarea { border-color: #d0d6df; }
 .presenter-edit button:hover:not(:disabled) { background: #f1f4f8; border-color: #b6bfcc; }
 .ppt-font { padding-top: 0; padding-bottom: 0; }
+
+/* 재생목록에 넣기: chooser, search-to-add, drag and drop */
+.add-menu { min-width: 240px; max-width: 320px; }
+.add-menu-title { padding: 6px 10px 4px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.add-menu-list { display: flex; flex-direction: column; max-height: 50vh; overflow-y: auto; }
+.add-menu-list button { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.add-menu-meta { display: flex; gap: 6px; flex: none; font-size: 11px; }
+.add-menu-meta b { color: #2e9e66; font-weight: 600; }
+.add-menu-meta em, .pl-adder-meta em { color: var(--muted); font-style: normal; }
+.add-menu .add-menu-new { margin-top: 4px; border-top: 1px solid var(--line) !important; border-radius: 0 0 6px 6px !important; color: #1f4f86; font-weight: 600; }
+.add-menu-form { display: flex; gap: 6px; padding: 6px; border-top: 1px solid var(--line); }
+.add-menu-form input { flex: 1; min-width: 0; }
+.ctx-menu button.danger { color: #b42318; }
+.pl-adder { position: relative; }
+.pl-adder .search { width: 100%; }
+.pl-adder-hits { list-style: none; margin: -4px 0 8px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.15)); max-height: 40vh; overflow-y: auto; }
+.pl-adder-hits li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.pl-adder-hits li.hi { background: #e6f5ec; }
+.pl-adder-hits li.empty { cursor: default; padding: 8px; }
+.pl-adder-meta { display: flex; align-items: center; gap: 6px; flex: none; font-size: 11px; }
+.pl-adder-meta b { color: #2e9e66; }
+.pl-menu-wrap { position: relative; flex: none; }
+.pl-more { font-size: 16px; line-height: 1; padding: 2px 8px !important; }
+.ctx-menu.pl-menu { position: absolute; right: 0; top: 100%; left: auto; }
+.pl-section { flex: 1.2; }
+.pl-list li[draggable="true"] { cursor: grab; }
+.pl-list .list-item, .pl-list .playlist-header { display: flex; align-items: center; gap: 6px; }
+.pl-title { flex: 1; min-width: 0; }
+.pl-grip { flex: none; font-size: 10px; letter-spacing: -2px; color: #b6bfcc; opacity: 0; }
+.pl-list li:hover .pl-grip { opacity: 1; }
+.pl-list .drop-before { box-shadow: inset 0 2px 0 #2e9e66; }
+.pl-list .drop-after { box-shadow: inset 0 -2px 0 #2e9e66; }
+.pl-drop-end { list-style: none; margin-top: 6px; padding: 10px 8px; border: 1px dashed #d0d6df; border-radius: 8px; color: var(--muted); font-size: 11px; text-align: center; line-height: 1.4; }
+.pl-drop-end.on { border-color: #2e9e66; color: #2e9e66; }
+.in-pl { color: #2e9e66; font-size: 11px; font-weight: 700; }
+.lib-panel .add-btn { font-size: 14px; font-weight: 700; color: #1f4f86; }
+.online-dot { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #f59e0b; vertical-align: middle; }
+.online-dot.ok { background: #4bc789; }
+.online-dot.error { background: #ef4444; }
+.ppt-pane-addpres { margin: 8px 4px 0 28px; padding: 8px; border: 1px dashed #b6bfcc !important; border-radius: 8px !important; background: transparent !important; color: #1f4f86; font-weight: 600; }
+.ppt-pane-addpres:hover { border-color: #2e9e66 !important; color: #2e9e66; }
+.ppt-pane-adder { margin: 8px 4px 0 28px; display: flex; flex-direction: column; gap: 4px; }
+.ppt-pane-adder > .mini-btn { align-self: flex-end; }
+.ppt-views button { font-size: 12px; padding: 2px 8px; }
+/* 디자인: both galleries scroll on their own so 화면 전환 stays on screen */
+.rb-gallery-themes { max-width: 360px; }
+.rb-gallery-bg { max-width: 250px; }
+@media (min-width: 1600px) { .rb-gallery-themes { max-width: 520px; } .rb-gallery-bg { max-width: 460px; } }
+.rb-range input[type='range'] { width: 96px; }
+.rb-range input[type='number'] { width: 60px; }
+.rb-theme { flex: 0 0 auto; }
+.rb-gallery-themes .rb-theme { width: 92px; }
