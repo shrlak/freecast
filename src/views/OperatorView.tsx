@@ -99,6 +99,8 @@ function download(name: string, data: string, type: string) {
 export function OperatorView() {
   const [state, dispatchRaw] = useReducer(reducer, undefined, () => createInitialState(loadLibrary()));
   const [modal, setModal] = useState<Modal>(null);
+  /** 단계별 수정: the wizard step opened alone (undefined = the whole 주일예배 마법사). */
+  const [sundayStep, setSundayStep] = useState<number | undefined>(undefined);
   const [followOn, setFollowOn] = useState(false);
   const [safe, setSafeState] = useState<SafeModeState>(loadSafeMode);
   const safeRef = useRef(safe); safeRef.current = safe;
@@ -564,7 +566,12 @@ export function OperatorView() {
     a.click();
   };
   const cmd: Commands = {
-    open: (m) => (m === 'follow' ? setFollowOn((on) => !on) : setModal(m)),
+    open: (m) => {
+      if (m === 'follow') return setFollowOn((on) => !on);
+      if (m === 'sunday') setSundayStep(undefined);
+      setModal(m);
+    },
+    editSundayStep: (step) => { setSundayStep(step); setModal('sunday'); },
     safeModeOn: safe.on,
     standbyOn: standbyConfig.on,
     followOn,
@@ -656,7 +663,7 @@ export function OperatorView() {
           onMixer={setMixer}
           onFeatures={() => setMarketOn(featureEnabled('templateMarket'))} onClose={() => setModal(null)} />
       )}
-      {modal === 'sunday' && <SundayWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}
+      {modal === 'sunday' && <SundayWizard key={sundayStep ?? 'all'} only={sundayStep} state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} service={service} />}
       {modal === 'retreat' && <RetreatWizard state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'chords' && <ChordSheetModal state={state} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'retreatBg' && <RetreatBackgroundModal library={state.library} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
