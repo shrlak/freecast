@@ -39,7 +39,7 @@ describe('광고: counting the announcements by their numbers', () => {
   it('never counts an indented numbered line, times or decimals', () => {
     const text = '1. 주일 일정\n  2. 들여쓴 줄\n10:30 1부 예배\n2. 성경공부\n3.5시간 진행';
     expect(titles(text)).toEqual(['주일 일정', '성경공부']);
-    expect(pages(text)[0][0]).toEqual(['2. 들여쓴 줄', '10:30 1부 예배']);
+    expect(pages(text)[0][0]).toEqual(['\u30002. 들여쓴 줄', '10:30 1부 예배']);
   });
 
   it('accepts skipped numbers after an empty line and numbers them again in order', () => {
@@ -55,6 +55,28 @@ describe('광고: counting the announcements by their numbers', () => {
   it('makes one announcement per block when nothing is numbered', () => {
     const items = parseAnnouncements('새가족 환영\n환영합니다\n\n수련회\n신청: https://forms.gle/x');
     expect(items.map((a) => [a.title, a.body, a.links])).toEqual([['새가족 환영', ['환영합니다'], []], ['수련회', [], ['https://forms.gle/x']]]);
+  });
+});
+
+describe('광고: bullets and links as written', () => {
+  it('turns * bullets into • and keeps lines indented under them as ◦, one step in', () => {
+    const text = `1. <수련회> 겨울 수련회가 열립니다.
+    * 장소 | 캠프
+    * 사전등록: 10월 18일
+        * 대학부: $50
+2. <기도모임>
+    * 화요기도모임
+        * 매주 화요일 8시 30분`;
+    expect(pages(text)).toEqual([
+      [['겨울 수련회가 열립니다.', '• 장소 | 캠프', '• 사전등록: 10월 18일', '\u3000◦ 대학부: $50']],
+      [['• 화요기도모임', '\u3000◦ 매주 화요일 8시 30분']],
+    ]);
+  });
+
+  it('drops the label left at the end of a line when its link becomes a QR code', () => {
+    const [a] = parseAnnouncements('1. <사역팀 모집> 많은 관심 부탁드립니다! 사인업: https://docs.google.com/forms/d/e/x/viewform');
+    expect(a.body).toEqual(['많은 관심 부탁드립니다!']);
+    expect(a.links).toEqual(['https://docs.google.com/forms/d/e/x/viewform']);
   });
 });
 
