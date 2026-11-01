@@ -1,39 +1,42 @@
 import { useEffect, useState } from 'react';
 import { desktop, type UpdateState } from '../domain/desktop';
 
-/** Update notice (desktop app): downloading → "restart to update". */
+/**
+ * Update notice (desktop app), on screen over the console: FreeCast looks for a new release every
+ * 30 minutes while it is open, and as soon as one is found this says so ("새 버전 … 내려받는 중"),
+ * then offers to restart once it is ready. "숨기기" hides it only for that version and step: it comes
+ * back when the download is ready or a newer version turns up. Nothing restarts by itself.
+ */
 export function UpdateBanner() {
   const [st, setSt] = useState<UpdateState | null>(null);
-  const [hidden, setHidden] = useState(false);
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
   useEffect(() => {
     if (!desktop) return;
     desktop.updateState().then(setSt);
-    return desktop.onUpdate((s) => {
-      setSt(s);
-      if (s.status === 'ready') setHidden(false);
-    });
+    return desktop.onUpdate(setSt);
   }, []);
-  if (!desktop || !st || hidden) return null;
+  if (!desktop || !st || (st.status !== 'downloading' && st.status !== 'ready')) return null;
+  const key = `${st.status}:${st.version}`;
+  if (hiddenFor === key) return null;
   if (st.status === 'downloading') {
     return (
-      <div className="update-banner">
-        <span>⬇ FreeCast {st.version} 업데이트를 내려받는 중… {st.progress}%</span>
+      <div className="update-banner" role="status">
+        <span><strong>🔔 새 버전 FreeCast {st.version}이(가) 있습니다.</strong> 내려받는 중… {st.progress}%</span>
         <progress max={100} value={st.progress} />
-        <button className="mini-btn" onClick={() => setHidden(true)}>숨기기</button>
+        <button className="mini-btn" onClick={() => setHiddenFor(key)}>숨기기</button>
       </div>
     );
   }
-  if (st.status === 'ready') {
-    return (
-      <div className="update-banner ready">
-        <span>✅ FreeCast {st.version} 업데이트가 준비되었습니다.</span>
-        <button className="primary" onClick={() => desktop!.installUpdate()}>지금 재시작하여 업데이트</button>
-        <button onClick={() => setHidden(true)}>나중에 (종료할 때 설치)</button>
-      </div>
-    );
-  }
-  return null;
+  return (
+    <div className="update-banner ready" role="alert">
+      <span><strong>✅ FreeCast {st.version} 업데이트가 준비되었습니다.</strong></span>
+      <button className="primary" onClick={() => desktop!.installUpdate()}>지금 재시작하여 업데이트</button>
+      <button onClick={() => setHiddenFor(key)}>나중에 (종료할 때 설치)</button>
+    </div>
+  );
 }
+
+const clock = (ms: number) => new Date(ms).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' });
 
 /** "Check for updates" control for settings. */
 export function UpdateCheck() {
@@ -49,7 +52,7 @@ export function UpdateCheck() {
     <div className="row gap-xs">
       <button onClick={() => desktop!.checkUpdates().then((s) => s && setSt(s))}>업데이트 확인</button>
       {st?.status === 'ready' && <button className="primary" onClick={() => desktop!.installUpdate()}>재시작하여 설치</button>}
-      <span className="muted small">{label}</span>
+      <span className="muted small">{label}{st?.checkedAt ? ` · 마지막 확인 ${clock(st.checkedAt)}` : ''} · 앱이 열려 있으면 30분마다 자동으로 확인합니다</span>
     </div>
   );
 }

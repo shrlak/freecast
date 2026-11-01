@@ -158,3 +158,11 @@ describe('live editing', () => {
     expect(s.live.slide).toBe(before.slide);
   });
 });
+
+describe('update checks while FreeCast is open', () => {
+  it('look for a new release every 30 minutes', async () => {
+    const src = await import('node:fs').then((fs) => fs.readFileSync(new URL('../electron/updater.mjs', import.meta.url), 'utf8'));
+    expect(src).toMatch(/export const CHECK_EVERY_MS = 30 \* 60 \* 1000;/);
+    expect(src).toMatch(/setInterval\(auto, CHECK_EVERY_MS\)/);
+  });
+});

@@ -4,8 +4,8 @@
 //   download the new release .zip and swap the app bundle with a small script — when the app quits,
 //   or right away (with a relaunch) if the operator clicks the notice.
 // Nothing restarts on its own: an update never interrupts a running service.
-// FreeCast looks for a new release on its own shortly after launch, every hour while it runs and
-// when the computer wakes from sleep, so a new version on GitHub reaches every installed copy.
+// FreeCast looks for a new release on its own shortly after launch, every 30 minutes while it is
+// open and when the computer wakes from sleep, so a new version on GitHub reaches every installed copy.
 // "Check for Updates…" in the menu still checks by hand at any time.
 import { app, Notification, powerMonitor, shell } from 'electron';
 import { spawn, execFile } from 'node:child_process';
@@ -20,7 +20,7 @@ import { newer } from './version.mjs';
 const { autoUpdater } = updaterPkg;
 
 let send = () => undefined;
-let state = { status: 'idle', version: null, progress: 0, error: null };
+let state = { status: 'idle', version: null, progress: 0, error: null, checkedAt: null };
 let macUpdate = null; // { version, zipUrl, appPath (downloaded .app) }
 let checking = false;
 let publish = null;
@@ -154,6 +154,7 @@ export async function checkForUpdates() {
     set({ status: 'error', error: e?.message ?? String(e) });
   } finally {
     checking = false;
+    set({ checkedAt: Date.now() });
   }
   return state;
 }
@@ -166,7 +167,8 @@ export function installUpdate() {
 
 export const updateState = () => state;
 
-const CHECK_EVERY_MS = 60 * 60 * 1000;
+/** How often an open FreeCast looks for a new release. */
+export const CHECK_EVERY_MS = 30 * 60 * 1000;
 
 /** Start the updater. `publishConfig` is the GitHub repo that hosts releases. */
 export function startUpdater({ publishConfig, sendToRenderer }) {

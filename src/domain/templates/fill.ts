@@ -37,8 +37,6 @@ const withDate = (s: Slide, date: Date): Slide => {
 const PRAYER_MARK = /기도\s*제목\s*\d/;
 const isPrayerBox = (e: SlideElement) => e.kind === 'text' && (e.role === 'prayer' || PRAYER_MARK.test(e.text ?? ''));
 const isPrayerPage = (s: Slide) => !!s.elements?.some(isPrayerBox);
-/** A prayer page that already carries this week's topics (not the template's own placeholder text). */
-const isFilledPrayerPage = (s: Slide) => !!s.elements?.some((e) => isPrayerBox(e) && !PRAYER_MARK.test(e.text ?? ''));
 
 interface PrayerLine { text: string; bold?: boolean }
 
@@ -107,13 +105,14 @@ export function fillFront(tpl: ServiceTemplates, date: Date, topics: PrayerTopic
 }
 
 /**
- * Restore the source Front design with this Sunday's date and these 기도제목, keeping the page and
- * object ids of the deck it replaces. Without `topics` (an earlier service's copy) the deck keeps the
- * 기도제목 it already prints.
+ * Restore the source Front design with this Sunday's date, keeping the page and object ids of the
+ * deck it replaces. With `topics` the 기도 준비 pages are made anew for them; without (the topics
+ * have not changed since, or an earlier service's copy) the deck keeps its 기도 pages as they are,
+ * edits included.
  */
 export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date, topics?: PrayerTopic[]): Slide[] {
   let fresh = fillFront(tpl, date, topics ?? []);
-  const kept = topics ? [] : slides.filter(isFilledPrayerPage);
+  const kept = topics ? [] : slides.filter(isPrayerPage);
   if (kept.length) {
     const at = fresh.findIndex(isPrayerPage);
     fresh = [...fresh.slice(0, at), ...kept.map(keepFrontLayout), ...fresh.slice(at).filter((s) => !isPrayerPage(s))];

@@ -28,6 +28,8 @@ export interface UpdateState {
   version: string | null;
   progress: number;
   error: string | null;
+  /** When FreeCast last looked for a new release (ms since epoch). */
+  checkedAt?: number | null;
 }
 
 export interface DesktopBridge {
