@@ -8,6 +8,7 @@ import { formatRefs, type BibleRef } from '../bible/refs';
 import type { ScriptureChunk } from '../bible/slides';
 import { announcementPages, type Announcement } from '../sunday/announcements';
 import { qrElements } from '../qrElements';
+import { withStableIds } from '../stableIds';
 import type { PrayerTopic } from '../sunday/prayer';
 import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
@@ -253,7 +254,12 @@ export function songStyleUpdates(presentations: Presentation[], tpl: ServiceTemp
   const key = songKey(tpl, maxLines);
   // (A song in the template design whose 진행 skips its title slide is redone too: the title must open the song.)
   const skipsTitle = (p: Presentation) => !!p.arrangements?.some((a) => !a.groups.includes('Title')) && p.slides.some((s) => s.group === 'Title');
-  return presentations.filter((p) => !p.protected && !p.slidesEdited && (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => restyleSong(p, tpl, maxLines));
+  // Every computer restyles the same songs the same way: with ids from the song, the results match
+  // and cloud sync sees one change, not a conflict.
+  return presentations.filter((p) => !p.protected && !p.slidesEdited && (p.templateKey !== key || skipsTitle(p)) && isSong(p)).map((p) => {
+    const styled = restyleSong(p, tpl, maxLines);
+    return { ...styled, slides: withStableIds(p.id, styled.slides) };
+  });
 }
 
 export interface ScriptureFill {

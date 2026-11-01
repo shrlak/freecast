@@ -27,5 +27,6 @@ export const qrElements = (links: readonly string[]): SlideElement[] => links.ma
 export function withQrElements(s: Slide): Slide {
   if (!s.qr?.length || s.lyricBody) return s;
   const { qr, ...rest } = s;
-  return { ...rest, elements: [...(s.elements ?? []), ...qrElements(qr)] };
+  // Ids from the slide: every computer converts a saved slide the same way (no sync conflict).
+  return { ...rest, elements: [...(s.elements ?? []), ...qrElements(qr).map((e, i) => ({ ...e, id: `${s.id}-qr${i}` }))] };
 }

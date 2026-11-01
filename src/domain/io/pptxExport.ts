@@ -66,6 +66,20 @@ async function urlData(url: string): Promise<string | null> {
 }
 
 const fontFace = (t: Theme) => pptxFont(t.fontFamily);
+
+/*
+ * What keeps the exported slides looking like the screen:
+ * - No inner margin: a FreeCast box is already the text area (importing a PowerPoint deck takes
+ *   its margins off), so PowerPoint's default 0.1" / 0.05" would make lines wrap sooner and spill.
+ * - Line spacing as exact points (font size × the screen's line height): PowerPoint's "multiple"
+ *   counts in the font's own line height, which differs by font (and by the Korean fallback font).
+ * - Korean text marked Korean, as in the church decks, so PowerPoint picks its Korean font for it.
+ */
+const NO_MARGIN = 0;
+const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
+const langOf = (text: string) => (HANGUL.test(text) ? 'ko-KR' : undefined);
+/** Points between lines for text of `sizePx` canvas pixels at line height `lineHeight` (×font size). */
+const linePts = (sizePx: number, lineHeight: number) => Math.round(sizePx * 0.5 * lineHeight * 10) / 10;
 const stripBold = (s: string) => stripChords(s.replace(/\*\*/g, ''));
 
 async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
@@ -92,13 +106,14 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
     const color = theme.color.replace('#', '');
     const valign = theme.vAlign === 'middle' ? 'middle' : theme.vAlign;
     const runs: PptxGenJS.TextProps[] = [];
-    if (slide.title) runs.push({ text: slide.title, options: { bold: true, fontSize: theme.fontSize * 0.72 * 0.5, breakLine: true } });
+    if (slide.title) runs.push({ text: slide.title, options: { bold: true, fontSize: theme.fontSize * 0.72 * 0.5, lineSpacing: linePts(theme.fontSize * 0.72, theme.lineHeight), breakLine: true } });
     for (const line of slide.text.split('\n')) {
-      runs.push({ text: stripBold(line), options: { bold: /^\*\*.*\*\*$/.test(line) || theme.fontWeight >= 700, breakLine: true } });
+      runs.push({ text: stripBold(line), options: { bold: /^\*\*.*\*\*$/.test(line) || theme.fontWeight >= 700, lineSpacing: linePts(theme.fontSize, theme.lineHeight), breakLine: true } });
     }
     if (slide.subtext) {
+      const sub = theme.fontSize * (theme.subScale ?? 0.62);
       for (const line of slide.subtext.split('\n')) {
-        runs.push({ text: line, options: { fontSize: theme.fontSize * (theme.subScale ?? 0.62) * 0.5, color: (theme.subColor ?? theme.color).replace('#', ''), breakLine: true } });
+        runs.push({ text: line, options: { fontSize: sub * 0.5, color: (theme.subColor ?? theme.color).replace('#', ''), lineSpacing: linePts(sub, theme.lineHeight), breakLine: true } });
       }
     }
     // A trailing paragraph would put an empty line below the lyrics and shift the
@@ -108,7 +123,8 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       x: layout.box.x * PX, y: layout.box.y * PX, w: layout.box.w * PX, h: layout.box.h * PX,
       fontFace: fontFace(theme), fontSize: theme.fontSize * 0.5, color, italic: theme.italic, underline: theme.underline ? { style: 'sng' } : undefined,
       ...textOptions(theme),
-      align: theme.align, valign, lineSpacingMultiple: theme.lineHeight,
+      margin: NO_MARGIN, lang: langOf(`${slide.title ?? ''}${slide.text}${slide.subtext ?? ''}`),
+      align: theme.align, valign,
       shadow: theme.shadow ? { type: 'outer', blur: 6, offset: 2, angle: 45, color: '000000', opacity: 0.6 } : undefined,
       fit: undefined,
     });
@@ -117,8 +133,11 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       const box = { x: el.x * PX, y: el.y * PX, w: el.w * PX, h: el.h * PX, rotate: el.rotation };
       if (el.kind === 'text' && el.text) {
         // Empty Front paragraphs also carry a source font size (and therefore spacer height).
-        const content = el.paragraphs?.length ? el.paragraphs.map((p, i) => ({ text: fixed ? p.text.split('\n').map((line) => line || '\u00a0').join('\n') : p.text, options: { fontSize: (p.fontSize ?? el.fontSize ?? 64) * 0.5, bold: p.bold ?? el.bold, italic: p.italic ?? el.italic, color: (p.color ?? el.color ?? '#ffffff').replace('#', ''), align: p.align ?? el.align, breakLine: i < el.paragraphs!.length - 1 } })) : el.text;
-        s.addText(content, { ...box, fontFace: pptxFont(el.fontFamily ?? baseTheme.fontFamily), lineSpacingMultiple: el.lineHeight, fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: undefined });
+        // The screen's line height for this box (as elementTextStyle draws it). A paragraph's last
+        // line break shows no extra line on screen, so it adds none here either.
+        const lh = el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25);
+        const content = el.paragraphs?.length ? el.paragraphs.map((p, i) => ({ text: fixed ? p.text.replace(/\n$/, '').split('\n').map((line) => line || '\u00a0').join('\n') : p.text, options: { fontSize: (p.fontSize ?? el.fontSize ?? 64) * 0.5, lineSpacing: linePts(p.fontSize ?? el.fontSize ?? 64, lh), bold: p.bold ?? el.bold, italic: p.italic ?? el.italic, color: (p.color ?? el.color ?? '#ffffff').replace('#', ''), align: p.align ?? el.align, breakLine: i < el.paragraphs!.length - 1 } })) : el.text;
+        s.addText(content, { ...box, fontFace: pptxFont(el.fontFamily ?? baseTheme.fontFamily), lineSpacing: el.paragraphs?.length ? undefined : linePts(el.fontSize ?? 64, lh), margin: NO_MARGIN, lang: langOf(el.text), fontSize: (el.fontSize ?? 64) * 0.5, color: (el.color ?? '#ffffff').replace('#', ''), bold: el.bold, italic: el.italic, underline: el.underline ? { style: 'sng' } : undefined, ...textOptions(el), align: el.align ?? 'center', valign: el.vAlign === 'top' ? 'top' : el.vAlign === 'bottom' ? 'bottom' : 'middle', fit: undefined });
       } else if (el.kind === 'image' && el.mediaId) {
         const data = await dataUrl(el.mediaId);
         if (data) s.addImage({ ...box, data, sizing: { type: el.fit === 'cover' ? 'cover' : 'contain', w: box.w, h: box.h } });
@@ -140,11 +159,17 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
 
 /** Export presentations (in playlist order when given) to a .pptx file download. */
 export async function exportPptx(lib: Library, source: { playlist: Playlist } | { presentation: Presentation }, fileName: string) {
+  const pptx = await buildPptx(lib, source);
+  await pptx.writeFile({ fileName: fileName.endsWith('.pptx') ? fileName : `${fileName}.pptx` });
+}
+
+/** The deck as PowerPoint will get it (in playlist order when given). */
+export async function buildPptx(lib: Library, source: { playlist: Playlist } | { presentation: Presentation }): Promise<PptxGenJS> {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_4x3';
   const list = 'playlist' in source
     ? source.playlist.items.flatMap((i) => (i.kind === 'header' ? [] : lib.presentations.filter((p) => p.id === i.presentationId)))
     : [source.presentation];
   for (const p of list) await addPresentation(pptx, lib, p);
-  await pptx.writeFile({ fileName: fileName.endsWith('.pptx') ? fileName : `${fileName}.pptx` });
+  return pptx;
 }

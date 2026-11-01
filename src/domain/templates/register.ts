@@ -13,6 +13,7 @@ import { mdy, upcomingSunday } from '../sunday/notice';
 import { parsePrayerTopics } from '../sunday/prayer';
 import { applyConfessionSong, findConfessionSong, songChunks } from './confession';
 import type { ServiceTemplates } from './serviceTemplates';
+import { withStableIds } from '../stableIds';
 
 const PLACEHOLDER_SLIDES = { front: 'front_prayer', back: 'back_confession' } as const;
 
@@ -49,6 +50,8 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
     // The 기도 pages are made anew only when the 기도제목 (or the date or church file) changed: edits
     // made on them since stay.
     const remake = current && front.templateKey !== frontKey;
+    // (Pages keep their ids; a Front remade the same way on two computers differs only in the new
+    // pages' ids, which cloud sync treats as the same change — see mergeById.)
     const slides = refreshFront(front.slides, tpl, date, remake ? parsePrayerTopics(prayer) : undefined);
     if (front.templateKey === frontKey && JSON.stringify(front.slides) === JSON.stringify(slides)) continue;
     if (front.id !== lib.sunday.frontId || isPlaceholder(front, 'front') || fromTemplates(front, 'front'))
@@ -65,10 +68,10 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
     if (back.templateKey !== backKey) {
       if (back.templateKey?.startsWith(`back:${tpl.keys.back}|`)) {
         // Same church file: only the 공동체 고백송 block is rewritten, edits elsewhere stay.
-        out.push({ id: back.id, patch: { templateKey: backKey, slides: (song && applyConfessionSong(back.slides, song, lines)) || back.slides } });
+        out.push({ id: back.id, patch: { templateKey: backKey, slides: withStableIds(back.id, (song && applyConfessionSong(back.slides, song, lines)) || back.slides) } });
       } else if (isPlaceholder(back, 'back') || fromTemplates(back, 'back')) {
         const slides = tpl.back.map((s) => fillSlide(s, (t) => t));
-        out.push({ id: back.id, patch: { ...base, templateKey: backKey, slides: (song && applyConfessionSong(slides, song, lines)) || slides } });
+        out.push({ id: back.id, patch: { ...base, templateKey: backKey, slides: withStableIds(back.id, (song && applyConfessionSong(slides, song, lines)) || slides) } });
       }
     }
   }
