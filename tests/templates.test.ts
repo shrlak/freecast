@@ -70,8 +70,8 @@ describe('PPTX slide conversion', () => {
     const bigger = patchElement({ ...el, fontSize: 60 }, { fontSize: 120 });
     expect(bigger.paragraphs!.map((p) => p.fontSize)).toEqual([120, 120]);
     expect(patchElement(el, { color: '#ff0000' }).paragraphs!.every((p) => p.color === undefined)).toBe(true);
-    // The box grows with the font, around its centre.
-    expect(patchElement({ ...el, fontSize: 60 }, { fontSize: 120 })).toMatchObject({ x: -350, y: 0, w: 2600, h: 400 });
+    // The box stays as it is when the font gets bigger (and stops fitting itself to the text).
+    expect(patchElement({ ...el, fontSize: 60 }, { fontSize: 120 })).toMatchObject({ x: el.x, y: el.y, w: el.w, h: el.h, autoFit: false });
   });
 
   it('fills tokens and drops lines whose value is missing', () => {

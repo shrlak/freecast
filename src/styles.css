@@ -811,6 +811,7 @@ body[data-remote-appearance='light'] .remote-empty { color: #c4c9d1; }
 
 /* The viewport stays still; only the upcoming slide list owns a scroll area. */
 .remote-console { height: 100vh; height: 100dvh; overflow: hidden; padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); gap: 8px; }
+.remote-console:not(.remote-embedded) { height: var(--app-height, 100dvh); }
 .remote-console.remote-embedded { height: 100%; max-height: 100%; padding: 8px 12px; }
 .remote-console > .remote-head { flex: none; min-height: 24px; background: var(--bg); isolation: isolate; }
 .remote-head > .truncate { flex: 1; }
@@ -910,10 +911,17 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
 .rehearsal-banner { margin: 10px 16px; padding: 10px; border: 1px solid #b47a00; border-radius: 6px; background: #b47a0015; }
 .rehearsal-modal > label { padding: 0 16px 10px; }
 .rehearsal-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(200px, 1fr); gap: 16px; padding: 0 16px; overflow: hidden; }
-.rehearsal-main { min-height: 0; overflow: auto; }
+/* The slide shown large fits the space left over (4:3, never cut off at the bottom). */
+.rehearsal-main { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.rehearsal-stage { flex: 1 1 auto; min-height: 220px; display: flex; justify-content: center; align-items: flex-start; }
+.rehearsal-stage > .canvas-frame { height: 100%; width: auto; max-width: 100%; }
 .rehearsal-main > .row { margin-top: 10px; }
-.rehearsal-list { padding: 0; display: grid; grid-template-columns: 1fr 1fr; align-content: start; gap: 8px; }
-.rehearsal-list > button { padding: 3px; min-width: 0; overflow: hidden; }
+.rehearsal-main > p { flex: none; }
+/* Thumbnails: two per row at a fixed half width, so each slide gets its full 4:3 height and its label
+   (a grid sized its rows before the slides knew their width, and cut every slide off at the bottom). */
+.rehearsal-list { padding: 0 2px 0 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; }
+.rehearsal-list > button { flex: none; width: calc(50% - 4px); padding: 3px; min-width: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px; white-space: normal; }
+.rehearsal-list > button > .canvas-frame { flex: none; }
 .rehearsal-list > button[aria-current='true'] { outline: 3px solid var(--accent); outline-offset: -3px; }
 .rehearsal-list > button > span { font-size: 11px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .remote-access { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 11px; flex: none; }
@@ -929,6 +937,7 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
   .rehearsal-body { grid-template-columns: 1fr; overflow: auto; }
   .rehearsal-list { overflow: visible; }
   .rehearsal-main { overflow: visible; }
+  .rehearsal-stage > .canvas-frame { height: auto; width: 100%; }
 }
 .remote-status-details { position: relative; flex: none; }
 .remote-status-details > summary { cursor: pointer; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; list-style: none; }
@@ -966,7 +975,7 @@ body[data-remote-appearance='light'] .remote-handset { --handset-top: #fff; --ha
 .team-request-history .team-request { display: block; }
 .team-request-history .team-request > div { font-size: 12px; margin-top: 4px; color: var(--muted); }
 .team-sender-modal { width: min(620px, 94vw); max-height: 90dvh; }
-.team-console { max-width: 660px; height: 100dvh; overflow: auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+.team-console { max-width: 660px; height: 100dvh; height: var(--app-height, 100dvh); overflow: auto; padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 .team-console > .remote-head { position: sticky; top: -12px; z-index: 2; background: var(--bg); padding: 8px 0; }
 .team-console > label input { min-width: 0; flex: 1; font-size: 16px; }
 .team-preview { flex: none; }

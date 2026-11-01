@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CloudStoragePanel } from './CloudStoragePanel';
+import { DeviceProfileFields } from './DeviceProfileFields';
 import type { CloudSync } from './useCloudSync';
 
 /** Sign in to the church cloud library (or create an account with the 관리자 password). */
@@ -13,9 +14,6 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
   const [done, setDone] = useState<string | null>(null);
   const { status, device } = cloud;
   useEffect(() => { if (status.session) void cloud.refreshStorage(); }, [status.session?.token, cloud.refreshStorage]);
-  const [deviceName, setDeviceName] = useState(device.name);
-  const [deviceUser, setDeviceUser] = useState(device.userName);
-  useEffect(() => { setDeviceName(device.name); setDeviceUser(device.userName); }, [device]);
 
   const submit = async () => {
     setBusy(true);
@@ -29,7 +27,7 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
         setAdmin('');
       } else {
         await cloud.login(username.trim(), password);
-        setDone('로그인했습니다. 이 기기의 이름과 사용자를 등록할 수 있습니다.');
+        setDone('로그인했습니다.');
       }
     } catch (e) {
       setError((e as Error).message);
@@ -53,11 +51,9 @@ export function AccountModal({ cloud, onClose, onActivity }: { cloud: CloudSync;
               <CloudStoragePanel cloud={cloud} />
               <h3>현재 기기</h3>
               <p className="small">{device.platform}{device.computerName ? ` · ${device.computerName}` : ''}{device.appVersion ? ` · FreeCast ${device.appVersion}` : ''}<br />기기 ID: {device.id}</p>
-              <label className="stack">기기 이름<input maxLength={60} value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="예: 교회 본당 Mac" /></label>
-              <label className="stack">기기 사용자 이름<input maxLength={60} value={deviceUser} onChange={(e) => setDeviceUser(e.target.value)} placeholder="예: 김철수" /></label>
-              <button onClick={() => { try { cloud.renameDevice(deviceName, deviceUser); setDone('이 기기의 이름과 사용자를 저장했습니다.'); setError(null); } catch (e) { setError((e as Error).message); } }}>기기 정보 저장</button>
+              <DeviceProfileFields cloud={cloud} />
               {error && <p role="alert">{error}</p>}
-              <p className="hint">이 설정은 이 기기에만 적용됩니다. 브라우저별로 별도 기기로 등록되며, 이름은 이후 사용기록에 적용됩니다.</p>
+              <p className="hint">입력하면 자동으로 저장됩니다. 이 설정은 이 기기에만 적용됩니다. 브라우저별로 별도 기기로 등록되며, 이름은 이후 사용기록에 적용됩니다.</p>
               <h3>라이브러리에 등록된 기기</h3>
               <ul>{cloud.registeredDevices.map((d) => <li key={d.id}>{d.name}{d.id === device.id ? ' (현재 기기)' : ''} · {d.userName || '사용자 미등록'} · {d.platform}<br /><span className="muted small">마지막 접속 {new Date(d.lastSeen).toLocaleString()} · {d.account ?? '계정 정보 없음'}</span></li>)}</ul>
               <p className="muted small">

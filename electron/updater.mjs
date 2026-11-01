@@ -6,8 +6,9 @@
 // Nothing restarts on its own: an update never interrupts a running service.
 // FreeCast looks for a new release on its own shortly after launch, every 30 minutes while it is
 // open and when the computer wakes from sleep, so a new version on GitHub reaches every installed copy.
-// "Check for Updates…" in the menu still checks by hand at any time.
-import { app, Notification, powerMonitor, shell } from 'electron';
+// "Check for Updates…" in the menu still checks by hand at any time. When FreeCast is closed it looks
+// once more and, if there is a new version, downloads it before it quits, so it is installed then.
+import { app, BrowserWindow, Notification, powerMonitor, shell } from 'electron';
 import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -20,6 +21,7 @@ import { newer } from './version.mjs';
 const { autoUpdater } = updaterPkg;
 
 let send = () => undefined;
+const watchers = new Set();
 let state = { status: 'idle', version: null, progress: 0, error: null, checkedAt: null };
 let macUpdate = null; // { version, zipUrl, appPath (downloaded .app) }
 let checking = false;
@@ -28,6 +30,18 @@ let publish = null;
 function set(patch) {
   state = { ...state, ...patch };
   send(state);
+  watchers.forEach((w) => w(state));
+}
+
+/** Resolves once `done(state)` holds, or after `ms`. */
+function waitFor(done, ms) {
+  return new Promise((resolve) => {
+    if (done(state)) return resolve();
+    const finish = () => { clearTimeout(t); watchers.delete(watch); resolve(); };
+    const watch = (st) => { if (done(st)) finish(); };
+    const t = setTimeout(finish, ms);
+    watchers.add(watch);
+  });
 }
 
 function notify(title, body, onClick) {
@@ -170,6 +184,54 @@ export const updateState = () => state;
 /** How often an open FreeCast looks for a new release. */
 export const CHECK_EVERY_MS = 30 * 60 * 1000;
 
+/** How long closing FreeCast may wait for the last check (and its download) before it quits anyway. */
+const QUIT_CHECK_MS = 20_000;
+const QUIT_DOWNLOAD_MS = 3 * 60 * 1000;
+let quitCheck = 'idle'; // 'idle' | 'running' | 'done'
+
+/** True while FreeCast is looking for an update on its way out (the app is still needed then). */
+export const holdingQuit = () => quitCheck === 'running';
+
+/** The small window that says what closing FreeCast is waiting for. */
+function quitWindow() {
+  const win = new BrowserWindow({ width: 440, height: 150, frame: false, resizable: false, alwaysOnTop: true, show: false, backgroundColor: '#ffffff',
+    webPreferences: { contextIsolation: true, sandbox: true } });
+  const html = `<!doctype html><meta charset="utf-8"><body style="margin:0;font:15px -apple-system,'Segoe UI','Malgun Gothic',sans-serif;display:grid;place-items:center;height:100vh;background:#fff;color:#252423">
+<div style="text-align:center;padding:0 24px"><b style="font-size:16px">FreeCast를 닫는 중</b><p id="m" style="margin:10px 0 0">새 버전이 있는지 확인하는 중…</p></div></body>`;
+  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  win.once('ready-to-show', () => win.show());
+  return win;
+}
+
+/**
+ * Closing FreeCast: look for a new release one last time, and download it if there is one, so it is
+ * installed as FreeCast quits (Windows: electron-updater on quit; macOS: the will-quit swap).
+ * Offline, or when it takes too long, FreeCast simply quits; the next launch checks again.
+ */
+async function checkOnQuit() {
+  quitCheck = 'running';
+  BrowserWindow.getAllWindows().forEach((w) => w.hide());
+  const win = quitWindow();
+  const say = (text) => { if (!win.isDestroyed()) win.webContents.executeJavaScript(`document.getElementById('m').textContent=${JSON.stringify(text)}`).catch(() => undefined); };
+  const progress = (st) => { if (st.status === 'downloading') say(`새 버전 ${st.version}을(를) 내려받는 중… ${st.progress}%`); };
+  watchers.add(progress);
+  try {
+    if (state.status !== 'downloading') {
+      // A check already under way (the 30-minute one) is waited for instead of started again.
+      if (checking) await waitFor((st) => st.status !== 'checking', QUIT_CHECK_MS);
+      else await Promise.race([checkForUpdates(), new Promise((r) => setTimeout(r, QUIT_CHECK_MS))]);
+    }
+    if (state.status === 'downloading' || state.status === 'checking') await waitFor((st) => st.status !== 'downloading' && st.status !== 'checking', QUIT_DOWNLOAD_MS);
+    if (state.status === 'ready') say(`새 버전 ${state.version}을(를) 설치합니다…`);
+  } catch { /* quit anyway */ }
+  finally {
+    watchers.delete(progress);
+    quitCheck = 'done';
+    if (!win.isDestroyed()) win.destroy();
+    app.quit();
+  }
+}
+
 /** Start the updater. `publishConfig` is the GitHub repo that hosts releases. */
 export function startUpdater({ publishConfig, sendToRenderer }) {
   publish = publishConfig;
@@ -178,6 +240,13 @@ export function startUpdater({ publishConfig, sendToRenderer }) {
   if (process.platform !== 'darwin') setupWindows();
   // macOS: a downloaded update installs itself when FreeCast quits (Windows does this in electron-updater).
   else app.on('will-quit', () => state.status === 'ready' && installMac(false));
+
+  // Closing FreeCast checks once more first (an update already downloaded just installs).
+  app.prependListener('before-quit', (e) => {
+    if (quitCheck !== 'idle' || state.status === 'ready') return;
+    e.preventDefault();
+    void checkOnQuit();
+  });
 
   // Once an update is downloaded there is nothing more to fetch until it is installed.
   const auto = () => state.status !== 'ready' && state.status !== 'downloading' && checkForUpdates();

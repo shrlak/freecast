@@ -52,6 +52,8 @@ import { deleteMedia, forgetMediaUrl } from '../domain/media';
 import { finishedServices } from '../domain/sunday/cleanup';
 import { useServiceUploads } from '../ui/ppt/useServiceUploads';
 import { AccountModal } from '../ui/AccountModal';
+import { DeviceSetupDialog } from '../ui/DeviceSetupDialog';
+import { deviceProfileSaved } from '../domain/device';
 import { ConfessionSetting } from '../ui/sunday/ConfessionSetting';
 import { AiUsage } from '../ui/AiUsage';
 import { PrayerSetting } from '../ui/sunday/PrayerSetting';
@@ -170,6 +172,13 @@ export function OperatorView() {
     return () => { clearTimeout(first); clearInterval(t); };
   }, []);
   const cloud = useCloudSync(state.library, dispatch, (m) => notifyRef.current(m));
+  // The first login on this computer (or a logged-in computer never named): register its name and user right away.
+  const [deviceSetup, setDeviceSetup] = useState(false);
+  useEffect(() => {
+    if (!cloud.status.session || deviceProfileSaved()) return;
+    setModal((m) => (m === 'account' ? null : m));
+    setDeviceSetup(true);
+  }, [cloud.status.session?.token]); // eslint-disable-line react-hooks/exhaustive-deps
   // 🛡 While the service runs the library does not change underneath it: no cloud merges, and risky edits are blocked.
   useEffect(() => {
     if (!safe.on) return;
@@ -655,6 +664,7 @@ export function OperatorView() {
       {modal === 'retreatBg' && <RetreatBackgroundModal library={state.library} dispatch={dispatch} onClose={() => setModal(null)} notify={notify} />}
       {modal === 'sync' && <SyncStatusModal cloud={cloud} library={state.library} dispatch={dispatch} notify={notify} onClose={() => setModal(null)} onAccount={() => setModal('account')} />}
       {modal === 'account' && <AccountModal cloud={cloud} onClose={() => setModal(null)} onActivity={() => setModal('activity')} />}
+      {deviceSetup && <DeviceSetupDialog cloud={cloud} onClose={() => setDeviceSetup(false)} />}
       {(modal === 'song' || modal === 'songNew') && (
         <SongEditor library={state.library} dispatch={dispatch} song={modal === 'song' ? selected ?? null : null} notify={notify} reloadOnline={loadOnline} onClose={() => setModal(null)} />
       )}

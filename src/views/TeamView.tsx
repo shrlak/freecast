@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRelay } from '../ui/hooks';
+import { trackViewportHeight } from '../ui/viewportHeight';
 import { phoneIdentity } from '../domain/phoneIdentity';
 import type { TeamRequest } from '../domain/teamRequests';
 import type { LiveState } from '../domain/types';
@@ -30,6 +31,7 @@ export function TeamView() {
   });
   const ready = relay.connected && host;
   useEffect(() => { document.title = 'FreeCast 무대팀'; document.body.dataset.remoteAppearance = appearance; }, [appearance]);
+  useEffect(() => trackViewportHeight(), []);
   useEffect(() => {
     const onMessage = (e: MessageEvent) => { if (e.source === window.parent && e.origin === location.origin && e.data?.type === 'freecast:remote-appearance' && ['light', 'dark'].includes(e.data.appearance)) setAppearance(e.data.appearance); };
     window.addEventListener('message', onMessage); return () => window.removeEventListener('message', onMessage);
