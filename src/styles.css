@@ -547,7 +547,9 @@ body[data-view='multiview'] { overflow: auto; }
 .presenter .live-panel { border-left: 1px solid #3a3a3a; }
 .ppt-format .inspector input, .ppt-format .inspector select, .ppt-format .inspector textarea { width: 100%; min-width: 0; }
 .ppt-format .form-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.update-banner { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 10px; background: #fff; color: #252423; border: 1px solid #c8c6c4; border-left: 4px solid #0078d4; border-radius: 6px; padding: 8px 12px; box-shadow: 0 8px 24px rgba(0,0,0,.2); font-size: 13px; }
+.update-banner { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); background: #fff; color: #252423; border: 1px solid #c8c6c4; border-left: 6px solid #0078d4; border-radius: 8px; padding: 12px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.28); font-size: 15px; animation: trFadeIn .3s ease both; }
+.update-banner strong { font-size: 16px; }
+.update-banner > span { white-space: nowrap; }
 .update-banner.ready { border-left-color: #107c10; }
 .update-banner progress { width: 140px; }
 .update-banner button { color: #252423; }
@@ -1153,7 +1155,7 @@ body[data-view='remote'] .pastor-root { position: fixed; inset: 0; z-index: 5; }
 .rb-pill .remote-request-badge { color: #fde718; }
 .rb-pill .dot { width: 7px; height: 7px; background: #f59e0b; }
 .rb-pill .dot.ok { background: #4bc789; }
-.rb-gear { font-size: 15px; padding: 2px 9px !important; }
+.rb-gear { font-size: 24px; line-height: 1; min-width: 40px; justify-content: center; padding: 0 10px !important; }
 .rb-present { flex: none; margin: 0 0 0 4px; padding: 5px 18px !important; border-radius: 999px !important; background: #fde718 !important; color: #163a62 !important; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
 .rb-present:hover:not(:disabled) { background: #fff176 !important; }
 .rb-busy { flex: 0 1 auto; min-width: 0; }

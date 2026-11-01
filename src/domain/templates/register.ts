@@ -46,7 +46,10 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
     const current = mdy(date) === mdy(sunday);
     const prayer = (lib.sunday.prayerText ?? '').trim();
     const frontKey = `front:${tpl.keys.front}|${mdy(date)}|original-fonts-v1${current ? `|${hash(prayer)}` : ''}`;
-    const slides = refreshFront(front.slides, tpl, date, current ? parsePrayerTopics(prayer) : undefined);
+    // The 기도 pages are made anew only when the 기도제목 (or the date or church file) changed: edits
+    // made on them since stay.
+    const remake = current && front.templateKey !== frontKey;
+    const slides = refreshFront(front.slides, tpl, date, remake ? parsePrayerTopics(prayer) : undefined);
     if (front.templateKey === frontKey && JSON.stringify(front.slides) === JSON.stringify(slides)) continue;
     if (front.id !== lib.sunday.frontId || isPlaceholder(front, 'front') || fromTemplates(front, 'front'))
       out.push({ id: front.id, patch: { ...base, templateKey: frontKey, slides } });

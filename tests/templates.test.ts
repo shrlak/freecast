@@ -388,6 +388,32 @@ describe('4:3 Front deck with this Sunday’s date and 기도제목', async () =
     expect(cleared[0].patch.slides![0].elements![1].text).toBe('기도제목 1\n기도제목 2');
   });
 
+  it('keeps edits made on the 기도 slides until the 기도제목 change', () => {
+    const lib = createSeedLibrary(); lib.sunday.prayerText = '1. 예배\n- 은혜\n2. 선교';
+    const [front] = templateDeckUpdates(lib, frontTpl, new Date(2026, 9, 21));
+    const synced = { ...lib, presentations: lib.presentations.map((p) => p.id === front.id ? { ...p, ...front.patch } : p) };
+    // Edit the first 기도 page: new wording, a bigger font, an extra note.
+    const edited = structuredClone(synced);
+    const deck = edited.presentations.find((p) => p.id === front.id)!;
+    const box = deck.slides[0].elements![1];
+    deck.slides[0].elements![1] = { ...box, text: '1. 예배와 말씀\n● 은혜를 사모하며', paragraphs: box.paragraphs!.map((p, i) => ({ ...p, text: i ? '● 은혜를 사모하며' : '1. 예배와 말씀', fontSize: 70 })) };
+    deck.slides[0].elements!.push(text('note', '함께 기도합시다', 900));
+    // The edits stay (the added box only gets Front's fixed layout, once).
+    const [kept] = templateDeckUpdates(edited, frontTpl, new Date(2026, 9, 22));
+    expect(kept.patch.slides![0].elements!.map((e) => e.text)).toEqual(['지금은 기도로 예배를 준비하는\n시간입니다.', '1. 예배와 말씀\n● 은혜를 사모하며', '함께 기도합시다']);
+    expect(kept.patch.slides![0].elements![1].paragraphs!.map((p) => p.fontSize)).toEqual([70, 70]);
+    deck.slides = kept.patch.slides!;
+    expect(templateDeckUpdates(edited, frontTpl, new Date(2026, 9, 22))).toEqual([]);
+    // The welcome page still follows the template.
+    deck.slides[2] = { ...deck.slides[2], elements: [{ ...deck.slides[2].elements![0], fontSize: 7 }] };
+    const [repair] = templateDeckUpdates(edited, frontTpl, new Date(2026, 9, 22));
+    expect(repair.patch.slides![0]).toEqual(deck.slides[0]);
+    expect(repair.patch.slides![2].elements![0].fontSize).not.toBe(7);
+    // New 기도제목 replace the edited pages.
+    const [changed] = templateDeckUpdates({ ...edited, sunday: { ...edited.sunday, prayerText: '감사' } }, frontTpl, new Date(2026, 9, 22));
+    expect(changed.patch.slides![0].elements!.map((e) => e.text)).toEqual(['지금은 기도로 예배를 준비하는\n시간입니다.', '● 감사']);
+  });
+
   it('continues a topic too long for the prayer box on another page', () => {
     const points = Array.from({ length: 12 }, (_, i) => `세부 기도 ${i + 1}`);
     const out = fillFront(frontTpl, new Date(2026, 9, 25), [{ title: '예배', points }]);
