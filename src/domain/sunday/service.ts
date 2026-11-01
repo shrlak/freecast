@@ -3,7 +3,8 @@ import { uid } from '../lyrics';
 import { CHURCH_BACKGROUNDS, DEFAULT_CONFESSION_SONG, PRAYER_PREP_TITLE } from '../defaults';
 import { findSong, songToPresentation, withProgression, type SongDraft } from './songs';
 import { planPrayerSlides, prayerSlideText, type PrayerTopic } from './prayer';
-import type { Announcement } from './announcements';
+import { announcementPages, type Announcement } from './announcements';
+import { qrElements } from '../qrElements';
 import { mmdd } from './notice';
 import { OPENING_SECTION } from './openingSong';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
@@ -138,9 +139,9 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
     add(make('광고', announcementSlides(tpl, input.announcements), 'theme_classic', black), true);
   } else if (input.announcements.length) {
     header('광고');
-    const slides = input.announcements.map((a, i) => ({
-      id: uid('s'), group: '광고', title: `${i + 1}. ${a.title}`, text: a.body.join('\n'), qr: a.links.length ? a.links : undefined,
-    }));
+    const slides = input.announcements.flatMap((a, i) => announcementPages(a).map((pg) => ({
+      id: uid('s'), group: '광고', title: `${i + 1}. ${a.title}`, text: pg.body.join('\n'), elements: pg.links.length ? qrElements(pg.links) : undefined,
+    })));
     add(make('광고', slides, 'theme_sunday_info', { background: CHURCH_BACKGROUNDS.watercolor }), true);
   }
 

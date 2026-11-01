@@ -6,7 +6,8 @@ import type { Presentation, Slide, SlideElement, Theme } from '../types';
 import { uid } from '../lyrics';
 import { formatRefs, type BibleRef } from '../bible/refs';
 import type { ScriptureChunk } from '../bible/slides';
-import type { Announcement } from '../sunday/announcements';
+import { announcementPages, type Announcement } from '../sunday/announcements';
+import { qrElements } from '../qrElements';
 import type { PrayerTopic } from '../sunday/prayer';
 import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
@@ -139,16 +140,20 @@ export const backSlides = (tpl: ServiceTemplates): Slide[] => (tpl.back ?? []).m
 /** FreeCast's built-in placeholder Back deck, which the church deck replaces in the library. */
 export const isPlaceholderBack = (p: Presentation | undefined) => !!p && p.slides.some((s) => s.id === 'back_confession');
 
-/** 광고: the title slide, then one slide per announcement ("1. <제목>", then its lines). */
+/**
+ * 광고: the title slide, then each announcement ("1. <제목>", then its lines) — one slide per part
+ * of it (an empty line in the text starts the next part, under the same title). Links are QR code
+ * objects on the slide, which can be moved, resized or deleted.
+ */
 export function announcementSlides(tpl: ServiceTemplates, items: Announcement[]): Slide[] {
   if (!items.length) return [];
   const [, titleBox, bodyBox] = [...texts(tpl.announceItem)].sort((a, b) => a.y - b.y);
   return [
     fillSlide(tpl.announceTitle, (t) => t),
-    ...items.map((a, i) => {
-      const slide = fillSlide(tpl.announceItem, (t, el) => (el.id === titleBox?.id ? `${i + 1}. <${a.title}>` : el.id === bodyBox?.id ? a.body.join('\n') : t), { qr: a.links.length ? a.links : undefined });
-      return prepareAnnouncementSlide(slide);
-    }),
+    ...items.flatMap((a, i) => announcementPages(a).map((page) => {
+      const slide = fillSlide(tpl.announceItem, (t, el) => (el.id === titleBox?.id ? `${i + 1}. <${a.title}>` : el.id === bodyBox?.id ? page.body.join('\n') : t));
+      return prepareAnnouncementSlide({ ...slide, elements: [...(slide.elements ?? []), ...qrElements(page.links)] });
+    })),
   ];
 }
 

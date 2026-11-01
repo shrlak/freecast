@@ -2,6 +2,7 @@ import type { Presentation, Slide, SlideElement } from './types';
 import { CANVAS_W } from './canvas';
 import { correctMixedTextSizes, uniformTextBoxFont } from './textBoxFonts';
 import { isFrontPresentation, isFrontSlide, keepFrontLayout, withoutPrayerCornerLogo } from './frontLayout';
+import { withQrElements } from './qrElements';
 
 /** Earlier versions kept text boxes out of a 300 px strip for the QR codes on the right. */
 const OLD_QR_EDGE = CANVAS_W - 300;
@@ -67,12 +68,16 @@ function outOfCorner(elements: SlideElement[]): SlideElement[] {
   });
 }
 
-/** Discard old automatic enlargement requests without changing the saved font or geometry. */
+/**
+ * Discard old automatic enlargement requests without changing the saved font or geometry; corner
+ * QR codes become objects on the slide.
+ */
 export function prepareAnnouncementSlide(s: Slide): Slide {
   const placed = s.elements && outOfCorner(s.elements.map((e) => unpushedFromQr(s, e)));
   const elements = placed?.map((e) => e.maximizeFont ? { ...e, maximizeFont: false } : e);
-  return s.maximizeFont || elements?.some((e, i) => e !== s.elements![i])
+  const ready = s.maximizeFont || elements?.some((e, i) => e !== s.elements![i])
     ? { ...s, maximizeFont: false, ...(elements ? { elements } : {}) } : s;
+  return withQrElements(ready);
 }
 
 /** Preserve original sizes for ads and imported material; actual overflow is resolved at layout time. */

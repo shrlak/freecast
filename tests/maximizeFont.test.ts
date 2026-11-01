@@ -36,7 +36,12 @@ describe('initial maximum text size', () => {
     expect(prepareAnnouncementSizing(protectedDeck)).toBe(protectedDeck);
   });
   it('reserves neighbor space at layout time, while QR codes sit over the boxes and reserve none', () => {
-    const s: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [box('title', '제목', 180), box('body', '본문', 320, 600)] };
+    const old: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [box('title', '제목', 180), box('body', '본문', 320, 600)] };
+    // The old corner QR code becomes an object on the slide, where it was drawn; the boxes stay.
+    const s = prepareAnnouncementSlide(old);
+    expect(s.qr).toBeUndefined();
+    expect(s.elements!.slice(0, 2)).toEqual(old.elements);
+    expect(s.elements![2]).toMatchObject({ kind: 'qr', link: 'https://example.org', x: 1140, y: 780, w: 240, h: 240 });
     expect(prepareAnnouncementSlide(s)).toBe(s);
     const [title, body] = s.elements!;
     const titleBounds = textElementBounds(title, s.elements), bodyBounds = textElementBounds(body, s.elements);
@@ -86,7 +91,7 @@ describe('initial maximum text size', () => {
   it('fixes a QR slide pushed to the left edge by an earlier version the same way', () => {
     const s = adSlide(); s.qr = ['https://example.org'];
     s.elements = s.elements!.map((e) => ({ ...e, x: 0, w: 1140 }));
-    expect(prepareAnnouncementSlide(s).elements!.map((e) => [e.x, e.x + e.w])).toEqual([[120, 1364], [120, 1364], [120, 1364]]);
+    expect(prepareAnnouncementSlide(s).elements!.filter((e) => e.kind === 'text').map((e) => [e.x, e.x + e.w])).toEqual([[120, 1364], [120, 1364], [120, 1364]]);
   });
   it('leaves a heading moved by hand, and slides without the heading, as they are', () => {
     const moved = adSlide(); moved.elements![0] = { ...moved.elements![0], x: 300, y: 40 };

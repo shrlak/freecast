@@ -3,7 +3,7 @@ import type { Action, AppState } from '../../domain/reducer';
 import type { MediaMeta, Slide } from '../../domain/types';
 import type { SongDraft } from '../../domain/sunday/songs';
 import { parsePrayerTopics, planPrayerSlides } from '../../domain/sunday/prayer';
-import { parseAnnouncements } from '../../domain/sunday/announcements';
+import { announcementPages, parseAnnouncements } from '../../domain/sunday/announcements';
 import { mdy, mmdd, serviceDate, upcomingSunday } from '../../domain/sunday/notice';
 import { buildService } from '../../domain/sunday/service';
 import { parseRefs, formatRef } from '../../domain/bible/refs';
@@ -146,6 +146,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service, only }
   const topics = parsePrayerTopics(d.prayer);
   const prayerPlan = planPrayerSlides(topics);
   const ann = parseAnnouncements(d.announcements);
+  const annSlides = ann.reduce((n, a) => n + announcementPages(a).length, 0);
   const addMedia = (m: MediaMeta) => dispatch({ type: 'media/add', media: m });
   const live = findLiveService(state.library, date);
   const openingDeck = (d.openingDeckId && state.library.presentations.find((p) => p.id === d.openingDeckId)) || null;
@@ -297,14 +298,14 @@ export function SundayWizard({ state, dispatch, onClose, notify, service, only }
             <div className="two-col">
               <AutoTextarea rows={16} placeholder={'1. <새가족 환영>\n오늘 처음 오신 분들을 환영합니다!\n\n2. <여름수련회 안내>\n- 장소: …\n- 신청: https://forms.gle/…'} value={d.announcements} onChange={(e) => set({ announcements: e.target.value })} />
               <div className="stack">
-                <strong>광고 {ann.length}개</strong>
-                {ann.map((a, i) => (
-                  <div key={i} className="card small ann-preview">
-                    <div><strong>{i + 1}. {a.title}</strong><div className="pre">{a.body.join('\n')}</div></div>
-                    {a.links.map((l) => <img key={l} src={qrDataUrl(l)} alt={l} title={l} />)}
+                <strong>광고 {ann.length}개 → 슬라이드 {annSlides}장</strong>
+                {ann.map((a, i) => announcementPages(a).map((pg, k, all) => (
+                  <div key={`${i}-${k}`} className="card small ann-preview">
+                    <div><strong>{i + 1}. {a.title}{all.length > 1 ? ` (${k + 1}/${all.length})` : ''}</strong><div className="pre">{pg.body.join('\n')}</div></div>
+                    {pg.links.map((l) => <img key={l} src={qrDataUrl(l)} alt={l} title={l} />)}
                   </div>
-                ))}
-                <p className="hint">“N. &lt;제목&gt;” starts an item and numbering is redone. Links are removed from the text and shown as QR codes.</p>
+                )))}
+                <p className="hint">“1. &lt;제목&gt;” 또는 “1. 제목”으로 광고가 시작되고 번호는 순서대로 다시 매깁니다. 광고 안의 “1. 일시 / 2. 장소” 같은 번호 목록과 들여쓴 줄은 그 광고의 내용으로 남습니다. 광고 안에서 빈 줄을 넣으면 그 뒤는 같은 제목의 새 슬라이드로 넘어갑니다. 링크는 글에서 빠지고 슬라이드 위 QR 코드가 되며, 슬라이드에서 옮기거나 크기를 바꾸거나 지울 수 있습니다.</p>
               </div>
             </div>
           )}
@@ -337,7 +338,7 @@ export function SundayWizard({ state, dispatch, onClose, notify, service, only }
                 <li>성경 말씀: {refs.refs.map((r) => formatRef(r)).join(', ') || '—'} {d.sermonTitle && `· “${d.sermonTitle}”`}</li>
                 <li>설교: {d.sermonSlides.length} slides → 기도</li>
                 <li>설교 후 찬양: {d.songs.filter((s) => s.postSermon).map((s) => s.title).join(', ') || '—'}</li>
-                <li>광고: {ann.length}</li>
+                <li>광고: {ann.length}개 ({annSlides}장)</li>
                 <li>Back / End (공동체 고백: {d.confession || sunday.confessionSong || '—'})</li>
                 <li>추가 자료: {d.extraSlides.length} slides</li>
               </ol>
