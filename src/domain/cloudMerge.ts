@@ -10,6 +10,9 @@ export function syncable(lib: Library): Library {
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Equal apart from the ids of slides and objects inside (which automatic changes may give anew). */
+const withoutInnerIds = (v: unknown) => JSON.stringify(v, function (this: unknown, k, x) { return k === 'id' && this !== v ? undefined : x; });
+const sameContent = (a: unknown, b: unknown) => a !== undefined && b !== undefined && withoutInnerIds(a) === withoutInnerIds(b);
 
 /**
  * Three-way merge of id-keyed lists: base (last synced), local and remote.
@@ -37,6 +40,11 @@ export function mergeById<T extends { id: string }>(
     if (lv && rv) {
       if (!lChanged) out.push(rv);
       else if (!rChanged || same(lv, rv)) out.push(lv);
+      // Both changed it the same way (an automatic change made on each computer), or this computer
+      // only renumbered its ids: the cloud's copy, so every computer ends up with one and the same.
+      else if (sameContent(lv, rv) || sameContent(bv, lv)) out.push(rv);
+      // Only the cloud's ids changed: this computer's real edit stays.
+      else if (sameContent(bv, rv)) out.push(lv);
       else out.push(...onConflict(lv, rv));
     } else if (lv) {
       if (!(bv && !lChanged)) out.push(lv); // new locally, or edited locally while deleted remotely

@@ -17,7 +17,7 @@ import { presentationFromSongFile } from '../domain/io/songFormats';
 import { exportBackup, importBackup } from '../domain/io/backup';
 import { exportPptx } from '../domain/io/pptxExport';
 import type { Library, Presentation } from '../domain/types';
-import { AUTO_INTERVAL, listRestorePoints, saveRestorePoint } from '../domain/restorePoints';
+import { AUTO_INTERVAL, newestRestorePointAt, saveRestorePoint } from '../domain/restorePoints';
 import { ActivityModal } from '../ui/ActivityModal';
 import { ServicePreparationModal } from '../ui/ServicePreparationModal';
 import { FindPalette } from '../ui/FindPalette';
@@ -159,8 +159,8 @@ export function OperatorView() {
       if (busy || snapped.current === lib) return;
       busy = true;
       try {
-        const newest = (await listRestorePoints())[0];
-        if (!newest || Date.now() - newest.at >= AUTO_INTERVAL) {
+        const newest = await newestRestorePointAt();
+        if (newest === null || Date.now() - newest >= AUTO_INTERVAL) {
           await saveRestorePoint(lib, 'auto');
           snapped.current = lib;
         }

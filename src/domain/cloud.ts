@@ -92,23 +92,35 @@ export async function loadBase(): Promise<Library | null> {
 
 export const saveBase = (lib: Library) => putMedia(BASE_KEY, new Blob([JSON.stringify(lib)], { type: 'application/json' }));
 
-/** Upload media this computer has that the server lacks, and download the reverse. */
+/**
+ * Upload media this computer has that the server lacks, and download the reverse. One file that
+ * cannot be sent or received is skipped (and tried again next time); it no longer stops the rest,
+ * nor marks the whole sync as failed. `failed` lists the names of the files skipped this time.
+ */
 export async function syncMedia(token: string, lib: Library, onProgress: (msg: string) => void) {
   const items = await cloudApi.listMedia(token);
   const remote = new Set(items.map((m) => m.id));
+  const failed: string[] = [];
   for (const m of lib.media) {
     const local = await getMedia(m.id).catch(() => undefined);
-    if (local && !remote.has(m.id)) {
-      if (local.size > 50 * 1024 * 1024) continue;
-      onProgress(`미디어 올리는 중: ${m.name}`);
-      await cloudApi.uploadMedia(token, m.id, local, lib.cloudResetId);
-      remote.add(m.id); items.push({ id: m.id, size: local.size });
-    } else if (!local && remote.has(m.id)) {
-      onProgress(`미디어 받는 중: ${m.name}`);
-      await putMedia(m.id, await cloudApi.downloadMedia(token, m.id));
+    try {
+      if (local && !remote.has(m.id)) {
+        if (local.size > 50 * 1024 * 1024) continue;
+        onProgress(`미디어 올리는 중: ${m.name}`);
+        await cloudApi.uploadMedia(token, m.id, local, lib.cloudResetId);
+        remote.add(m.id); items.push({ id: m.id, size: local.size });
+      } else if (!local && remote.has(m.id)) {
+        onProgress(`미디어 받는 중: ${m.name}`);
+        await putMedia(m.id, await cloudApi.downloadMedia(token, m.id));
+      }
+    } catch (e) {
+      // A signed-out session or a lost connection ends this round; anything else skips just this file.
+      const err = e as { status?: number; network?: boolean };
+      if (err.status === 401 || err.network) throw e;
+      failed.push(m.name);
     }
   }
-  return items;
+  return Object.assign(items, { failed });
 }
 
 /** Read server data, not this computer's pending edits or media cache. */

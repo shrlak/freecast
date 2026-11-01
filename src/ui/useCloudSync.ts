@@ -159,10 +159,12 @@ export function useCloudSync(library: Library, dispatch: Dispatch<Action>, notif
       }
       // Never mark edits made during an in-flight request as already uploaded.
       lastPushed.current = JSON.stringify(current);
-      await syncMedia(session.token, current, (m) => setStatus((s) => ({ ...s, message: m })));
+      const { failed } = await syncMedia(session.token, current, (m) => setStatus((s) => ({ ...s, message: m })));
       if (loadSession()?.token !== session.token) return;
       failures.current = 0;
-      setStatus((s) => ({ ...s, state: 'synced', message: null, lastSync: Date.now() }));
+      // The library itself is in step; a few files that could not be moved are tried again next time.
+      const skipped = failed.length ? `미디어 ${failed.length}개를 주고받지 못해 다음 동기화에서 다시 시도합니다: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? ' …' : ''}` : null;
+      setStatus((s) => ({ ...s, state: 'synced', message: skipped, lastSync: Date.now() }));
       succeeded = true;
       void refreshStorage();
     } catch (e) {

@@ -62,20 +62,42 @@ export function saveRestorePoint(lib: Library, kind: RestorePoint['kind'], at = 
   return job;
 }
 
+type Meta = Pick<RestorePoint, 'id' | 'at' | 'kind'>;
+/**
+ * Which snapshots exist, kept in memory: each snapshot holds the whole library, so reading them
+ * all for every save (every sync, every minute) made sync and the app slow with a large library.
+ */
+let metaCache: Meta[] | null = null;
+const metaOf = ({ id, at, kind }: RestorePoint): Meta => ({ id, at, kind });
+async function metas(): Promise<Meta[]> {
+  // Read once per session; afterwards the list is kept up to date here.
+  if (!metaCache) await listRestorePoints();
+  return metaCache ?? [];
+}
+
 async function writeRestorePoint(lib: Library, kind: RestorePoint['kind'], at: number, label?: string): Promise<void> {
   const mine = lib.presentations.filter((p) => !p.online);
-  const existing = await listRestorePoints();
+  const existing = await metas();
   const id = Math.max(at, ...existing.map((p) => p.id + 1));
   const point: RestorePoint = { id, at, kind, label, savedBy: getDevice(), lastModified: lib.lastModified, presentations: mine.length, slides: mine.reduce((n, p) => n + p.slides.length, 0), json: serialize(lib) };
   await run('readwrite', (s) => s.put(point));
-  const all = await listRestorePoints();
-  for (const id of pruneIds(all)) await run('readwrite', (s) => s.delete(id));
+  const all = [...existing.filter((m) => m.id !== id), metaOf(point)];
+  const gone = new Set(pruneIds(all));
+  for (const old of gone) await run('readwrite', (s) => s.delete(old));
+  metaCache = all.filter((m) => !gone.has(m.id));
 }
 
 /** Newest first. */
 export async function listRestorePoints(): Promise<RestorePoint[]> {
   const all = await run<RestorePoint[]>('readonly', (s) => s.getAll());
+  metaCache = all.map(metaOf);
   return all.sort((a, b) => b.at - a.at);
+}
+
+/** When the newest snapshot was taken (null when there is none), without reading the snapshots. */
+export async function newestRestorePointAt(): Promise<number | null> {
+  const all = await metas();
+  return all.length ? Math.max(...all.map((m) => m.at)) : null;
 }
 
 /** The library of a snapshot (null if it can no longer be read). */
@@ -89,12 +111,18 @@ export const libraryOf = (p: RestorePoint): Library | null => {
 
 /** Save each distinct state at the beginning of sync, including attempts that fail offline. */
 let syncSnapshotQueue: Promise<void> = Promise.resolve();
+/** The library of the last sync snapshot (undefined until read once): checks that change nothing stay in memory. */
+let lastSyncJson: string | null | undefined;
 export function saveSyncRestorePoint(lib: Library): Promise<void> {
   const json = serialize(lib);
   const job = syncSnapshotQueue.then(async () => {
-    const previous = (await listRestorePoints()).find((p) => p.kind === 'sync');
-    if (previous?.json === json) return;
+    if (lastSyncJson === undefined) {
+      const newest = [...(await metas())].filter((m) => m.kind === 'sync').sort((a, b) => b.at - a.at)[0];
+      lastSyncJson = newest ? (await run<RestorePoint | undefined>('readonly', (s) => s.get(newest.id)))?.json ?? null : null;
+    }
+    if (lastSyncJson === json) return;
     await saveRestorePoint(lib, 'sync', Date.now(), '수정 후 동기화 시작');
+    lastSyncJson = json;
   });
   syncSnapshotQueue = job.catch(() => undefined);
   return job;
