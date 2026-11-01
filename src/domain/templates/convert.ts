@@ -156,15 +156,10 @@ export function fillTokens(text: string, values: Record<string, string | undefin
 export function patchElement(el: SlideElement, patch: Partial<SlideElement>): SlideElement {
   let next: SlideElement = { ...el, ...patch };
   if (patch.fontSize !== undefined) { next.maximizeFont = false; next.preferredFontSize = undefined; }
+  // A new text size leaves the box as it is (like PowerPoint's "Do not autofit"): it neither scales
+  // with the font nor grows to fit it afterwards. Text bigger than the box shows past its edge.
   const was = el.fontSize ?? el.paragraphs?.find((p) => p.text.trim())?.fontSize;
-  const ratio = patch.fontSize && was ? patch.fontSize / was : 1;
-  // The box follows the text size: a bigger / smaller font grows / shrinks the box around its centre.
-  if (ratio !== 1 && el.kind === 'text' && patch.w === undefined && patch.h === undefined) {
-    next.w = Math.max(20, Math.round(el.w * ratio));
-    next.h = Math.max(20, Math.round(el.h * ratio));
-    if (patch.x === undefined) next.x = Math.round(el.x + (el.w - next.w) / 2);
-    if (patch.y === undefined) next.y = Math.round(el.y + (el.h - next.h) / 2);
-  }
+  if (el.kind === 'text' && patch.fontSize !== undefined && patch.fontSize !== was && patch.autoFit === undefined) next.autoFit = false;
   if (!el.paragraphs) return next;
   if (patch.text !== undefined) next = withElementText(next, patch.text);
   const whole = (['color', 'bold', 'italic', 'align'] as const).filter((k) => k in patch);

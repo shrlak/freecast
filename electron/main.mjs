@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { lanAddresses, startServer } from '../server/app.mjs';
-import { checkForUpdates, installUpdate, startUpdater, updateState } from './updater.mjs';
+import { checkForUpdates, holdingQuit, installUpdate, startUpdater, updateState } from './updater.mjs';
 import { PUBLISH } from './publish.mjs';
 import { setAiConfigProvider } from '../server/ai.mjs';
 import { startTunnel } from '../server/tunnel.mjs';
@@ -504,6 +504,8 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
+  // Closing FreeCast first looks for an update (updater.mjs); the server is stopped when it really quits.
+  if (holdingQuit()) return;
   tunnel?.stop();
   running?.close();
 });

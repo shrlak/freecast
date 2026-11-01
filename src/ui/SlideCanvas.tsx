@@ -229,7 +229,9 @@ function TextElement({ el, box }: { el: SlideElement; box: CSSProperties }) {
       fontWeight: el.bold ? 800 : el.paragraphs ? 400 : 500, fontStyle: el.italic ? 'italic' : undefined, lineHeight: el.lineHeight ?? (el.paragraphs ? 1.2 : 1.25),
       textDecoration: decoration(el), letterSpacing: el.letterSpacing ? el.letterSpacing : undefined,
       paddingLeft: el.indent ? el.indent * INDENT_PX : undefined, ...columnsAndDirection(el),
-      textShadow: el.shadow ? '0 3px 12px rgba(0,0,0,.8)' : undefined, overflow: 'hidden',
+      // A box that does not fit itself to its text (a font size set by hand, Front) lets the text show
+      // past its edge, as PowerPoint does, instead of cutting it off.
+      textShadow: el.shadow ? '0 3px 12px rgba(0,0,0,.8)' : undefined, overflow: el.autoFit === false ? 'visible' : 'hidden',
     }}>
       {el.paragraphs
         ? el.paragraphs.map((p, i) => (

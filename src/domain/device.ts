@@ -26,10 +26,22 @@ export async function initializeDevice(): Promise<DeviceIdentity> {
   }
   return getDevice();
 }
+const PROFILE_KEY = 'freecast.device.profileSaved';
+
+/**
+ * Whether this computer's name and user were ever registered. A computer someone gave a user name
+ * before this flag existed counts as registered.
+ */
+export function deviceProfileSaved(): boolean {
+  try { if (localStorage.getItem(PROFILE_KEY) === '1') return true; } catch { /* storage blocked */ }
+  return !!getDevice().userName.trim();
+}
+
 export function saveDeviceProfile(name: string, userName: string): DeviceIdentity {
   if (!name.trim() || name.trim().length > 60 || userName.trim().length > 60) throw new Error('기기 이름은 1–60자, 기기 사용자 이름은 60자 이내로 입력하세요.');
   const next = { ...getDevice(), name: name.trim(), userName: userName.trim() };
   localStorage.setItem(KEY, JSON.stringify(next));
+  try { localStorage.setItem(PROFILE_KEY, '1'); } catch { /* storage blocked */ }
   cached = next;
   return { ...next };
 }

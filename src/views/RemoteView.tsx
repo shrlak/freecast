@@ -6,6 +6,7 @@ import { phoneIdentity } from '../domain/phoneIdentity';
 import type { RemoteControlState } from '../domain/remoteControl';
 import type { Cursor } from '../domain/live';
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { trackViewportHeight } from '../ui/viewportHeight';
 import type { LiveState } from '../domain/types';
 import { SlideCanvas } from '../ui/SlideCanvas';
 import { liveCanvasProps } from '../ui/liveProps';
@@ -20,6 +21,8 @@ export function RemoteView() {
   const [appearance, setAppearance] = useState<'light' | 'dark'>(() => {
     try { return localStorage.getItem('freecast.remote.appearance') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
   });
+  // Landscape on iPhone / iPad home-screen apps: size the remote from the real window height.
+  useEffect(() => trackViewportHeight(), []);
   useEffect(() => {
     document.body.dataset.remoteAppearance = appearance;
     return () => { delete document.body.dataset.remoteAppearance; };

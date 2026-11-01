@@ -31,12 +31,15 @@ describe('grow text boxes while preserving font sizes', () => {
     expect(growTextBox(box, { w: 400, h: 70 }, 'left', 'top', bounds)).toEqual(box);
     expect(growTextBox(box, { w: 2000, h: 4000 }, 'center', 'middle', bounds)).toEqual({ x: 100, y: 200, w: 1000, h: 800 });
   });
-  it('manual font edits retain automatic box growth and per-paragraph sizes until explicitly changed', () => {
+  it('a manual font size keeps the box as it is; text edits keep per-paragraph sizes and box growth', () => {
     const el: SlideElement = { id: 'box', kind: 'text', text: '첫 줄\n둘째 줄', x: 200, y: 300, w: 600, h: 80, fontSize: 80, autoFit: true,
       paragraphs: [{ text: '첫 줄', fontSize: 80 }, { text: '둘째 줄', fontSize: 50 }] };
     const edited = patchElement(el, { text: '새 첫 줄\n새 둘째 줄\n셋째 줄' });
     expect(edited.fontSize).toBe(80); expect(edited.paragraphs!.map((p) => p.fontSize)).toEqual([80, 50, 50]);
-    expect(patchElement(el, { fontSize: 96 }).autoFit).toBe(true);
+    expect(edited.autoFit).toBe(true);
+    expect(patchElement(el, { fontSize: 96 })).toMatchObject({ x: 200, y: 300, w: 600, h: 80, autoFit: false, fontSize: 96 });
+    expect(patchElement(el, { fontSize: 80 }).autoFit).toBe(true); // same size: nothing changes
+    expect(patchElement(el, { color: '#ff0000' }).autoFit).toBe(true);
   });
   it('exports fixed bounded geometry and consistent fonts without PowerPoint growing boxes off-slide', async () => {
     const lib = createSeedLibrary(), dir = await mkdtemp(join(tmpdir(), 'freecast-box-fit-'));

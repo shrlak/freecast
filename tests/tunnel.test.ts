@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 // @ts-expect-error plain .mjs server module
-import { cleanOutput, cloudflaredAsset, isPublicHost, parseTunnelUrl, startTunnel } from '../server/tunnel.mjs';
+import { cleanOutput, cloudflaredAsset, isPublicHost, parseMetricsAddress, parseTunnelUrl, startTunnel } from '../server/tunnel.mjs';
 
 describe('parseTunnelUrl', () => {
   it('finds the address in cloudflared\'s log', () => {
@@ -42,7 +42,7 @@ describe('isPublicHost', () => {
 describe('tunnel recovery', () => {
   afterEach(() => { vi.useRealTimers(); });
 
-  async function running(fetchFn = vi.fn(async () => new Response('<div id="root"></div>'))) {
+  async function running(fetchFn: (url: string, init?: RequestInit) => Promise<Response> = vi.fn(async () => new Response('<div id="root"></div>'))) {
     vi.useFakeTimers();
     const processes: any[] = [];
     const changes: any[] = [];
@@ -85,6 +85,41 @@ describe('tunnel recovery', () => {
       expect(state.spawnFn).toHaveBeenCalledTimes(1);
       expect(state.processes[0].kill).not.toHaveBeenCalled();
     } finally { state.tunnel.stop(); }
+  });
+
+  // This computer cannot look up its own brand-new public address (its DNS remembers the failed
+  // lookup, or a filter blocks trycloudflare.com) although phones reach the tunnel fine.
+  const unreachableFromHere = (ready: Response | Error) => vi.fn(async (url: string) => {
+    if (url.startsWith('http://127.0.0.1:53421/ready')) { if (ready instanceof Error) throw ready; return ready; }
+    throw new Error('getaddrinfo ENOTFOUND one.trycloudflare.com');
+  });
+  it('keeps a tunnel this computer cannot reach while cloudflared says it is connected', async () => {
+    const fetchFn = unreachableFromHere(new Response('{"status":200,"readyConnections":4}'));
+    const state = await running(fetchFn);
+    try {
+      state.processes[0].stderr.emit('data', 'INF Starting metrics server on 127.0.0.1:53421/metrics\n');
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(state.spawnFn).toHaveBeenCalledTimes(1);
+      expect(state.processes[0].kill).not.toHaveBeenCalled();
+      expect(fetchFn.mock.calls.some(([url]) => url === 'http://127.0.0.1:53421/ready')).toBe(true);
+      expect(state.tunnel.state()).toMatchObject({ status: 'on', url: 'https://one.trycloudflare.com' });
+    } finally { state.tunnel.stop(); }
+  });
+  it('replaces the tunnel when it is unreachable and cloudflared has no connection either', async () => {
+    for (const ready of [new Response('{"status":503,"readyConnections":0}', { status: 503 }), new Error('connection refused')]) {
+      const state = await running(unreachableFromHere(ready));
+      try {
+        state.processes[0].stderr.emit('data', 'INF Starting metrics server on 127.0.0.1:53421/metrics\n');
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(state.processes[0].kill).toHaveBeenCalledOnce();
+        expect(state.spawnFn).toHaveBeenCalledTimes(2);
+      } finally { state.tunnel.stop(); vi.useRealTimers(); }
+    }
+  });
+  it('asks cloudflared for a status server on this computer only and finds its port in the log', () => {
+    expect(parseMetricsAddress('2026-11-01T01:00:00Z INF Starting metrics server on 127.0.0.1:53421/metrics')).toBe('127.0.0.1:53421');
+    expect(parseMetricsAddress('INF Starting metrics server on 0.0.0.0:20241/metrics')).toBeNull();
+    expect(parseMetricsAddress('no metrics here')).toBeNull();
   });
 
   it('reconnects on resume and cancels all recovery when turned off', async () => {

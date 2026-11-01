@@ -35,6 +35,11 @@ export function parseTunnelUrl(text) {
   return URL_RE.exec(cleanOutput(text))?.[0].toLowerCase() ?? null;
 }
 
+/** cloudflared's own status server on this computer ("Starting metrics server on 127.0.0.1:53421/metrics"). */
+export function parseMetricsAddress(text) {
+  return /Starting metrics server on (127\.0\.0\.1|localhost|\[::1\]):(\d+)/i.exec(cleanOutput(text))?.slice(1, 3).join(':') ?? null;
+}
+
 async function run(cmd, args) {
   await new Promise((resolve, reject) => {
     const c = spawn(cmd, args, { stdio: 'ignore', windowsHide: true });
@@ -124,11 +129,22 @@ export function startTunnel(port, onChange, { dir, ensureBinary = ensureCloudfla
     let out = '';
     let gotUrl = false;
     let pending = null;
+    let metrics = null;
     let failures = 0;
-    // http2 (plain TCP) goes through firewalls that block the faster QUIC/UDP.
-    const process = spawnFn(bin, ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', `http://127.0.0.1:${port}`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    // http2 (plain TCP) goes through firewalls that block the faster QUIC/UDP. The status server
+    // stays on this computer only, on any free port (it is read back from the log).
+    const process = spawnFn(bin, ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--metrics', '127.0.0.1:0', '--url', `http://127.0.0.1:${port}`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     child = process;
     const active = () => !stopped && attempt === generation && child === process;
+    /** cloudflared's own word on its connections to Cloudflare (no DNS, no trip over the internet). */
+    const connected = async (signal) => {
+      if (!metrics) return false;
+      try {
+        const response = await fetchFn(`http://${metrics}/ready`, { cache: 'no-store', signal });
+        const body = await response.json().catch(() => ({}));
+        return response.ok && Number(body.readyConnections ?? 1) > 0;
+      } catch { return false; }
+    };
     const health = async () => {
       if (!active()) return;
       const controller = new AbortController(); healthAbort = controller;
@@ -137,8 +153,15 @@ export function startTunnel(port, onChange, { dir, ensureBinary = ensureCloudfla
       try {
         const response = await fetchFn(pending + '/?view=remote', { cache: 'no-store', redirect: 'manual', signal: controller.signal });
         const body = await response.text();
+        // An answer from Cloudflare that is not FreeCast (e.g. 530: the tunnel is gone) is a real failure.
         healthy = response.ok && /id=["']root["']/.test(body);
-      } catch { /* a running cloudflared process can still have a dead tunnel */ }
+      } catch {
+        // This computer could not reach its own public address at all. That is often this computer's
+        // network, not the tunnel: its DNS has not learned the brand-new address yet (Windows and macOS
+        // remember a failed lookup for minutes) or a filter blocks trycloudflare.com, while phones get
+        // through fine. Then cloudflared itself decides: still connected to Cloudflare means healthy.
+        healthy = await connected(controller.signal);
+      }
       finally { clearTimeout(timeout); if (healthAbort === controller) healthAbort = null; }
       if (!active()) return;
       failures = healthy ? 0 : failures + 1;
@@ -150,6 +173,7 @@ export function startTunnel(port, onChange, { dir, ensureBinary = ensureCloudfla
       if (!active()) return;
       out = (out + chunk).slice(-4000);
       pending = parseTunnelUrl(out) ?? pending;
+      metrics = parseMetricsAddress(out) ?? metrics;
       // The address is printed before the tunnel is reachable: show it once the connection is registered.
       if (!gotUrl && pending && /Registered tunnel connection/.test(out)) {
         gotUrl = true;
