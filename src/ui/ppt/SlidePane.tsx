@@ -1,4 +1,5 @@
-import { Fragment, useEffect, type Dispatch } from 'react';
+import { Fragment, useEffect, useState, type Dispatch } from 'react';
+import { PlaylistAdder } from '../AddToPlaylist';
 import type { Action, AppState } from '../../domain/reducer';
 import type { Presentation, Slide } from '../../domain/types';
 import { groupColor } from '../../domain/lyrics';
@@ -23,6 +24,9 @@ interface Props {
   onClickSlide: (r: PaneSlide, e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => void;
   onMenu: (x: number, y: number, slideId: string, seq: number) => void;
   onAdd: () => void;
+  /** The playlist the pane lists (null: one presentation on its own). */
+  playlistId: string | null;
+  notify: (msg: string) => void;
 }
 
 export const paneSlideId = (r: PaneSlide) => `pslide-${r.key}`;
@@ -31,7 +35,8 @@ export const paneSlideId = (r: PaneSlide) => `pslide-${r.key}`;
  * The left 슬라이드 pane: every slide of the playlist (or of the presentation) in one list,
  * divided by the playlist's sections, the presentations' titles and the parts inside them.
  */
-export function SlidePane({ state, dispatch, rows, heading, p, item, selected, pick, multi, onClickSlide, onMenu, onAdd }: Props) {
+export function SlidePane({ state, dispatch, rows, heading, p, item, selected, pick, multi, onClickSlide, onMenu, onAdd, playlistId, notify }: Props) {
+  const [adding, setAdding] = useState(false);
   const { library } = state;
   const liveSlideId = state.live.slide?.id;
 
@@ -87,6 +92,10 @@ export function SlidePane({ state, dispatch, rows, heading, p, item, selected, p
           )}
         </Fragment>
       ))}
+      {playlistId && (adding
+        ? <div className="ppt-pane-adder"><PlaylistAdder state={state} dispatch={dispatch} playlistId={playlistId} notify={notify} autoFocus onDone={() => setAdding(false)} />
+            <button className="mini-btn" onClick={() => setAdding(false)}>닫기</button></div>
+        : <button className="ppt-pane-addpres" onClick={() => setAdding(true)}>＋ 이 재생목록에 곡·자료 넣기</button>)}
     </div>
   );
 }
