@@ -20,6 +20,7 @@ import { resolveBackground } from '../../domain/autoBackground';
 import { NameDialog } from '../NameDialog';
 import { AutoTextarea } from '../AutoTextarea';
 import { PROTECTED_MESSAGE } from '../../domain/materialProtection';
+import { SUNDAY_STEPS } from '../../domain/sunday/wizardSteps';
 
 const LOCK_MSG = '🔒 화면에 표시 중이라 삭제·추가가 잠겨 있습니다 — 상태 표시줄의 🔒를 눌러 해제하세요';
 
@@ -284,6 +285,12 @@ export function PptLayout({ state, dispatch, cmd }: Props) {
                     <button className="ppt-start-card" onClick={() => cmd.open('new')}>
                       <span className="ppt-start-icon">📄</span><b>새 프레젠테이션</b><small>빈 슬라이드에서 시작합니다</small>
                     </button>
+                  </div>
+                  <div className="ppt-start-steps">
+                    <span className="muted small">단계별 수정:</span>
+                    {SUNDAY_STEPS.map((s, i) => (
+                      <button key={s.label} className="ppt-start-step" title={s.hint} onClick={() => cmd.editSundayStep(i)}>{s.icon} {s.edit}</button>
+                    ))}
                   </div>
                 </div>
               )}

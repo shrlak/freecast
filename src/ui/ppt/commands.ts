@@ -14,6 +14,8 @@ export interface OnlineStatus {
 /** Everything the ribbon can do; implemented once in OperatorView. */
 export interface Commands {
   open: (m: Modal) => void;
+  /** 단계별 수정: the 주일예배 마법사 on one step alone (index into SUNDAY_STEPS). */
+  editSundayStep: (step: number) => void;
   notify: (msg: string) => void;
   pickFiles: (kind: ImportKind, accept: string) => void;
   exportPlaylistPptx: () => void;

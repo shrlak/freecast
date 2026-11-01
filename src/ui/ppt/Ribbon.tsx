@@ -17,6 +17,7 @@ import { useMediaUrl } from '../hooks';
 import { ACCEPT, type Commands } from './commands';
 import { sequence } from '../../domain/arrangement';
 import { isSong } from '../../domain/templates/fill';
+import { SUNDAY_STEPS } from '../../domain/sunday/wizardSteps';
 import { SLIDE_TEMPLATES, type SlideTemplate } from '../../domain/slideTemplates';
 
 interface Props {
@@ -366,11 +367,18 @@ export function Ribbon({ state, dispatch, cmd, presentation: p, slide, onDesign 
               <Big icon="⇩" label="PPTX 저장 (MMDD)" title="이번 재생목록을 PowerPoint 파일로 내보냅니다" onClick={cmd.exportPlaylistPptx} />
             </Group>
             <Group label="예배 만들기">
-              <Big icon="📝" label="주일예배 마법사" onClick={() => cmd.open('sunday')} />
+              <Big icon="📝" label="주일예배 마법사" title="순서 · 찬양 · 광고를 처음부터 단계별로 채웁니다" onClick={() => cmd.open('sunday')} />
               <Big icon="🙏" label="기도제목" title="이번 주 기도제목 — 주일예배 Front 슬라이드에 들어갑니다" onClick={() => cmd.open('prayer')} />
               <Big icon="🙌" label="공동체 고백송" title={`지금: ${lib.sunday.confessionSong || DEFAULT_CONFESSION_SONG} — 학기·해마다 바꾸기`} onClick={() => cmd.open('confession')} />
               <Big icon="⛺" label="수련회" onClick={() => cmd.open('retreat')} />
               <Big icon="🌌" label="수련회 배경" title="수련회 주제를 넣으면 어울리는 움직이는 배경이 정해집니다 — 언제든 바꿀 수 있고 모든 수련회 슬라이드가 따라갑니다" onClick={() => cmd.open('retreatBg')} />
+            </Group>
+            <Group label="단계별 수정 (마법사 없이)">
+              {[[0, 1, 2], [3, 4], [5, 6]].map((col) => (
+                <div key={col[0]} className="rb-col">
+                  {col.map((i) => <Small key={i} icon={SUNDAY_STEPS[i].icon} label={SUNDAY_STEPS[i].edit} title={`${SUNDAY_STEPS[i].hint} — 이번 주 예배에 바로 반영`} onClick={() => cmd.editSundayStep(i)} />)}
+                </div>
+              ))}
             </Group>
             <Group label="찬양 · 말씀">
               <Big icon="🎵" label="새 찬양" title="찬양 등록 — 제목·진행·파트별 가사 (주일예배 생성기와 같은 방식)" onClick={() => cmd.open('songNew')} />

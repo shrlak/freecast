@@ -20,6 +20,7 @@ import { filesToSlides } from '../importFiles';
 import { SundaySongs, type CoverInfo } from './SundaySongs';
 import { AutoTextarea } from '../AutoTextarea';
 import { OpeningSongField } from './OpeningSongField';
+import { songsInService, SUNDAY_STEPS } from '../../domain/sunday/wizardSteps';
 
 interface Props {
   state: AppState;
@@ -28,6 +29,8 @@ interface Props {
   notify: (msg: string) => void;
   /** The week's playlist, when it exists, follows every change made here. */
   service: ServiceUploads;
+  /** 단계별 수정: open on this step alone (no step tabs); omitted = the whole wizard. */
+  only?: number;
 }
 
 interface Draft {
@@ -48,7 +51,7 @@ interface Draft {
 }
 
 const DRAFT_KEY = 'freecast.sundayDraft';
-const STEPS = ['찬양', '성경 말씀', '설교', '기도회 · 기도제목', '광고', '추가 자료', '생성'] as const;
+const STEPS = SUNDAY_STEPS.map((s) => s.label);
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function emptyDraft(): Draft {
@@ -66,9 +69,16 @@ function loadDraft(): Draft {
 }
 
 /** 주일예배 builder: 7 steps that become this Sunday's playlist (and an optional MMDD.pptx). */
-export function SundayWizard({ state, dispatch, onClose, notify, service }: Props) {
-  const [step, setStep] = useState(0);
-  const [d, setD] = useState<Draft>(loadDraft);
+export function SundayWizard({ state, dispatch, onClose, notify, service, only }: Props) {
+  const [step, setStep] = useState(only ?? 0);
+  const [single, setSingle] = useState(only !== undefined);
+  // A draft with no songs (or 기도제목) of its own starts from what that week's service already has.
+  const [d, setD] = useState<Draft>(() => {
+    const draft = loadDraft();
+    const songs = draft.songs.length ? draft.songs : songsInService(state.library, new Date(`${draft.date}T12:00:00`));
+    const prayer = draft.prayer.trim() ? draft.prayer : state.library.sunday.prayerText ?? '';
+    return { ...draft, songs, prayer };
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const sermonRef = useRef<HTMLInputElement>(null);
   const extraRef = useRef<HTMLInputElement>(null);
@@ -96,37 +106,48 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
   const synced = useRef(d);
   const settingsSig = JSON.stringify([sunday.translations, sunday.versesPerSlide, sunday.linesPerSlide]);
   const syncedSettings = useRef(settingsSig);
+  const latest = useRef({ d, settingsSig });
+  latest.current = { d, settingsSig };
+  const flush = () => {
+    const { d, settingsSig } = latest.current;
+    const prev = synced.current;
+    const settingsChanged = syncedSettings.current !== settingsSig;
+    synced.current = d;
+    syncedSettings.current = settingsSig;
+    if (prev.date !== d.date) return;
+    const ids = (l: Slide[]) => l.map((x) => x.id).join();
+    const parts: WizardPart[] = [];
+    if (prev.openingDeckId !== d.openingDeckId) parts.push('opening');
+    if (JSON.stringify(prev.songs) !== JSON.stringify(d.songs) || settingsChanged) parts.push('songs');
+    if (prev.refs !== d.refs || prev.sermonTitle !== d.sermonTitle || prev.preacher !== d.preacher || settingsChanged) parts.push('scripture');
+    if (ids(prev.sermonSlides) !== ids(d.sermonSlides)) parts.push('sermon');
+    if (prev.prayer !== d.prayer) parts.push('prayer');
+    if (prev.announcements !== d.announcements) parts.push('announcements');
+    if (ids(prev.extraSlides) !== ids(d.extraSlides)) parts.push('extra');
+    if (prev.confession !== d.confession) parts.push('confession');
+    if (!parts.length) return;
+    service.syncWizard(d, parts, prev.sermonSlides, new Date(`${d.date}T12:00:00`))
+      .then((w) => w?.length && notify(w.join('; ')))
+      .catch((e: Error) => notify(e.message));
+  };
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
   useEffect(() => {
-    const t = setTimeout(() => {
-      const prev = synced.current;
-      const settingsChanged = syncedSettings.current !== settingsSig;
-      synced.current = d;
-      syncedSettings.current = settingsSig;
-      if (prev.date !== d.date) return;
-      const ids = (l: Slide[]) => l.map((x) => x.id).join();
-      const parts: WizardPart[] = [];
-      if (prev.openingDeckId !== d.openingDeckId) parts.push('opening');
-      if (JSON.stringify(prev.songs) !== JSON.stringify(d.songs) || settingsChanged) parts.push('songs');
-      if (prev.refs !== d.refs || prev.sermonTitle !== d.sermonTitle || prev.preacher !== d.preacher || settingsChanged) parts.push('scripture');
-      if (ids(prev.sermonSlides) !== ids(d.sermonSlides)) parts.push('sermon');
-      if (prev.prayer !== d.prayer) parts.push('prayer');
-      if (prev.announcements !== d.announcements) parts.push('announcements');
-      if (ids(prev.extraSlides) !== ids(d.extraSlides)) parts.push('extra');
-      if (prev.confession !== d.confession) parts.push('confession');
-      if (!parts.length) return;
-      service.syncWizard(d, parts, prev.sermonSlides, new Date(`${d.date}T12:00:00`))
-        .then((w) => w?.length && notify(w.join('; ')))
-        .catch((e: Error) => notify(e.message));
-    }, 900);
+    const t = setTimeout(() => flushRef.current(), 900);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d, settingsSig]);
+  // Closed right after a change (e.g. ✓ 완료 in 단계별 수정): the change still goes in, and the draft is kept.
+  useEffect(() => () => {
+    flushRef.current();
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(latest.current.d)); } catch { /* storage full or blocked */ }
+  }, []);
 
   const refs = parseRefs(d.refs);
   const topics = parsePrayerTopics(d.prayer);
   const prayerPlan = planPrayerSlides(topics);
   const ann = parseAnnouncements(d.announcements);
   const addMedia = (m: MediaMeta) => dispatch({ type: 'media/add', media: m });
+  const live = findLiveService(state.library, date);
   const openingDeck = (d.openingDeckId && state.library.presentations.find((p) => p.id === d.openingDeckId)) || null;
 
   const importInto = async (files: FileList | null, key: 'sermonSlides' | 'extraSlides') => {
@@ -165,6 +186,9 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
       });
       // That week's playlist already exists: update it in place instead of adding a second one.
       const existing = findLiveService(state.library, date);
+      // Everything goes in now; closing must not send it again.
+      synced.current = d;
+      syncedSettings.current = settingsSig;
       const syncWarnings = existing ? (await service.syncWizard(d, WIZARD_PARTS, [], date)) ?? [] : [];
       if (!existing) dispatch({ type: 'presentation/createMany', presentations: built.presentations, playlist: built.playlist });
       if (d.prayer.trim()) dispatch({ type: 'sunday/settings', patch: { prayerText: d.prayer.trim() } });
@@ -200,10 +224,21 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
     <div className="modal-backdrop">
       <div className="modal wizard" role="dialog" aria-label="주일예배 builder">
         <header className="modal-head">
-          <h2>⛪ 주일예배 · {mmdd(date)}</h2>
-          <div className="steps-nav">
-            {STEPS.map((s, i) => <button key={s} className={i === step ? 'tab active' : 'tab'} onClick={() => setStep(i)}>{i + 1}. {s}</button>)}
-          </div>
+          {single ? (
+            <>
+              <h2>{SUNDAY_STEPS[step].icon} 주일예배 · {mmdd(date)} · {STEPS[step]} 수정</h2>
+              <div className="steps-nav">
+                <button className="tab" title="모든 단계를 차례로 보는 주일예배 마법사로 바꿉니다" onClick={() => setSingle(false)}>📝 전체 마법사로</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>⛪ 주일예배 · {mmdd(date)}</h2>
+              <div className="steps-nav">
+                {STEPS.map((s, i) => <button key={s} className={i === step ? 'tab active' : 'tab'} onClick={() => setStep(i)}>{i + 1}. {s}</button>)}
+              </div>
+            </>
+          )}
           <button className="icon-btn" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="wizard-body">
@@ -314,11 +349,21 @@ export function SundayWizard({ state, dispatch, onClose, notify, service }: Prop
             </div>
           )}
         </div>
-        <footer className="modal-foot">
-          <span className="muted small grow">Draft saved automatically</span>
-          <button disabled={step === 0} onClick={() => setStep(step - 1)}>이전</button>
-          <button className="primary" disabled={step === STEPS.length - 1} onClick={() => setStep(step + 1)}>다음</button>
-        </footer>
+        {single ? (
+          <footer className="modal-foot">
+            <span className="muted small grow">
+              {live ? `바꾼 내용은 “${live.name}”에 바로 들어갑니다` : `${mmdd(date)} 주일예배 재생목록이 아직 없습니다 — 바꾼 내용은 초안에 저장되고, 만들 때 들어갑니다`}
+            </span>
+            {!live && step !== STEPS.length - 1 && <button disabled={!!busy} onClick={() => build(false)}>재생목록 만들기</button>}
+            <button className="primary" disabled={!!busy} onClick={onClose}>✓ 완료</button>
+          </footer>
+        ) : (
+          <footer className="modal-foot">
+            <span className="muted small grow">Draft saved automatically</span>
+            <button disabled={step === 0} onClick={() => setStep(step - 1)}>이전</button>
+            <button className="primary" disabled={step === STEPS.length - 1} onClick={() => setStep(step + 1)}>다음</button>
+          </footer>
+        )}
       </div>
     </div>
   );
