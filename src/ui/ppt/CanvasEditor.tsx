@@ -55,7 +55,7 @@ export function CanvasEditor({ slide, theme: baseTheme, background, bgEffect, se
     save?.();
   }, []);
   const theme = slideTheme(baseTheme, slide);
-  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }), !!slide.qr?.length, isFrontSlide(slide));
+  const elements = useAutoTextBoxes(slide.elements ?? [], readOnly || isPdfSlide(slide) ? undefined : (elements) => onChange({ elements }), isFrontSlide(slide));
   const defaultTextBox: Box = { x: theme.padding, y: theme.padding, w: CANVAS_W - theme.padding * 2, h: CANVAS_H - theme.padding * 2 };
   const [bodyBox, setBodyBox] = useState<{ identity: string; box: Box } | null>(null);
   const latestBody = useRef({ slide, onChange }); latestBody.current = { slide, onChange };

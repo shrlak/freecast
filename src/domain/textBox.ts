@@ -14,8 +14,8 @@ export function growTextBox(box: TextBox, needed: { w: number; h: number }, alig
   return { x, y, w, h };
 }
 
-/** Neighboring text boxes and corner QR codes reserve their existing space. */
-export function textElementBounds(el: SlideElement, elements: SlideElement[] = [], hasQr = false): TextBounds {
+/** Neighboring text boxes reserve their existing space (a slide's QR codes sit on top of the boxes and reserve none). */
+export function textElementBounds(el: SlideElement, elements: SlideElement[] = []): TextBounds {
   let left = 0, top = 0, right = CANVAS_W, bottom = CANVAS_H;
   for (const other of elements) {
     if (other.id === el.id || other.kind !== 'text' || !other.text?.trim()) continue;
@@ -27,6 +27,5 @@ export function textElementBounds(el: SlideElement, elements: SlideElement[] = [
       else left = Math.max(left, Math.min(el.x, other.x + other.w + 16));
     }
   }
-  if (hasQr) right = Math.min(right, CANVAS_W - 300);
   return { x: left, y: top, w: Math.max(1, right - left), h: Math.max(1, bottom - top) };
 }

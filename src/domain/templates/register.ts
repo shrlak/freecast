@@ -1,7 +1,7 @@
 // Keeps the library's 주일예배 Front and Back decks the same as the church's current
 // templates (front-slides.pptx / back-slides.pptx): the Front shows this coming Sunday's date
-// with the original fonts/layout and only the date changed; the Back shows this season's 고백송.
-// Front is restored from the source template with only its date replaced. Back refreshes its
+// with the original fonts/layout and this week's 기도제목; the Back shows this season's 고백송.
+// Front is restored from the source template with its date and 기도제목 filled in. Back refreshes its
 // 고백송 block in place and preserves edits outside that block.
 import type { Library, Presentation } from '../types';
 import { DEFAULT_CONFESSION_SONG } from '../defaults';
@@ -10,6 +10,7 @@ import { refreshFront } from './fill';
 import { isFrontPresentation } from '../frontLayout';
 import { serviceEnd } from '../sunday/cleanup';
 import { mdy, upcomingSunday } from '../sunday/notice';
+import { parsePrayerTopics } from '../sunday/prayer';
 import { applyConfessionSong, findConfessionSong, songChunks } from './confession';
 import type { ServiceTemplates } from './serviceTemplates';
 
@@ -41,8 +42,11 @@ export function templateDeckUpdates(lib: Library, tpl: ServiceTemplates, now = n
   for (const front of lib.presentations.filter((p) => p.id === lib.sunday.frontId || isFrontPresentation(p))) {
     if (front.protected) continue;
     const date = front.id === lib.sunday.frontId ? sunday : serviceEnd(front.folder ?? '', now) ?? serviceEnd(`${front.title.slice(0, 4)} 주일예배`, now) ?? sunday;
-    const frontKey = `front:${tpl.keys.front}|${mdy(date)}|original-fonts-v1`;
-    const slides = refreshFront(front.slides, tpl, date);
+    // This Sunday's Front prints the 기도제목 setting; an earlier service's copy keeps its own.
+    const current = mdy(date) === mdy(sunday);
+    const prayer = (lib.sunday.prayerText ?? '').trim();
+    const frontKey = `front:${tpl.keys.front}|${mdy(date)}|original-fonts-v1${current ? `|${hash(prayer)}` : ''}`;
+    const slides = refreshFront(front.slides, tpl, date, current ? parsePrayerTopics(prayer) : undefined);
     if (front.templateKey === frontKey && JSON.stringify(front.slides) === JSON.stringify(slides)) continue;
     if (front.id !== lib.sunday.frontId || isPlaceholder(front, 'front') || fromTemplates(front, 'front'))
       out.push({ id: front.id, patch: { ...base, templateKey: frontKey, slides } });

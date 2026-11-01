@@ -43,7 +43,14 @@ export function parseRef(input: string): BibleRef | null {
   const [alias, book] = hit;
   const rest = compact.slice(alias.length).replace(/^\./, '');
   if (!rest) return { book, startChapter: 1, endChapter: book.chapters };
-  const m = /^(\d+)(?:[:.](\d+))?(?:-(\d+)(?:[:.](\d+))?)?$/.exec(rest);
+  return parseRange(book, rest);
+}
+
+const RANGE = /^(\d+)(?:[:.](\d+))?(?:-(\d+)(?:[:.](\d+))?)?$/;
+
+/** The chapter/verse part of a reference ("12:1-2", "23", "1:8-2:3") in `book`. */
+function parseRange(book: BibleBook, rest: string): BibleRef | null {
+  const m = RANGE.exec(rest);
   if (!m) return null;
   const [, c1, v1, x, v2] = m;
   const startChapter = num(c1)!;
@@ -56,6 +63,18 @@ export function parseRef(input: string): BibleRef | null {
   if (x === undefined) return { book, startChapter, startVerse: num(v1), endChapter: startChapter, endVerse: num(v1) };
   if (v2 !== undefined) return { book, startChapter, startVerse: num(v1), endChapter: num(x)!, endVerse: num(v2) };
   return { book, startChapter, startVerse: num(v1), endChapter: startChapter, endVerse: num(x) };
+}
+
+/**
+ * A piece without a book name continues the reference before it, as references are usually
+ * written: "롬12:1-2, 14-21" (more verses of chapter 12), "롬12:1-2, 13:1-7" (another chapter of
+ * Romans), "시23, 24" (another psalm).
+ */
+function continueRef(prev: BibleRef, piece: string): BibleRef | null {
+  const rest = piece.replace(/\s+/g, '').replace(/[–—~]/g, '-');
+  if (!RANGE.test(rest)) return null;
+  if (/[:.]/.test(rest) || prev.startVerse === undefined) return parseRange(prev.book, rest);
+  return parseRange(prev.book, `${prev.endChapter}:${rest}`);
 }
 
 /**
@@ -84,12 +103,16 @@ export function parseRefs(input: string): { refs: BibleRef[]; invalid: string[] 
   const refs: BibleRef[] = [];
   const invalid: string[] = [];
   const normalized = normalizeScripture(input);
-  // English refs contain spaces ("1 John 3:16"), so split on separators that cannot occur inside one.
-  const tokens = /[a-z]/i.test(normalized)
-    ? normalized.split(/\s*[;,]\s*|\s+(?=(?:[123]\s?)?[A-Za-z가-힣]{2,}\.?\s*\d)/)
-    : normalized.split(/\s+/);
+  // English refs contain spaces ("1 John 3:16"), so split on separators that cannot occur inside one
+  // (never between the number and the name of "1 John").
+  const tokens = (/[a-z]/i.test(normalized)
+    ? normalized.split(/\s*[;,]\s*|(?<!(?:^|\s)[123])\s+(?=(?:[123]\s?)?[A-Za-z가-힣]{2,}\.?\s*\d)/)
+    : normalized.split(/\s+/))
+    // "Romans 12:1-2 14-21": numbers after a reference's own numbers are a piece of their own.
+    .flatMap((x) => x.split(/(?<=\d)\s+(?=\d+(?:[:.]\d+)?(?:-\d+(?:[:.]\d+)?)?(?:\s|$))/));
   for (const t of tokens.map((x) => x.trim()).filter(Boolean)) {
-    const r = parseRef(t);
+    const prev = refs[refs.length - 1];
+    const r = parseRef(t) ?? (prev ? continueRef(prev, t) : null);
     if (r) refs.push(r);
     else invalid.push(t);
   }
@@ -105,4 +128,22 @@ export function formatRef(r: BibleRef, lang: 'ko' | 'en' = 'ko'): string {
   if (r.endChapter !== r.startChapter) return `${name}${sep}${r.startChapter}:${r.startVerse}-${r.endChapter}:${r.endVerse}`;
   if (r.endVerse !== undefined && r.endVerse !== r.startVerse) return `${name}${sep}${r.startChapter}:${r.startVerse}-${r.endVerse}`;
   return `${name}${sep}${r.startChapter}:${r.startVerse}`;
+}
+
+/**
+ * Several references written the short way: the book is named once, and the chapter once for
+ * verses of the same chapter — "로마서 12:1-2, 14-21", "로마서 12:1-2, 13:1-7".
+ */
+export function formatRefs(refs: BibleRef[], lang: 'ko' | 'en' = 'ko'): string {
+  return refs
+    .map((r, i) => {
+      const full = formatRef(r, lang);
+      const prev = refs[i - 1];
+      if (!prev || prev.book !== r.book) return full;
+      const name = lang === 'ko' ? r.book.nameKo : r.book.nameEn;
+      const rest = full.slice(name.length + 1);
+      const sameChapter = prev.startVerse !== undefined && r.startVerse !== undefined && prev.endChapter === r.startChapter && r.endChapter === r.startChapter;
+      return sameChapter ? rest.slice(rest.indexOf(':') + 1) : rest;
+    })
+    .join(', ');
 }
