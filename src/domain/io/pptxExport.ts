@@ -112,11 +112,8 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
       shadow: theme.shadow ? { type: 'outer', blur: 6, offset: 2, angle: 45, color: '000000', opacity: 0.6 } : undefined,
       fit: undefined,
     });
-    slide.qr?.forEach((link, i) => {
-      s.addImage({ data: qrDataUrl(link), x: W - 2.1, y: H - 2.1 - i * 2.1, w: 1.8, h: 1.8 });
-    });
     for (const original of slide.elements ?? []) {
-      const el = fixed ? original : fitTextElement(original, textElementBounds(original, slide.elements, !!slide.qr?.length));
+      const el = fixed ? original : fitTextElement(original, textElementBounds(original, slide.elements));
       const box = { x: el.x * PX, y: el.y * PX, w: el.w * PX, h: el.h * PX, rotate: el.rotation };
       if (el.kind === 'text' && el.text) {
         // Empty Front paragraphs also carry a source font size (and therefore spacer height).
@@ -130,6 +127,10 @@ async function addPresentation(pptx: PptxGenJS, lib: Library, p: Presentation) {
         s.addShape(el.ellipse ? 'ellipse' : 'roundRect', { ...box, fill: { color: solid }, rectRadius: el.radius ? Math.min(0.5, (el.radius * PX) / Math.min(box.w, box.h)) : 0 });
       }
     }
+    // QR codes go over the text boxes, in the corner (added last, so they are on top).
+    slide.qr?.forEach((link, i) => {
+      s.addImage({ data: qrDataUrl(link), x: W - 2.1, y: H - 2.1 - i * 2.1, w: 1.8, h: 1.8 });
+    });
     if (slide.caption) s.addText(slide.caption, { x: 0.3, y: 0.15, w: 8, h: 0.5, fontSize: 14, color, fontFace: fontFace(theme) });
     if (slide.notes) s.addNotes(slide.notes);
   }

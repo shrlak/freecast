@@ -254,7 +254,7 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
   const fontEpoch = useFontEpoch();
   const { box: baseBox, bounds, noWrap: lyricLines } = slideTextFrame(slide, originalTheme);
   const hasQr = !!slide.qr?.length;
-  const elements = useAutoTextBoxes(slide.elements ?? [], undefined, hasQr, isFrontSlide(slide));
+  const elements = useAutoTextBoxes(slide.elements ?? [], undefined, isFrontSlide(slide));
   const key = JSON.stringify([slide.id, slide.title, slide.text, slide.subtext, originalTheme, bounds, fontEpoch]);
   const [layout, setLayout] = useState<{ key: string; result: TextLayout } | null>(null);
   const resolved = layout?.key === key ? layout.result : { box: baseBox, fontSize: originalTheme.fontSize, wrap: false };
@@ -282,12 +282,13 @@ function SlideBody({ slide, theme: base }: { slide: Slide; theme: Theme }) {
           )}
         </div>
       </div>
+      {elements.map((el) => <ElementView key={el.id} el={el} />)}
+      {/* QR codes float over the text boxes in the corner; the boxes keep their own place. */}
       {hasQr && (
           <div className="qr-stack">
             {slide.qr!.map((link) => <img key={link} src={qrDataUrl(link)} alt={link} />)}
           </div>
       )}
-      {elements.map((el) => <ElementView key={el.id} el={el} />)}
       {slide.caption && <div className="slide-caption" style={{ fontFamily: theme.fontFamily, color: theme.color }}>{slide.caption}</div>}
     </>
   );

@@ -4,10 +4,11 @@
 // title and one 광고 slide per announcement.
 import type { Presentation, Slide, SlideElement, Theme } from '../types';
 import { uid } from '../lyrics';
-import { formatRef, type BibleRef } from '../bible/refs';
+import { formatRefs, type BibleRef } from '../bible/refs';
 import type { ScriptureChunk } from '../bible/slides';
 import type { Announcement } from '../sunday/announcements';
 import type { PrayerTopic } from '../sunday/prayer';
+import { planPrayerSlides } from '../sunday/prayer';
 import { mdy } from '../sunday/notice';
 import { splitEvenly } from '../sunday/songs';
 import { fillSlide, fillTokens } from './convert';
@@ -32,15 +33,100 @@ const withDate = (s: Slide, date: Date): Slide => {
       ? { ...e, text: replace(e.text), paragraphs: e.paragraphs?.map((p) => ({ ...p, text: replace(p.text) })) } : e) });
 };
 
-/** Restore the source Front design, retaining page/object identities where possible. Only dates differ. */
-export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date, _topics: PrayerTopic[] = []): Slide[] {
-  return fillFront(tpl, date).map((s, i) => ({ ...s, id: slides[i]?.id ?? s.id,
-    elements: s.elements?.map((e, n) => ({ ...e, id: slides[i]?.elements?.[n]?.kind === e.kind ? slides[i].elements![n].id : e.id })) }));
+/** The 기도 준비 page's 기도제목 box ("기도제목 1\n기도제목 2" in the church file). */
+const PRAYER_MARK = /기도\s*제목\s*\d/;
+const isPrayerBox = (e: SlideElement) => e.kind === 'text' && (e.role === 'prayer' || PRAYER_MARK.test(e.text ?? ''));
+const isPrayerPage = (s: Slide) => !!s.elements?.some(isPrayerBox);
+/** A prayer page that already carries this week's topics (not the template's own placeholder text). */
+const isFilledPrayerPage = (s: Slide) => !!s.elements?.some((e) => isPrayerBox(e) && !PRAYER_MARK.test(e.text ?? ''));
+
+interface PrayerLine { text: string; bold?: boolean }
+
+/** About how many lines the box holds at its own font size (CJK characters are about 1 em wide). */
+function boxCapacity(el: SlideElement): { lines: number; chars: number } {
+  const size = el.paragraphs?.find((p) => p.text.trim())?.fontSize ?? el.fontSize ?? 48;
+  const lineHeight = size * (el.lineHeight ?? 1.2);
+  return { lines: Math.max(3, Math.floor((el.h - 24) / lineHeight)), chars: Math.max(8, Math.floor((el.w - 24) / size)) };
 }
 
-/** Keep Front typography and content; change dates and omit the prayer page's corner logo only. */
-export function fillFront(tpl: ServiceTemplates, date: Date, _topics: PrayerTopic[] = []): Slide[] {
-  return tpl.front.map((s) => withDate({ ...s, id: uid('s'), elements: s.elements?.map((e) => ({ ...e, id: uid('e') })) }, date));
+/**
+ * The box's lines for each page: one topic per page — "n. 제목" in bold with its points as "● …"
+ * lines (a plain list prints "● 제목") — and a topic too long for the box continues on the next page.
+ */
+function prayerPages(el: SlideElement, topics: PrayerTopic[]): PrayerLine[][] {
+  const structured = topics.some((t) => t.points.length);
+  const { lines: capacity, chars } = boxCapacity(el);
+  const height = (l: PrayerLine) => Math.max(1, Math.ceil([...l.text].length / chars));
+  const pages: PrayerLine[][] = [];
+  planPrayerSlides(topics).forEach(([topic], i) => {
+    if (!structured) return pages.push([{ text: `● ${topic.title}` }]);
+    const head: PrayerLine = { text: `${i + 1}. ${topic.title}`, bold: true };
+    let page = [head], used = height(head);
+    for (const point of topic.points.map((p) => ({ text: `● ${p}` }))) {
+      if (used + height(point) > capacity && page.length > 1) {
+        pages.push(page);
+        page = [head];
+        used = height(head);
+      }
+      page.push(point);
+      used += height(point);
+    }
+    pages.push(page);
+  });
+  return pages;
+}
+
+/** The 기도제목 box printing `lines` in the box's own font, size and colour (bold for topic titles). */
+function withPrayerLines(el: SlideElement, lines: PrayerLine[]): SlideElement {
+  const style = el.paragraphs?.find((p) => p.text.trim()) ?? el.paragraphs?.[0];
+  return {
+    ...el, role: 'prayer', text: lines.map((l) => l.text).join('\n'),
+    paragraphs: style ? lines.map((l) => ({ ...style, text: l.text, bold: l.bold || undefined })) : undefined,
+  };
+}
+
+const freshCopy = (s: Slide): Slide => ({ ...s, id: uid('s'), elements: s.elements?.map((e) => ({ ...e, id: uid('e') })) });
+
+/**
+ * Front from the church file with this Sunday's date, and this week's 기도제목 in the 기도 준비 page's
+ * box (one page per topic, the template's fonts and layout kept). With no topics the page keeps the
+ * template's own text.
+ */
+export function fillFront(tpl: ServiceTemplates, date: Date, topics: PrayerTopic[] = []): Slide[] {
+  return tpl.front.flatMap((s) => {
+    const box = s.elements?.find(isPrayerBox);
+    if (!box) return [withDate(freshCopy(s), date)];
+    const pages = topics.length ? prayerPages(box, topics) : [null];
+    return pages.map((lines) => {
+      const page = freshCopy(s);
+      const at = s.elements!.indexOf(box);
+      page.elements = page.elements!.map((e, i) => (i === at ? (lines ? withPrayerLines(e, lines) : { ...e, role: 'prayer' as const }) : e));
+      return withDate(page, date);
+    });
+  });
+}
+
+/**
+ * Restore the source Front design with this Sunday's date and these 기도제목, keeping the page and
+ * object ids of the deck it replaces. Without `topics` (an earlier service's copy) the deck keeps the
+ * 기도제목 it already prints.
+ */
+export function refreshFront(slides: Slide[], tpl: ServiceTemplates, date: Date, topics?: PrayerTopic[]): Slide[] {
+  let fresh = fillFront(tpl, date, topics ?? []);
+  const kept = topics ? [] : slides.filter(isFilledPrayerPage);
+  if (kept.length) {
+    const at = fresh.findIndex(isPrayerPage);
+    fresh = [...fresh.slice(0, at), ...kept.map(keepFrontLayout), ...fresh.slice(at).filter((s) => !isPrayerPage(s))];
+  }
+  // Pages are matched in order among prayer pages and among the other pages, so a change in the
+  // number of 기도제목 pages does not hand the welcome page's id to a prayer page.
+  const oldPrayer = slides.filter(isPrayerPage), oldOther = slides.filter((s) => !isPrayerPage(s));
+  let p = 0, o = 0;
+  return fresh.map((s) => {
+    const old = isPrayerPage(s) ? oldPrayer[p++] : oldOther[o++];
+    if (!old) return s;
+    return { ...s, id: old.id, elements: s.elements?.map((e, n) => ({ ...e, id: old.elements?.[n]?.kind === e.kind ? old.elements[n].id : e.id })) };
+  });
 }
 
 /** Date-only fallback when the church source file is unavailable. */
@@ -173,7 +259,7 @@ export interface ScriptureFill {
   preacher?: string;
 }
 
-const ranges = (refs: BibleRef[], lang: 'ko' | 'en') => refs.map((r) => formatRef(r, lang)).join(', ');
+const ranges = (refs: BibleRef[], lang: 'ko' | 'en') => formatRefs(refs, lang);
 
 /** 성경 말씀 title slide + one slide per verse chunk, from the Bible template. */
 export function scriptureSlides(tpl: ServiceTemplates, f: ScriptureFill): Slide[] {

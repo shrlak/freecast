@@ -57,14 +57,16 @@ describe('Front original fonts, date only', () => {
     expect(correctMixedTextSizes(loaded.presentations[0])).toBe(loaded.presentations[0]);
     expect(loaded.presentations[0].slides[0].elements![0].autoFit).toBe(false);
   });
-  it('migrates main and dated service Front copies once, retains each service date, and ignores prayer changes', () => {
+  it('migrates main and dated service Front copies once, retains each service date, and puts prayer changes on this Sunday only', () => {
     const lib = createSeedLibrary();
     lib.presentations.push({ id: 'copy', title: '1101 Front', folder: '1101 주일예배', themeId: 'theme_classic', slides: [{ ...source, id: 'copy-source' }] });
     const updates = templateDeckUpdates(lib, tpl, new Date(2026, 9, 21));
     expect(updates.find((u) => u.id === lib.sunday.frontId)!.patch.slides![0].elements![0].text).toContain('10/25/2026');
     expect(updates.find((u) => u.id === 'copy')!.patch.slides![0].elements![0].text).toContain('11/01/2026');
     const saved = { ...lib, presentations: lib.presentations.map((p) => ({ ...p, ...updates.find((u) => u.id === p.id)?.patch })) };
-    expect(templateDeckUpdates({ ...saved, sunday: { ...saved.sunday, prayerText: '완전히 새 기도제목' } }, tpl, new Date(2026, 9, 22))).toEqual([]);
+    expect(templateDeckUpdates(saved, tpl, new Date(2026, 9, 22))).toEqual([]);
+    // (This test's Front has no 기도제목 box, so only the key of this Sunday's deck changes.)
+    expect(templateDeckUpdates({ ...saved, sunday: { ...saved.sunday, prayerText: '완전히 새 기도제목' } }, tpl, new Date(2026, 9, 22)).map((u) => u.id)).toEqual([lib.sunday.frontId]);
     const changed = structuredClone(saved);
     changed.presentations.find((p) => p.id === 'copy')!.slides[0].elements![0].paragraphs![0].fontSize = 999;
     const repair = templateDeckUpdates(changed, tpl, new Date(2026, 9, 22)).find((u) => u.id === 'copy');

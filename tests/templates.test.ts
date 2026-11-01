@@ -82,12 +82,14 @@ describe('PPTX slide conversion', () => {
 });
 
 describe('church template filling', () => {
-  it('changes only the Front date and preserves the original prayer text and font sizes', () => {
+  it('puts the 기도제목 in the Front prayer box and the date on the welcome slide, in the template fonts', () => {
     const out = fillFront(TPL, new Date(2026, 9, 18), [{ title: '예배', points: ['은혜'] }]);
     expect(out).toHaveLength(TPL.front.length);
     expect(els(out[1])[0]).toBe('빛주사랑\n대학청년부\n10/18/2026');
-    expect(els(out[0])).toEqual(els(TPL.front[0]));
-    expect(out[0].elements![1].paragraphs!.map((p) => p.fontSize)).toEqual([60, 40]);
+    expect(els(out[0])).toEqual([els(TPL.front[0])[0], '1. 예배\n● 은혜']);
+    expect(out[0].elements![0]).toEqual({ ...TPL.front[0].elements![0], id: out[0].elements![0].id, autoFit: false, maximizeFont: false, preferredFontSize: undefined });
+    expect(out[0].elements![1]).toMatchObject({ x: 300, y: 300, w: 1300, h: 200, role: 'prayer' });
+    expect(out[0].elements![1].paragraphs!.map((p) => [p.fontSize, p.bold])).toEqual([[60, true], [60, undefined]]);
     expect(out.every((s) => s.preserveTextLayout && s.style?.autoFit === false)).toBe(true);
     expect(out.flatMap((s) => s.elements!).filter((e) => e.kind === 'text').every((e) => e.autoFit === false)).toBe(true);
     expect(out[0].id).not.toBe(TPL.front[0].id);
@@ -365,18 +367,34 @@ describe('4:3 Front deck with this Sunday’s date and 기도제목', async () =
     expect(out[1].elements![0].text).toBe('빛주사랑\n대학청년부\n10/25/2026');
   });
 
-  it('updates only the library Front date and ignores prayer-setting changes', () => {
+  it('puts the 기도제목 setting into the library Front, one page per topic, and follows its changes', () => {
     const lib = createSeedLibrary(); lib.sunday.prayerText = '1. 예배\n- 은혜\n2. 선교';
     const [front] = templateDeckUpdates(lib, frontTpl, new Date(2026, 9, 21));
     expect(front.id).toBe(lib.sunday.frontId);
-    expect(front.patch.slides).toHaveLength(frontTpl.front.length);
-    expect(front.patch.slides![0].elements![1].text).toBe('기도제목 1\n기도제목 2');
-    expect(front.patch.slides![1].elements![0].text).toContain('10/25/2026');
+    expect(front.patch.slides).toHaveLength(frontTpl.front.length + 1);
+    expect(front.patch.slides!.slice(0, 2).map((s) => s.elements![1].text)).toEqual(['1. 예배\n● 은혜', '2. 선교']);
+    expect(front.patch.slides![2].elements![0].text).toContain('10/25/2026');
     const synced = { ...lib, presentations: lib.presentations.map((p) => p.id === front.id ? { ...p, ...front.patch } : p) };
     expect(templateDeckUpdates(synced, frontTpl, new Date(2026, 9, 22))).toEqual([]);
     const nextWeek = templateDeckUpdates(synced, frontTpl, new Date(2026, 9, 26));
-    expect(nextWeek[0].patch.slides![1].elements![0].text).toContain('11/01/2026');
-    expect(templateDeckUpdates({ ...synced, sunday: { ...synced.sunday, prayerText: '감사' } }, frontTpl, new Date(2026, 9, 22))).toEqual([]);
+    expect(nextWeek[0].patch.slides![2].elements![0].text).toContain('11/01/2026');
+    const changed = templateDeckUpdates({ ...synced, sunday: { ...synced.sunday, prayerText: '감사' } }, frontTpl, new Date(2026, 9, 22));
+    expect(changed[0].patch.slides).toHaveLength(frontTpl.front.length);
+    expect(changed[0].patch.slides![0].elements![1].text).toBe('● 감사');
+    // The welcome page keeps its id when the number of prayer pages changes.
+    expect(changed[0].patch.slides![1].id).toBe(front.patch.slides![2].id);
+    // Cleared, the page shows the template's own text again.
+    const cleared = templateDeckUpdates({ ...synced, sunday: { ...synced.sunday, prayerText: '' } }, frontTpl, new Date(2026, 9, 22));
+    expect(cleared[0].patch.slides![0].elements![1].text).toBe('기도제목 1\n기도제목 2');
+  });
+
+  it('continues a topic too long for the prayer box on another page', () => {
+    const points = Array.from({ length: 12 }, (_, i) => `세부 기도 ${i + 1}`);
+    const out = fillFront(frontTpl, new Date(2026, 9, 25), [{ title: '예배', points }]);
+    const pages = out.filter((s) => s.elements?.some((e) => e.role === 'prayer'));
+    expect(pages.length).toBeGreaterThan(1);
+    expect(pages.every((s) => s.elements![1].text!.startsWith('1. 예배\n'))).toBe(true);
+    expect(pages.flatMap((s) => s.elements![1].text!.split('\n').slice(1))).toEqual(points.map((p) => `● ${p}`));
   });
 
   it('moves 16:9 objects onto the 4:3 canvas once, keeping them centred', () => {
@@ -419,13 +437,17 @@ describe('editable slides that keep their edits', async () => {
     expect(out[1].elements!.some((e) => e.kind === 'image')).toBe(true);
   });
 
-  it('restores the original Front design and changes only the date', () => {
+  it('restores the original Front design with the new date and 기도제목', () => {
     const first = fillFront(tpl, new Date(2026, 9, 25));
     const edited = first.map((s) => ({ ...s, elements: [...s.elements!.map((e) => e.kind === 'text' ? { ...e, fontSize: 999, y: 40 } : e), text('note', '이전 편집', 100)] }));
     const next = refreshFront(edited, tpl, new Date(2026, 10, 1), [{ title: '선교', points: [] }]);
     expect(next).toHaveLength(tpl.front.length);
     expect(next[0].elements!.find((e) => e.text?.startsWith('지금은'))!.y).toBe(100);
-    expect(next[0].elements!.find((e) => e.text?.includes('기도제목'))!.text).toBe('기도제목 1\n기도제목 2');
+    expect(next[0].elements!.find((e) => e.role === 'prayer')).toMatchObject({ text: '● 선교', y: 300 });
+    // An earlier service's copy (no topics given) keeps the 기도제목 it prints.
+    const kept = refreshFront(next, tpl, new Date(2026, 10, 1));
+    expect(kept[0].elements!.find((e) => e.role === 'prayer')!.text).toBe('● 선교');
+    expect(kept.map((s) => s.id)).toEqual(next.map((s) => s.id));
     expect(next[1].elements!.map((e) => e.text).filter(Boolean)).toEqual(['빛주사랑\n대학청년부\n11/01/2026']);
     expect(next.map((s) => s.id)).toEqual(first.map((s) => s.id));
   });

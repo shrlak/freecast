@@ -34,14 +34,24 @@ describe('initial maximum text size', () => {
     const protectedDeck = { ...p, protected: true };
     expect(prepareAnnouncementSizing(protectedDeck)).toBe(protectedDeck);
   });
-  it('reserves neighbor and QR space at layout time rather than resizing short content on load', () => {
+  it('reserves neighbor space at layout time, while QR codes sit over the boxes and reserve none', () => {
     const s: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [box('title', '제목', 180), box('body', '본문', 320, 600)] };
     expect(prepareAnnouncementSlide(s)).toBe(s);
     const [title, body] = s.elements!;
-    const titleBounds = textElementBounds(title, s.elements, true), bodyBounds = textElementBounds(body, s.elements, true);
+    const titleBounds = textElementBounds(title, s.elements), bodyBounds = textElementBounds(body, s.elements);
     expect((titleBounds.y ?? 0) + titleBounds.h).toBeLessThan(body.y);
     expect(bodyBounds.y).toBeGreaterThan(title.y + title.h);
-    expect(bodyBounds.w).toBe(1140);
+    expect(bodyBounds).toMatchObject({ x: 0, w: 1440 });
+  });
+  it('moves boxes an earlier version pushed against the left edge for the QR strip back to the middle', () => {
+    const pushed = { ...box('body', '본문', 320, 600), x: 0, w: 1140 };
+    const s: Slide = { id: 'ad', group: '광고', text: '', qr: ['https://example.org'], elements: [pushed] };
+    const fixed = prepareAnnouncementSlide(s);
+    expect(fixed.elements![0]).toMatchObject({ x: 62, w: 1316, y: pushed.y, h: pushed.h });
+    expect(prepareAnnouncementSlide(fixed)).toBe(fixed);
+    // Without QR codes, or placed there by hand elsewhere, a box stays where it is.
+    const plain = { ...s, qr: undefined };
+    expect(prepareAnnouncementSlide(plain)).toBe(plain);
   });
   it('preserves plain-text ads and explicit manual font choices', () => {
     const p = deck(); p.slides = [{ id: 'plain', group: '광고', text: '광고 본문', style: { fontSize: 32 } }];

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { formatRef, normalizeScripture, parseRef, parseRefs } from '../src/domain/bible/refs';
+import { formatRef, formatRefs, normalizeScripture, parseRef, parseRefs } from '../src/domain/bible/refs';
 import { versesFor, type BibleText } from '../src/domain/bible/data';
 import { planScripture } from '../src/domain/bible/slides';
 import { formatClock, startTimer, stopTimer, timerValue } from '../src/domain/timers';
@@ -63,5 +63,32 @@ describe('timers', () => {
     expect(formatClock(40000)).toBe('0:40');
     expect(formatClock(-12000)).toBe('-0:12');
     expect(formatClock(3723000)).toBe('1:02:03');
+  });
+});
+
+describe('references continued without the book name', () => {
+  const show = (input: string) => parseRefs(input).refs.map((r) => formatRef(r));
+  it('reads "로마서 12:1-2, 14-21" as two ranges of Romans 12', () => {
+    for (const input of ['로마서 12:1-2, 14-21', '롬12:1-2,14-21', '로마서 12장 1-2절, 14-21절', '로마서 12:1-2; 14-21']) {
+      expect(show(input)).toEqual(['로마서 12:1-2', '로마서 12:14-21']);
+      expect(parseRefs(input).invalid).toEqual([]);
+    }
+    expect(show('Romans 12:1-2, 14-21')).toEqual(['로마서 12:1-2', '로마서 12:14-21']);
+  });
+  it('continues with another chapter, a single verse, or another psalm', () => {
+    expect(show('로마서 12:1-2, 13:1-7')).toEqual(['로마서 12:1-2', '로마서 13:1-7']);
+    expect(show('요 3:16, 18')).toEqual(['요한복음 3:16', '요한복음 3:18']);
+    expect(show('시 23, 24')).toEqual(['시편 23', '시편 24']);
+    expect(show('롬12:1-2, 14-21 요3:16')).toEqual(['로마서 12:1-2', '로마서 12:14-21', '요한복음 3:16']);
+    expect(show('John 3:16; 1 John 4:8')).toEqual(['요한복음 3:16', '요한일서 4:8']);
+  });
+  it('a number with nothing before it is still not a reference', () => {
+    expect(parseRefs('14-21').invalid).toEqual(['14-21']);
+  });
+  it('writes several ranges the short way', () => {
+    expect(formatRefs(parseRefs('로마서 12:1-2, 14-21').refs)).toBe('로마서 12:1-2, 14-21');
+    expect(formatRefs(parseRefs('로마서 12:1-2, 13:1-7').refs)).toBe('로마서 12:1-2, 13:1-7');
+    expect(formatRefs(parseRefs('Romans 12:1-2, 14-21').refs, 'en')).toBe('Romans 12:1-2, 14-21');
+    expect(formatRefs(parseRefs('롬12:1-2 요3:16').refs)).toBe('로마서 12:1-2, 요한복음 3:16');
   });
 });

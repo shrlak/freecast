@@ -1,8 +1,8 @@
 import type { Library, Playlist, PlaylistItem, Presentation, Slide } from '../types';
 import { uid } from '../lyrics';
-import { CHURCH_BACKGROUNDS, DEFAULT_CONFESSION_SONG } from '../defaults';
+import { CHURCH_BACKGROUNDS, DEFAULT_CONFESSION_SONG, PRAYER_PREP_TITLE } from '../defaults';
 import { findSong, songToPresentation, withProgression, type SongDraft } from './songs';
-import type { PrayerTopic } from './prayer';
+import { planPrayerSlides, prayerSlideText, type PrayerTopic } from './prayer';
 import type { Announcement } from './announcements';
 import { mmdd } from './notice';
 import type { ServiceTemplates } from '../templates/serviceTemplates';
@@ -63,13 +63,16 @@ export function buildService(lib: Library, input: ServiceInput): BuiltService {
     prayerAdded = true;
   };
 
-  // Front keeps the source design and text; only its date changes.
+  // Front keeps the source design; its date and 기도제목 change.
   const front = byId(sunday.frontId);
   if (tpl) {
     header('Front');
     add(make(`${mmdd(input.date)} Front`, fillFront(tpl, input.date, input.prayerTopics), 'theme_classic', { background: { kind: 'color', value: '#000000' } }), true);
   } else if (front) {
-    const slides = updateFrontDate(front.slides.map((s) => ({ ...s, id: uid('s') })), input.date);
+    // The built-in Front: its 기도 준비 slide printed once per 기도제목.
+    const pages = planPrayerSlides(input.prayerTopics);
+    const withTopics = front.slides.flatMap((s) => (s.title === PRAYER_PREP_TITLE && pages.length ? pages.map((group, i) => ({ ...s, text: prayerSlideText(group, i + 1) })) : [s]));
+    const slides = updateFrontDate(withTopics.map((s) => ({ ...s, id: uid('s') })), input.date);
     header('Front');
     add({ ...front, id: uid('p'), title: `${mmdd(input.date)} Front`, folder, slides }, true);
   }

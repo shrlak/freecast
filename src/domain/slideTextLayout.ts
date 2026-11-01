@@ -8,9 +8,9 @@ import { isFrontSlide } from './frontLayout';
 export function slideTextFrame(slide: Slide, theme: Theme) {
   const qr = !!slide.qr?.length;
   const pad = slide.lyricBody && qr ? Math.max(theme.padding, 300) : theme.padding;
-  const qrSpace = qr && !slide.lyricBody ? 300 : 0;
-  const box = { x: pad, y: theme.padding, w: Math.max(1, CANVAS_W - pad * 2 - qrSpace), h: Math.max(1, CANVAS_H - theme.padding * 2) };
-  const bounds = { x: slide.lyricBody && qr ? pad : 0, y: 0, w: slide.lyricBody && qr ? box.w : CANVAS_W - qrSpace, h: CANVAS_H };
+  // Other slides keep their full, centred text area: QR codes are drawn over it in the corner.
+  const box = { x: pad, y: theme.padding, w: Math.max(1, CANVAS_W - pad * 2), h: Math.max(1, CANVAS_H - theme.padding * 2) };
+  const bounds = { x: slide.lyricBody && qr ? pad : 0, y: 0, w: slide.lyricBody && qr ? box.w : CANVAS_W, h: CANVAS_H };
   return { box, bounds, noWrap: theme.noWrap ?? theme.id === 'theme_tpl_lyrics' };
 }
 
